@@ -14,7 +14,7 @@ Built to turn natural-language intent into product-level validation.
 
 ![Trae + Munk AI demo](./assets/output-4fps.gif)
 
-*Trae + Munk AI adds a delete feature to a Todo app, compiles the build, and runs automated validation on Android.*
+*From feature request to real-device validation: Trae + Munk AI implements a new delete flow, builds the project, and verifies the change automatically.*
 
 ## Why Munk AI
 
