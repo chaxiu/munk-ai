@@ -10,6 +10,8 @@ Built to give Harness Engineering a real-world feedback loop.
 Not another XPath-driven test framework.
 Built to turn natural-language intent into product-level validation.
 
+## Demo
+
 ![Trae + Munk AI demo](./assets/output-4fps.gif)
 
 *Trae + Munk AI adds a delete feature to a Todo app, compiles the build, and runs automated validation on Android.*
