@@ -16,6 +16,20 @@ Built to turn natural-language intent into product-level validation.
 
 *From feature request to real-device validation: Trae + Munk AI implements a new delete flow, builds the project, and verifies the change automatically.*
 
+## Get Started
+
+Available on macOS today.
+
+Install Munk AI, run diagnostics, and start the local Web UI:
+
+```bash
+curl -fsSL https://get.munk.sh | sh
+munk doctor
+munk serve --port 16888
+```
+
+For docs and updates, visit [munk.sh](https://www.munk.sh/).
+
 ## Why Munk AI
 
 Code generation is no longer the bottleneck.
