@@ -177,9 +177,17 @@ Munk AI is under active development.
 - [x] Stable MCP support for coding agents
 - [x] Local Web UI for recording, planning, and execution
 - [x] macOS release
-- [ ] Core modules open source
+- [x] Batches mode
+- [x] Schedules mode
+- [x] Api contract open source
+- [ ] Implementation open source
+- [ ] CI & Release Setup
+- [ ] Docs and CONTRIBUTING guide
 - [ ] Windows support
 - [ ] Linux support
+- [ ] iOS environment setup
+- [ ] Web environment setup
+- [ ] Advanced agent
 
 ## Vision
 
