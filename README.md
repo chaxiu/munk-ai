@@ -158,10 +158,95 @@ Munk AI exposes one validation engine through multiple entry points:
 
 - CLI for local developer workflows
 - MCP for coding agents and automation systems
-- Local Web UI for recording, asset management, and batch execution
+- Local Web UI for QA-oriented device management, test asset management, and batch execution
 - Local API for integration with surrounding tools
 
 This design allows the same core engine to serve developers, QA, CI workflows, and AI agents without maintaining separate business logic for each surface.
+
+```mermaid
+flowchart TD
+    classDef entry fill:#E8F0FE,stroke:#1A73E8,stroke-width:2px,color:#1A73E8;
+    classDef host fill:#FCE8E6,stroke:#D93025,stroke-width:2px,color:#D93025;
+    classDef workflow fill:#E6F4EA,stroke:#137333,stroke-width:2px,color:#137333;
+    classDef infra fill:#FFF3E0,stroke:#E65100,stroke-width:2px,color:#E65100,stroke-dasharray: 5 5;
+    classDef platform fill:#F3E8FD,stroke:#9334E6,stroke-width:2px,color:#6A1B9A,stroke-dasharray: 5 5;
+
+    A(🧰 CLI<br/>Local command entry):::entry
+    B(🔌 Local API<br/>Programmatic control surface):::entry
+    C(🧩 MCP<br/>External tool integration):::entry
+    D(🖥️ QA Web UI<br/>Human-facing workspace):::entry
+
+    E(🎛️ Orchestration Host<br/>Coordinates runs and artifacts):::host
+
+    P(📝 Plan<br/>Task planning):::workflow
+    R(🏃 Runner<br/>Execution loop):::workflow
+    J(⚖️ Judge<br/>Outcome evaluation):::workflow
+    V(🔍 Review<br/>Result inspection):::workflow
+    O(📼 Recording<br/>Capture and replay flow):::workflow
+
+    DP(📱 Device and Perception<br/>Execution and sensing layer):::infra
+    L(🔗 Local Bridge<br/>Recording transport):::infra
+
+    AX(🤖 Android<br/>Runtime target):::platform
+    WX(🌐 Web<br/>Runtime target):::platform
+    IX(🍎 iOS<br/>Evolving runtime target):::platform
+
+    A --> E
+    B --> E
+    C --> E
+    D --> B
+
+    E --> P
+    E --> R
+    E --> J
+    E --> V
+    E --> O
+
+    R --> DP
+    O --> L
+
+    DP --> AX
+    DP --> WX
+    DP --> IX
+
+    subgraph Entry surfaces
+        A
+        B
+        C
+        D
+    end
+
+    subgraph Core orchestration
+        E
+        P
+        R
+        J
+        V
+        O
+    end
+
+    subgraph Runtime and platform layer
+        DP
+        L
+        AX
+        WX
+        IX
+    end
+```
+
+Repository-level architecture follows a layered model:
+
+- `src/munk/` hosts orchestration, adapters, and artifact handling
+- `*-api` packages define stable contracts across package boundaries
+- `*-runtime-*` packages provide local runtime implementations
+- `perception-*` packages separate orchestration from perception internals
+- `recording-web` and `recording-bridge-local` support the human-facing QA UI and recording flow
+
+Platform support should be read as workflow maturity rather than repository presence alone:
+
+- Android is the primary local execution path today
+- Web support is available and evolving
+- iOS support exists in the repository and continues to evolve
 
 ## Current Status
 
