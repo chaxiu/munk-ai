@@ -1,3 +1,9 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -9,40 +15,46 @@ __pycache__/
 .coverage
 .venv/
 venv/
-.python-version
-.DS_Store
-.idea/
-.vscode/
-.cache/
-build/
-dist/
-development-log/
-docs/
-android-adb/
-icon_detect/
-onnxruntime-genai-main/
-llamacpp/
-scripts/
-runs/
-.review-runtime-local/
-paddleocr-onnx-models/
-perception-sdk-full/src/munk_perception_full/resources/models/
-*.onnx
-*.pt
-*.enc
-test_assets/
-
-screen_shot/
 .venv-perception-verify/
 .venv-review-lock/
 .venv-review-lock-explicit/
-tmp/
-.tmp/
+.python-version
+
+# Node / Frontend
 node_modules/
 .pnpm-store/
+
+# Build / Temp
+.cache/
+build/
+dist/
+tmp/
+.tmp/
+development-log/
+public/
+
+# IDE / Local runtime data
+.trae/
+.munk/
+.review-runtime-local/
+internal/
+runs/
+operations.sqlite3
+perception-sdk-full/src/munk_perception_full/resources/models/detect/detect.onnx
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Local experiments / external checkouts
+android-adb/
+llamacpp/
+munk-web/
 code/Todo/
 code/ToDoiOS/
-munk-web/
-download/
-.munk/
-public/
+
+# Local model assets
+models/
+logo/
+perception-sdk-full/src/munk_perception_full/resources/models/
+
+# Local Knowledge
+project-memory.md

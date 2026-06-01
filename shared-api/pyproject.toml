@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-shared-api"
+version = "0.1.0"
+description = "Shared testing contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
