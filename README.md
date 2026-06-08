@@ -234,13 +234,12 @@ flowchart TD
     end
 ```
 
-Repository-level architecture follows a layered model:
+Repository-level architecture follows a layered, package-oriented model:
 
-- `src/munk/` hosts orchestration, adapters, and artifact handling
-- `*-api` packages define stable contracts across package boundaries
-- `*-runtime-*` packages provide local runtime implementations
-- `perception-*` packages separate orchestration from perception internals
-- `recording-web` and `recording-bridge-local` support the human-facing QA UI and recording flow
+- `src/munk/` hosts the main entry surfaces, orchestration, adapters, and artifact handling
+- `packages/agents/*` contains agent-facing contract packages and local runtime implementations
+- `packages/devices/*` contains cross-platform device contracts and platform-specific runtimes
+- `packages/shared/*` contains shared contracts, perception packages, and cross-agent foundations
 
 Platform support should be read as workflow maturity rather than repository presence alone:
 
@@ -265,7 +264,7 @@ Munk AI is under active development.
 - [x] Batches mode
 - [x] Schedules mode
 - [x] Api contract open source
-- [ ] Implementation open source
+- [x] Implementation open source
 - [ ] CI & Release Setup
 - [ ] Docs and CONTRIBUTING guide
 - [ ] Windows support
