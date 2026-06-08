@@ -1,0 +1,142 @@
+import type { RouteRecordRaw } from 'vue-router'
+
+export const routes: RouteRecordRaw[] = [
+  {
+    path: '/',
+    name: 'dashboard',
+    component: () => import('@/features/home/pages/HomePage.vue'),
+    meta: {
+      title: 'Dashboard',
+      navLabel: 'nav.dashboard',
+      feature: 'dashboard',
+      sidebar: true,
+      shellAction: 'tests-planning',
+    },
+  },
+  {
+    path: '/devices',
+    name: 'devices',
+    component: () => import('@/features/devices/pages/DevicesPage.vue'),
+    meta: { title: 'Devices', navLabel: 'nav.devices', feature: 'devices', sidebar: true },
+  },
+  {
+    path: '/tests',
+    name: 'tests',
+    component: () => import('@/features/tests/pages/TestsPage.vue'),
+    meta: {
+      title: 'Tests',
+      navLabel: 'nav.tests',
+      feature: 'tests',
+      sidebar: true,
+      shellAction: 'tests-planning',
+    },
+  },
+  {
+    path: '/tests/create',
+    name: 'tests-create',
+    component: () => import('@/features/tests/pages/CreatePlanPage.vue'),
+    meta: { title: 'Create Plan', navLabel: 'tests.createTitle', feature: 'tests', sidebar: false },
+  },
+  {
+    path: '/tests/create/operations/:operationId',
+    name: 'tests-create-progress',
+    component: () => import('@/features/tests/pages/PlanCreationProgressPage.vue'),
+    meta: { title: 'Plan Creation Progress', navLabel: 'tests.createProgressTitle', feature: 'tests', sidebar: false },
+  },
+  {
+    path: '/tests/plans/:appId/:planId',
+    name: 'tests-plan-detail',
+    component: () => import('@/features/tests/pages/PlanDetailPage.vue'),
+    meta: { title: 'Plan Detail', navLabel: 'tests.planDetailTitle', feature: 'tests', sidebar: false },
+  },
+  {
+    path: '/tests/plans/:appId/:planId/cases/:caseId',
+    name: 'tests-case-detail',
+    component: () => import('@/features/tests/pages/CaseDetailPage.vue'),
+    meta: { title: 'Case Detail', navLabel: 'tests.caseDetailTitle', feature: 'tests', sidebar: false },
+  },
+  {
+    path: '/runs',
+    name: 'runs',
+    component: () => import('@/features/runs/pages/RunsPage.vue'),
+    meta: { title: 'Runs', navLabel: 'nav.runs', feature: 'runs', sidebar: true },
+  },
+  {
+    path: '/schedules',
+    name: 'schedules',
+    component: () => import('@/features/schedules/pages/SchedulesPage.vue'),
+    meta: { title: 'Schedules', navLabel: 'nav.schedules', feature: 'schedules', sidebar: true },
+  },
+  {
+    path: '/schedules/:scheduleId',
+    name: 'schedule-detail',
+    component: () => import('@/features/schedules/pages/ScheduleDetailPage.vue'),
+    meta: { title: 'Schedule Detail', navLabel: 'schedules.detailTitle', feature: 'schedules', sidebar: false },
+  },
+  {
+    path: '/runs/new',
+    name: 'runs-new',
+    component: () => import('@/features/runs/pages/RunPlansPage.vue'),
+    meta: { title: 'Run Plans', navLabel: 'nav.runs', feature: 'runs', sidebar: false },
+  },
+  {
+    path: '/runs/:operationId',
+    name: 'run-detail',
+    component: () => import('@/features/runs/pages/RunDetailPage.vue'),
+    meta: { title: 'Run Detail', navLabel: 'runDetail.title', feature: 'runs', sidebar: false },
+  },
+  {
+    path: '/recording',
+    name: 'recording',
+    component: () => import('@/features/recording/pages/RecordingWorkspacePage.vue'),
+    meta: { title: 'Recording', navLabel: 'nav.recording', feature: 'recording', sidebar: true },
+  },
+  {
+    path: '/assets',
+    name: 'assets',
+    component: () => import('@/features/assets/pages/AssetsPage.vue'),
+    meta: { title: 'Assets', navLabel: 'nav.assets', feature: 'assets', sidebar: false },
+  },
+  {
+    path: '/apps',
+    name: 'apps',
+    component: () => import('@/features/apps/pages/AppsPage.vue'),
+    meta: { title: 'Apps', navLabel: 'nav.apps', feature: 'apps', sidebar: true },
+  },
+  {
+    path: '/apps/create',
+    name: 'apps-create',
+    component: () => import('@/features/apps/pages/CreateAppPage.vue'),
+    meta: { title: 'Create App', navLabel: 'apps.createTitle', feature: 'apps', sidebar: false },
+  },
+  {
+    path: '/apps/:appId/knowledge',
+    name: 'apps-knowledge',
+    component: () => import('@/features/apps/pages/AppKnowledgePage.vue'),
+    meta: { title: 'App Knowledge', navLabel: 'apps.knowledge.title', feature: 'apps', sidebar: false },
+  },
+  {
+    path: '/apps/:appId/knowledge/candidates',
+    name: 'apps-knowledge-candidates',
+    component: () => import('@/features/apps/pages/AppKnowledgeCandidatesPage.vue'),
+    meta: { title: 'Knowledge Candidates', navLabel: 'apps.knowledge.candidatesPageTitle', feature: 'apps', sidebar: false },
+  },
+  {
+    path: '/apps/:appId',
+    name: 'apps-edit',
+    component: () => import('@/features/apps/pages/EditAppPage.vue'),
+    meta: { title: 'Edit App', navLabel: 'apps.editor.editTitle', feature: 'apps', sidebar: false },
+  },
+  {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('@/features/settings/pages/SettingsPage.vue'),
+    meta: { title: 'Settings', navLabel: 'nav.settings', feature: 'settings', sidebar: true },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/features/not-found/pages/NotFoundPage.vue'),
+    meta: { title: 'Not Found', navLabel: 'notFound.title', feature: 'not-found', sidebar: false },
+  },
+]

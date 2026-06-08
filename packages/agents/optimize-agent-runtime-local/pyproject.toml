@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-optimize-agent-runtime-local"
+version = "0.1.0"
+description = "Local optimize runtime implementation for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-optimize-agent-api>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "munk-shared-tools-api>=0.1.0",
+  "pydantic-ai-slim[openai,google]>=1.86.1",
+  "httpx>=0.28.1",
+  "pyyaml>=6.0.1",
+  "opencv-python-headless>=4.10.0.84",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.optimize.runtimes"]
+local = "munk_optimize_local:build_optimize_runtime_factory"
+
+[tool.uv.sources]
+munk-optimize-agent-api = { path = "../optimize-agent-api", editable = true }
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+munk-shared-tools-api = { path = "../../shared/shared-tools-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

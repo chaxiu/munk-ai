@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-knowledge-agent-runtime-local"
+version = "0.1.0"
+description = "Local knowledge agent runtime implementation for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-knowledge-agent-api>=0.1.0",
+  "pydantic-ai-slim[openai,google]>=1.86.1",
+  "httpx>=0.28.1",
+  "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.knowledge_agent.runtimes"]
+local = "munk_knowledge_agent_local:build_knowledge_agent_runtime_factory"
+
+[tool.uv.sources]
+munk-knowledge-agent-api = { path = "../knowledge-agent-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

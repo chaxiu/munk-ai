@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-agent-base"
+version = "0.1.0"
+description = "Shared implementation base for Munk agents"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-knowledge-api>=0.1.0",
+  "munk-knowledge-runtime-local>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "pydantic>=2.7.0",
+  "pydantic-ai-slim[openai,google]>=1.86.1",
+  "httpx>=0.28.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.app_knowledge.runtimes"]
+local = "munk.app_knowledge.local_runtime:build_knowledge_runtime_factory"
+
+[tool.uv.sources]
+munk-knowledge-api = { path = "../knowledge-api", editable = true }
+munk-knowledge-runtime-local = { path = "../knowledge-runtime-local", editable = true }
+munk-shared-api = { path = "../shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

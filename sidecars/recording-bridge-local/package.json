@@ -1,0 +1,44 @@
+{
+  "type": "module",
+  "name": "recording-bridge-local",
+  "version": "1.0.0",
+  "description": "This project was bootstrapped with Fastify-CLI.",
+  "main": "app.ts",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "npm run build:ts",
+    "test": "npm run build:ts && tsc -p test/tsconfig.json && FASTIFY_AUTOLOAD_TYPESCRIPT=1 node --test --experimental-test-coverage --loader ts-node/esm test/**/*.ts",
+    "start": "npm run build:ts && fastify start -l info dist/app.js",
+    "build:ts": "tsc",
+    "watch:ts": "tsc -w",
+    "dev": "fastify start -l info src/app.ts",
+    "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/websocket": "^11.2.0",
+    "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.0",
+    "@fastify/autoload": "^6.0.0",
+    "@fastify/sensible": "^6.0.0",
+    "@yume-chan/fetch-scrcpy-server": "^1.0.0",
+    "fastify-cli": "^8.0.0",
+    "@yume-chan/adb": "^2.1.1",
+    "@yume-chan/adb-scrcpy": "^2.1.1",
+    "@yume-chan/adb-server-node-tcp": "^2.1.1",
+    "@yume-chan/scrcpy": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "c8": "^11.0.0",
+    "ts-node": "^10.4.0",
+    "concurrently": "^9.0.0",
+    "fastify-tsconfig": "^3.0.0",
+    "typescript": "~5.9.2"
+  }
+}

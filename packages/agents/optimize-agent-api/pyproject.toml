@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-optimize-agent-api"
+version = "0.1.0"
+description = "Optimize API contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-shared-api>=0.1.0",
+  "pydantic>=2.7.0",
+]
+
+[tool.uv.sources]
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

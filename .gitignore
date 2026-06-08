@@ -38,7 +38,7 @@ public/
 .munk/
 .review-runtime-local/
 internal/
-runs/
+/runs/
 operations.sqlite3
 perception-sdk-full/src/munk_perception_full/resources/models/detect/detect.onnx
 *.sqlite3-wal
@@ -55,6 +55,8 @@ code/ToDoiOS/
 models/
 logo/
 perception-sdk-full/src/munk_perception_full/resources/models/
+packages/agents/review-agent-runtime-local/src/munk_review_local/resources
+packages/shared/knowledge-runtime-local/src/munk_knowledge_local/resources
 
 # Local Knowledge
 project-memory.md

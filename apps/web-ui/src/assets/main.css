@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+select {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+pre,
+code {
+  font-family: var(--font-mono);
+}
+
+@layer base {
+  ::selection {
+    background: var(--accent-primary-soft);
+  }
+}
+
+@layer components {
+  .app-page {
+    @apply mx-auto grid w-full max-w-7xl gap-6 px-6 py-6;
+  }
+
+  .app-section-title {
+    @apply text-lg font-semibold text-text-primary;
+  }
+
+  .app-section-description {
+    @apply text-sm text-text-secondary;
+  }
+
+  .app-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-4;
+  }
+
+  .app-filter-grid {
+    @apply grid gap-3 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .app-link {
+    @apply text-text-primary transition-colors hover:text-accent;
+  }
+
+  .app-link-subtle {
+    @apply text-text-secondary transition-colors hover:text-text-primary;
+  }
+
+  .app-code-block {
+    @apply overflow-x-auto rounded-xl border border-border-muted bg-surface-muted p-4 text-sm text-text-primary;
+  }
+}
+
+@layer utilities {
+  .scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}

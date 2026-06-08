@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-knowledge-agent-api"
+version = "0.1.0"
+description = "Knowledge agent API contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-agent-base>=0.1.0",
+  "munk-judge-agent-api>=0.1.0",
+  "pydantic>=2.7.0",
+]
+
+[tool.uv.sources]
+munk-agent-base = { path = "../../shared/agent-base", editable = true }
+munk-judge-agent-api = { path = "../judge-agent-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-runner-agent-api"
+version = "0.1.0"
+description = "Runner API contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-device-api>=0.1.0",
+  "munk-perception-api>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "pydantic>=2.7.0",
+]
+
+[tool.uv.sources]
+munk-device-api = { path = "../../devices/device-api", editable = true }
+munk-perception-api = { path = "../../shared/perception-api", editable = true }
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

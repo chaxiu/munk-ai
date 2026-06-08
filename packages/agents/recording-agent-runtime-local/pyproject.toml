@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-recording-agent-runtime-local"
+version = "0.1.0"
+description = "Local recording runtime implementation for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-device-api>=0.1.0",
+  "munk-device-android-runtime>=0.1.0",
+  "munk-recording-agent-api>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "numpy>=1.24.0",
+  "opencv-python-headless>=4.9.0.80",
+  "uiautomator2>=3.2.5",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.recording.runtimes"]
+local = "munk_recording_local:build_recording_runtime_factory"
+
+[tool.uv.sources]
+munk-device-api = { path = "../../devices/device-api", editable = true }
+munk-device-android-runtime = { path = "../../devices/device-runtime-android", editable = true }
+munk-recording-agent-api = { path = "../recording-agent-api", editable = true }
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

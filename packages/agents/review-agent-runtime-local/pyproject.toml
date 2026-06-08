@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-review-agent-runtime-local"
+version = "0.1.0"
+description = "Local review runtime implementation for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-review-agent-api>=0.1.0",
+  "munk-knowledge-runtime-local>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "pydantic-ai-slim[openai,google]>=1.86.1",
+  "httpx>=0.28.1",
+  "transformers==4.57.6",
+  "onnxruntime==1.23.2",
+  "sqlite-vec==0.1.9",
+  "pyyaml>=6.0.1",
+  "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.review.runtimes"]
+local = "munk_review_local:build_review_runtime_factory"
+
+[tool.uv.sources]
+munk-review-agent-api = { path = "../review-agent-api", editable = true }
+munk-knowledge-runtime-local = { path = "../../shared/knowledge-runtime-local", editable = true }
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+munk_review_local = ["resources/**/*"]

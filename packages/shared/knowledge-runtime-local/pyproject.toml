@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-knowledge-runtime-local"
+version = "0.1.0"
+description = "Local app knowledge runtime skeleton for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-knowledge-api>=0.1.0",
+  "numpy>=1.24.0",
+  "onnxruntime==1.23.2",
+  "sqlite-vec==0.1.9",
+  "transformers==4.57.6",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[tool.uv.sources]
+munk-knowledge-api = { path = "../knowledge-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+munk_knowledge_local = ["resources/**/*"]

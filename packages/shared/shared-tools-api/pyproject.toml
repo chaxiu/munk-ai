@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-shared-tools-api"
+version = "0.1.0"
+description = "Shared agent tool contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-agent-base>=0.1.0",
+  "munk-knowledge-api>=0.1.0",
+  "pydantic>=2.7.0",
+  "pydantic-ai-slim>=1.86.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[tool.uv.sources]
+munk-agent-base = { path = "../agent-base", editable = true }
+munk-knowledge-api = { path = "../knowledge-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

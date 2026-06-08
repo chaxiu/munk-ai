@@ -1,0 +1,3 @@
+export const DEFAULT_QUERY_STALE_TIME_MS = 5_000
+export const DEFAULT_QUERY_GC_TIME_MS = 5 * 60_000
+export const DEFAULT_POLL_INTERVAL_MS = 2_000

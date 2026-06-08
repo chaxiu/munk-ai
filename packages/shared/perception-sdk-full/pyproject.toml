@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-perception-full-sdk"
+version = "0.1.0"
+description = "Full perception SDK implementation for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-perception-api>=0.1.0",
+  "numpy>=1.24.0",
+  "opencv-python-headless>=4.9.0.80",
+  "onnxruntime==1.23.2",
+  "rapidocr>=3.8.1",
+  "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.perception.providers"]
+full = "munk_perception_full:build_provider_factory"
+
+[tool.uv.sources]
+munk-perception-api = { path = "../perception-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+munk_perception_full = ["resources/**/*"]
+
+[tool.setuptools.exclude-package-data]
+munk_perception_full = ["*.c", "resources/icon_detect/**/*"]

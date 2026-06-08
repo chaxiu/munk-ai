@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-device-web-runtime"
+version = "0.1.0"
+description = "Web device runtime implementation for munk"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-device-api>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "numpy>=1.24.0",
+  "opencv-python-headless>=4.9.0.80",
+  "playwright>=1.55.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[project.entry-points."munk.device.runtimes"]
+web = "munk_device_web:build_device_runtime_factory"
+
+[tool.uv.sources]
+munk-device-api = { path = "../device-api", editable = true }
+munk-shared-api = { path = "../../shared/shared-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

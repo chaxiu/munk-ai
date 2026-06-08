@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk-device-api"
+version = "0.1.0"
+description = "Device API contracts for ai-monkey"
+requires-python = ">=3.10"
+dependencies = [
+  "munk-perception-api>=0.1.0",
+  "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0"]
+
+[tool.uv.sources]
+munk-perception-api = { path = "../../shared/perception-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
