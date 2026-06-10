@@ -59,30 +59,79 @@ It tests the product itself, not just code, mocks, or static analysis.
 ### The Old Loop: Humans As Test Operators
 
 ```mermaid
-graph TD
-    classDef human fill:#E8F0FE,stroke:#1A73E8,stroke-width:2px,color:#1A73E8;
-    classDef codingAgent fill:#FCE8E6,stroke:#D93025,stroke-width:2px,color:#D93025;
-    classDef manualTest fill:#FEF7E0,stroke:#F29900,stroke-width:2px,color:#B06000,stroke-dasharray: 5 5;
+flowchart TD
+    classDef entry fill:#E8F0FE,stroke:#1A73E8,stroke-width:2px,color:#1A73E8;
+    classDef host fill:#FCE8E6,stroke:#D93025,stroke-width:2px,color:#D93025;
+    classDef workflow fill:#E6F4EA,stroke:#137333,stroke-width:2px,color:#137333;
+    classDef infra fill:#FFF3E0,stroke:#E65100,stroke-width:2px,color:#E65100,stroke-dasharray: 5 5;
+    classDef platform fill:#F3E8FD,stroke:#9334E6,stroke-width:2px,color:#6A1B9A,stroke-dasharray: 5 5;
 
-    H1(👤 Human<br/>Defines the requirement):::human
-    A1(🤖 Coding Agent<br/>Generates the code):::codingAgent
-    H2(👀 Human tester<br/>Compiles, clicks, checks errors):::manualTest
-    H3(📸 Human feedback loop<br/>Screenshots and writes context):::manualTest
+    A(🧰 CLI<br/>Local command entry):::entry
+    B(🔌 Local API<br/>Programmatic control surface):::entry
+    C(🧩 MCP<br/>External tool integration):::entry
+    D(🖥️ QA Web UI<br/>Human-facing workspace):::entry
 
-    H1 -->|Instruction| A1
-    A1 -->|Build and run| H2
-    H2 -->|Bug found| H3
-    H3 -->|Feed context back| A1
-    H2 -->|If it looks correct| END((Delivery))
+    E(🎛️ Orchestration Host<br/>Coordinates runs and artifacts):::host
 
-    subgraph Open-loop vibe coding
-        H1
-        A1
+    P(📝 Plan<br/>Task planning):::workflow
+    R(🏃 Runner<br/>Execution loop):::workflow
+    J(⚖️ Judge<br/>Outcome evaluation):::workflow
+    X(🛠️ Optimize Agent<br/>Post-run guidance optimization):::workflow
+    K(🧠 Knowledge Agent<br/>Execution-driven knowledge distillation):::workflow
+    V(🔍 Review<br/>Result inspection):::workflow
+    O(📼 Recording<br/>Capture and replay flow):::workflow
+
+    DP(📱 Device and Perception<br/>Execution and sensing layer):::infra
+    L(🔗 Local Bridge<br/>Recording transport):::infra
+
+    AX(🤖 Android<br/>Runtime target):::platform
+    WX(🌐 Web<br/>Runtime target):::platform
+    IX(🍎 iOS<br/>Evolving runtime target):::platform
+
+    A --> E
+    B --> E
+    C --> E
+    D --> B
+
+    E --> P
+    E --> R
+    E --> J
+    E --> X
+    E --> K
+    E --> V
+    E --> O
+
+    R --> DP
+    O --> L
+
+    DP --> AX
+    DP --> WX
+    DP --> IX
+
+    subgraph Entry surfaces
+        A
+        B
+        C
+        D
     end
 
-    subgraph Human-as-feedback bottleneck
-        H2
-        H3
+    subgraph Core orchestration
+        E
+        P
+        R
+        J
+        X
+        K
+        V
+        O
+    end
+
+    subgraph Runtime and platform layer
+        DP
+        L
+        AX
+        WX
+        IX
     end
 ```
 
