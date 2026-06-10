@@ -322,4 +322,4 @@ That is how Harness Engineering becomes practical.
 
 ## License
 
-AGPL-3.0. See [License.txt](./License.txt).
+Apache-2.0. See [License.txt](./License.txt).
