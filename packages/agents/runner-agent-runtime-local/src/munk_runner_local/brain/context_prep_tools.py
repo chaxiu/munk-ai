@@ -17,17 +17,23 @@ from munk_runner_local.brain.context_prep_models import (
 @dataclass(frozen=True)
 class ContextPrepDeps:
     knowledge_tools: KnowledgeToolProvider
+    recall_candidate_card_ids: tuple[str, ...] = ()
 
 
 def get_knowledge_card_bundle_payload(
     *,
     knowledge_tools: KnowledgeToolProvider,
     card_ids: list[str],
+    recall_candidate_card_ids: tuple[str, ...] = (),
 ) -> ContextPrepBundleToolResult:
     args = ContextPrepBundleToolArgs(card_ids=card_ids)
+    allowed_recall_ids = set(recall_candidate_card_ids)
     items: list[ContextPrepKnowledgeItem] = []
     missing_card_ids: list[str] = []
     for card_id in args.card_ids:
+        if allowed_recall_ids and card_id not in allowed_recall_ids:
+            missing_card_ids.append(card_id)
+            continue
         card = knowledge_tools.get(card_id)
         if card is None:
             missing_card_ids.append(card_id)
@@ -51,8 +57,9 @@ def register_context_prep_tools(
         ctx: PydanticRunContext[ContextPrepDeps],
         card_ids: list[str],
     ) -> ContextPrepBundleToolResult:
-        """Read 1-3 selected knowledge cards and return compact card summaries."""
+        """Read 1-3 selected knowledge cards from the recalled candidate list and return compact summaries."""
         return get_knowledge_card_bundle_payload(
             knowledge_tools=ctx.deps.knowledge_tools,
             card_ids=card_ids,
+            recall_candidate_card_ids=ctx.deps.recall_candidate_card_ids,
         )

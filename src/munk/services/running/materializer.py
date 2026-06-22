@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from munk.artifacts import ARTIFACT_ID_ARTIFACT_MANIFEST, ARTIFACT_ID_DIAGNOSTICS, ARTIFACT_ID_LLM_TRANSCRIPT
 from munk.config import ResolvedConfig
 from munk.execution.models import CaseExecutionRequest, CaseExecutionResult, ExecutionOutcome
-from munk.judging.models import JudgeEvidence, JudgeResult
+from munk.judging.models import JudgeResult
 from munk.judging.runtime import JudgeRuntime
 from munk.running import RunnerRuntimeOutput
 from munk.services.artifact_manifest_models import ReproductionTargetKind
@@ -18,9 +19,9 @@ from munk.services.judging import execute_case_judging
 from munk.services.models import RunPaths
 from munk.services.operations.service import OperationTracker
 
+from .materializer_diagnostics import build_runner_failure_diagnostics, build_runner_success_diagnostics
+from .materializer_evidence import compact_judge_evidence
 from .runtime_host import RunnerHostManagedPaths
-
-RUNNER_RUNTIME_DIAGNOSTICS_STAGE = "runner_runtime"
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,6 @@ class RunnerArtifactMaterializer:
             result=result,
             execution=execution,
             artifacts=artifacts,
-            judge_result=materialized_judge.result,
             judge_diagnostics=materialized_judge.diagnostics,
         )
         self._diagnostics_service.write(host_paths.diagnostics_path, diagnostics)
@@ -158,7 +158,6 @@ class RunnerArtifactMaterializer:
             result=result,
             execution=execution,
             artifacts=artifacts,
-            judge_result=judge_result,
             judge_diagnostics=judge_diagnostics,
             exc=exc,
         )
@@ -192,29 +191,8 @@ class RunnerArtifactMaterializer:
             confidence=judge_result.confidence,
             missing_evidence=list(judge_result.missing_evidence),
             supporting_evidence_ids=list(judge_result.supporting_evidence_ids),
-            evidence=[RunnerArtifactMaterializer._compact_evidence(item) for item in list(judge_result.evidence)],
+            evidence=[compact_judge_evidence(item) for item in list(judge_result.evidence)],
             artifacts=artifacts,
-        )
-
-    @staticmethod
-    def _compact_evidence(evidence: JudgeEvidence) -> JudgeEvidence:
-        payload = dict(evidence.payload)
-        compact_payload: dict[str, object] = {}
-        path = payload.get("path")
-        if isinstance(path, str):
-            compact_payload["path"] = path
-        step_index = payload.get("step_index")
-        if isinstance(step_index, int):
-            compact_payload["step_index"] = step_index
-        excerpt = payload.get("excerpt")
-        if excerpt is not None:
-            compact_payload["excerpt"] = excerpt
-        return JudgeEvidence(
-            evidence_id=evidence.evidence_id,
-            kind=evidence.kind,
-            source=evidence.source,
-            summary=evidence.summary,
-            payload=compact_payload,
         )
 
     def _build_artifacts(
@@ -227,28 +205,21 @@ class RunnerArtifactMaterializer:
     ) -> dict[str, str]:
         effective_run_dir = run_dir or host_paths.root_dir
         artifacts: dict[str, str] = {
-            "case": str(paths.case_path if paths is not None and paths.case_path is not None else effective_run_dir / "case.json"),
-            "result": str(host_paths.result_path),
-            "artifact_manifest": str(host_paths.artifact_manifest_path),
-            "diagnostics": str(host_paths.diagnostics_path),
+            ARTIFACT_ID_ARTIFACT_MANIFEST: str(host_paths.artifact_manifest_path),
+            ARTIFACT_ID_DIAGNOSTICS: str(host_paths.diagnostics_path),
         }
         if paths is not None:
-            artifacts["log"] = str(paths.log_path)
-            optional_paths = {
-                "decision_trace": paths.decision_trace_path,
-                "runner_history": paths.runner_history_path,
-                "runner_memory": paths.runner_memory_path,
-                "context_prep": paths.context_prep_path,
-                "runtime_logs": paths.runtime_logs_dir,
-                "raw_screenshots": paths.raw_dir,
-                "annotated_screenshots": paths.annotated_dir,
-                "observation_frames": paths.observation_frames_dir,
-                "observation_diffs": paths.observation_diffs_dir,
-                "observation_tree": paths.observation_tree_dir,
-                "llm_transcript": paths.llm_transcript_path if paths.llm_transcript_path and paths.llm_transcript_path.exists() else None,
-            }
-            for artifact_id, path in optional_paths.items():
-                if path is not None:
+            for artifact_id, path in paths.publishable_artifacts().items():
+                artifacts[artifact_id] = str(path)
+        ios_bridge_dir = effective_run_dir / "ios_bridge"
+        if ios_bridge_dir.exists():
+            artifacts["ios_bridge"] = str(ios_bridge_dir)
+            for artifact_id, path in {
+                "ios_bridge_session": ios_bridge_dir / "session.json",
+                "ios_bridge_events": ios_bridge_dir / "events.jsonl",
+                "ios_bridge_summary": ios_bridge_dir / "summary.json",
+            }.items():
+                if path.exists():
                     artifacts[artifact_id] = str(path)
         if request.artifact_path is not None:
             artifacts["input_artifact"] = str(request.artifact_path)
@@ -261,35 +232,17 @@ class RunnerArtifactMaterializer:
         result: CaseExecutionResult,
         execution: ExecutionOutcome,
         artifacts: dict[str, str],
-        judge_result: JudgeResult,
         judge_diagnostics: OperationDiagnostics,
     ) -> OperationDiagnostics:
-        provider, model, role_models, config_fingerprint = self._diagnostics_service.resolve_provider_model(
+        return build_runner_success_diagnostics(
+            diagnostics_service=self._diagnostics_service,
             resolved_config=self._resolved_config,
-            roles=("runner", "judge"),
-        )
-        warning_summary = list(judge_diagnostics.warning_summary)
-        if execution.stop_reason:
-            warning_summary.append(f"runner stop reason: {execution.stop_reason}")
-        return OperationDiagnostics(
             operation_id=self._operation_id(),
-            operation_kind="run_case",
-            app_id=request.app_id,
-            status="succeeded",
-            verification_verdict=result.verdict,
-            started_at=judge_diagnostics.started_at,
-            finished_at=self._diagnostics_service.now_iso(),
-            duration_ms=judge_diagnostics.duration_ms,
-            provider=provider,
-            model=model,
-            role_models=role_models,
-            config_fingerprint=config_fingerprint,
-            device_ref=request.device_ref,
-            entry_identity=execution.last_surface_identity or execution.last_target_identity,
-            warning_summary=warning_summary,
-            artifact_checks=self._build_artifact_checks(artifacts),
-            contract_versions={},
-            linked_operation_ids={},
+            request=request,
+            result=result,
+            execution=execution,
+            artifacts=artifacts,
+            judge_diagnostics=judge_diagnostics,
         )
 
     def _build_failure_diagnostics(
@@ -299,86 +252,20 @@ class RunnerArtifactMaterializer:
         result: CaseExecutionResult,
         execution: ExecutionOutcome,
         artifacts: dict[str, str],
-        judge_result: JudgeResult,
         judge_diagnostics: OperationDiagnostics | None,
         exc: Exception,
     ) -> OperationDiagnostics:
-        provider, model, role_models, config_fingerprint = self._diagnostics_service.resolve_provider_model(
+        return build_runner_failure_diagnostics(
+            diagnostics_service=self._diagnostics_service,
             resolved_config=self._resolved_config,
-            roles=("runner", "judge"),
-        )
-        warning_summary = list(judge_diagnostics.warning_summary) if judge_diagnostics is not None else []
-        if execution.stop_reason:
-            warning_summary.append(f"runner stop reason: {execution.stop_reason}")
-        return OperationDiagnostics(
             operation_id=self._operation_id(),
-            operation_kind="run_case",
-            app_id=request.app_id,
-            status="failed",
-            verification_verdict=result.verdict,
-            started_at=judge_diagnostics.started_at if judge_diagnostics is not None else self._diagnostics_service.now_iso(),
-            finished_at=self._diagnostics_service.now_iso(),
-            duration_ms=judge_diagnostics.duration_ms if judge_diagnostics is not None else 0,
-            provider=provider,
-            model=model,
-            role_models=role_models,
-            config_fingerprint=config_fingerprint,
-            device_ref=request.device_ref,
-            entry_identity=execution.last_surface_identity or execution.last_target_identity,
-            warning_summary=warning_summary,
-            failure_category=self._diagnostics_service.classify_exception(exc),
-            failure_stage=RUNNER_RUNTIME_DIAGNOSTICS_STAGE,
-            failure_message=str(exc),
-            artifact_checks=self._build_artifact_checks(artifacts),
-            contract_versions={},
-            linked_operation_ids={},
+            request=request,
+            result=result,
+            execution=execution,
+            artifacts=artifacts,
+            judge_diagnostics=judge_diagnostics,
+            exc=exc,
         )
-
-    def _build_artifact_checks(self, artifacts: dict[str, str]) -> list:
-        checks = [
-            self._diagnostics_service.build_json_artifact_check(
-                artifact_id="case",
-                path=Path(artifacts["case"]),
-                required_fields=("app_id", "plan_id", "case"),
-            ),
-            self._diagnostics_service.build_json_artifact_check(
-                artifact_id="result",
-                path=Path(artifacts["result"]),
-                required_fields=("plan_id", "case_id", "execution", "verdict", "artifacts"),
-            ),
-            self._diagnostics_service.build_json_artifact_check(
-                artifact_id="artifact_manifest",
-                path=Path(artifacts["artifact_manifest"]),
-                required_fields=("root_dir", "primary_artifacts", "case_runs"),
-            ),
-            self._diagnostics_service.build_json_artifact_check(
-                artifact_id="judge_result",
-                path=judge_path(artifacts.get("judge_result")),
-                required_fields=("verdict", "summary", "reason"),
-                required=False,
-            ),
-        ]
-        for artifact_id in (
-            "decision_trace",
-            "runner_history",
-            "runner_memory",
-            "llm_transcript",
-            "runtime_logs",
-            "observation_frames",
-            "observation_diffs",
-            "observation_tree",
-        ):
-            raw_path = artifacts.get(artifact_id)
-            if raw_path is None:
-                continue
-            checks.append(
-                self._diagnostics_service.build_path_artifact_check(
-                    artifact_id=artifact_id,
-                    path=Path(raw_path),
-                    required=False,
-                )
-            )
-        return checks
 
     def _build_case_manifest(self, *, result: CaseExecutionResult):
         return self._artifact_manifest_service.build_case_manifest(
@@ -420,8 +307,12 @@ class RunnerArtifactMaterializer:
             evidence=[],
             judge_request_path=run_dir / "judge_request.json",
             judge_result_path=run_dir / "judge_result.json",
-            diagnostics_path=Path(artifacts["diagnostics"]),
-            llm_transcript_path=Path(artifacts["llm_transcript"]) if "llm_transcript" in artifacts else None,
+            diagnostics_path=Path(artifacts[ARTIFACT_ID_DIAGNOSTICS]),
+            llm_transcript_path=(
+                Path(artifacts[ARTIFACT_ID_LLM_TRANSCRIPT])
+                if ARTIFACT_ID_LLM_TRANSCRIPT in artifacts
+                else None
+            ),
         )
 
     def _operation_id(self) -> str | None:
@@ -443,7 +334,3 @@ class RunnerArtifactMaterializer:
             return getattr(record, "kind", None)
         except Exception:
             return getattr(tracker, "kind", None)
-
-
-def judge_path(raw_path: str | None) -> Path:
-    return Path(raw_path) if raw_path else Path("/__missing__/judge_result.json")

@@ -3,13 +3,33 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DevicesListInput(BaseModel):
     platform: Literal["android", "ios", "web"] | None = Field(
         default=None,
         description="Optional platform filter for discovered devices.",
+    )
+
+
+class DeviceStateInput(BaseModel):
+    device_ref: str = Field(description="Target device reference to inspect.")
+    platform: Literal["android", "ios", "web"] | None = Field(
+        default=None,
+        description="Optional explicit platform filter used to disambiguate the device reference.",
+    )
+
+
+class DeviceUnlockInput(BaseModel):
+    device_ref: str = Field(description="Target device reference to unlock.")
+    platform: Literal["android", "ios", "web"] | None = Field(
+        default=None,
+        description="Optional explicit platform filter used to disambiguate the device reference.",
+    )
+    strategy: Literal["swipe"] = Field(
+        default="swipe",
+        description="Device unlock strategy. V1 supports swipe only.",
     )
 
 
@@ -120,7 +140,18 @@ class SessionsListInput(BaseModel):
 
 
 class SessionActionInput(BaseModel):
-    type: Literal["click", "long_press", "input", "clear_and_input", "scroll", "swipe", "wait", "back", "home"] = Field(
+    type: Literal[
+        "click",
+        "long_press",
+        "input",
+        "edit_text",
+        "scroll",
+        "swipe",
+        "pull_to_refresh",
+        "wait",
+        "back",
+        "home",
+    ] = Field(
         description="Allowed interactive action type.",
     )
     target_id: int | None = Field(
@@ -141,11 +172,20 @@ class SessionActionInput(BaseModel):
     )
     point: tuple[int, int] | None = Field(default=None, description="Optional click point as x, y.")
     text: str | None = Field(default=None, description="Optional input text payload.")
+    text_mode: Literal["append", "replace"] | None = Field(
+        default=None,
+        description="Optional edit_text mode. Use append to type into the current focus or target, replace to clear a target then type.",
+    )
     direction: Literal["up", "down", "left", "right"] | None = Field(
         default=None,
         description="Optional direction. For scroll it means content direction; for swipe it means finger gesture direction.",
     )
-    distance_px: int | None = Field(default=None, gt=0, description="Optional gesture travel distance in pixels.")
+    start_x_ratio: float | None = Field(default=None, description="Optional normalized gesture start x ratio in the range [0.0, 1.0].")
+    start_y_ratio: float | None = Field(default=None, description="Optional normalized gesture start y ratio in the range [0.0, 1.0].")
+    distance_ratio: float | None = Field(
+        default=None,
+        description="Optional normalized gesture travel along the primary axis in the range (0.0, 1.0].",
+    )
     duration: float | None = Field(
         default=None,
         description="Optional duration in seconds. Used by wait and can override the default hold time for long_press.",
@@ -169,17 +209,50 @@ class SessionActionInput(BaseModel):
             return {"type": "wait", "duration": float(value)}
         return data
 
+    @field_validator("start_x_ratio", "start_y_ratio")
+    @classmethod
+    def validate_start_ratio(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        if not (0.0 <= value <= 1.0):
+            raise ValueError("start ratio values must be between 0.0 and 1.0")
+        return value
+
+    @field_validator("distance_ratio")
+    @classmethod
+    def validate_distance_ratio(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        if value <= 0.0 or value > 1.0:
+            raise ValueError("distance_ratio must be between 0.0 and 1.0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_gesture_shape(self) -> "SessionActionInput":
+        if self.type in {"scroll", "swipe"}:
+            if self.direction is None:
+                raise ValueError("direction is required for scroll and swipe")
+            if self.start_x_ratio is None:
+                raise ValueError("start_x_ratio is required for scroll and swipe")
+            if self.start_y_ratio is None:
+                raise ValueError("start_y_ratio is required for scroll and swipe")
+            if self.distance_ratio is None:
+                raise ValueError("distance_ratio is required for scroll and swipe")
+        if self.type == "pull_to_refresh" and self.direction is not None:
+            raise ValueError("direction must not be provided for pull_to_refresh")
+        return self
+
 
 class SessionActInput(BaseModel):
     session_id: str = Field(description="Interactive session identifier to act on.")
     action: SessionActionInput = Field(description="One allowed interactive action request.")
-    detail: Literal["compact", "full"] = Field(
-        default="compact",
-        description="Action result payload detail level. Use compact by default and full for complete before/after payloads.",
+    detail: Literal["summary", "compact", "full"] = Field(
+        default="summary",
+        description="Action result payload detail level. Use summary by default, compact for post-action targets, and full for complete before/after payloads.",
     )
-    settle_timeout_sec: float | None = Field(
+    timeout_sec: float | None = Field(
         default=None,
-        description="Optional post-action settle timeout in seconds. Defaults to 6.0 for interactive sessions.",
+        description="Optional post-action timeout in seconds while waiting for the screen to settle. Defaults to 6.0 for interactive sessions.",
     )
 
 

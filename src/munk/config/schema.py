@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 AgentRole = Literal["plan", "runner", "judge", "review", "analysis", "optimize", "knowledge"]
 LLMProviderKind = Literal["openai_compatible", "gemini"]
 OutputStrategy = Literal["auto", "prompted"]
+SettleMode = Literal["strict", "ratio", "delay"]
+VisionImageFormat = Literal["webp", "jpeg"]
 
 
 class OpenAICompatibleSection(BaseModel):
@@ -28,6 +30,10 @@ class GeminiSection(BaseModel):
     vertexai: bool = False
     project: str | None = None
     location: str | None = None
+    credentials_path: str | None = Field(
+        default=None,
+        description="Optional path to Google Cloud service account JSON file",
+    )
     base_url: str | None = None
     timeout_sec: float = 120.0
 
@@ -64,6 +70,11 @@ class ProxyConfig(BaseModel):
     no_proxy: list[str] = Field(default_factory=list)
 
 
+class IOSBridgeConfig(BaseModel):
+    sudo_enabled: bool = False
+    sudo_password: str | None = None
+
+
 class RuntimeConfig(BaseModel):
     max_tokens: int | None = None
     temperature: float | None = None
@@ -71,9 +82,20 @@ class RuntimeConfig(BaseModel):
     max_seconds: float | None = None
     interval: float | None = None
     settle_timeout: float | None = None
+    initial_ready_timeout_sec: float | None = None
+    settle_mode: SettleMode | None = None
+    settle_ocr_only: bool | None = None
+    settle_ratio_threshold: float | None = None
+    settle_delay_sec: float | None = None
     max_side: int | None = None
     vl_max_side: int | None = None
+    runner_max_elements: int | None = None
+    vl_image_format: VisionImageFormat | None = None
+    vl_fallback_image_format: Literal["jpeg"] | None = None
+    vl_webp_quality: int | None = None
+    vl_jpeg_quality: int | None = None
     icon_conf: float | None = None
+    runner_include_screenshot: bool | None = None
 
 
 class OrchestrationConfig(BaseModel):
@@ -90,5 +112,6 @@ class MunkConfig(BaseModel):
     agents: MunkAgentsConfig | None = None
     perception: PerceptionConfig | None = None
     proxy: ProxyConfig | None = None
+    ios_bridge: IOSBridgeConfig | None = None
     runtime: RuntimeConfig | None = None
     orchestration: OrchestrationConfig | None = None

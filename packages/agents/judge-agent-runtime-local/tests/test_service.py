@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from munk.agent_base.llm.transcript import append_transcript_entry
+from munk.agent_base.llm.transcript import append_llm_request_entry
 from munk.judging.models import (
+    JudgeEvidenceBundle,
     JudgeExecutionSummary,
     JudgeManagedPaths,
     JudgeRequest,
@@ -24,11 +25,14 @@ class FakeJudgeAgent:
 
     def judge(self, evidence_pack):  # noqa: ANN001, ANN201
         assert evidence_pack.case_id == "case-1"
-        append_transcript_entry(
-            kind="llm_request",
+        append_llm_request_entry(
             provider="test",
             model="judge-test",
-            payload={"case_id": evidence_pack.case_id},
+            request_id="req-1",
+            method="POST",
+            url="https://example.com/v1/chat/completions",
+            headers={},
+            body={"case_id": evidence_pack.case_id},
         )
         return JudgeAgentOutput(
             verdict="passed",
@@ -66,13 +70,14 @@ def build_request(tmp_path: Path) -> JudgeRequest:
         expected=["Settings page is visible"],
         runner_goal="Open settings page",
         execution=JudgeExecutionSummary(status="completed", steps_completed=2),
-        evidence_bundle={},
+        evidence_bundle=JudgeEvidenceBundle(),
     )
 
 
 def build_context(tmp_path: Path, *, progress=None) -> JudgeRuntimeContext:  # noqa: ANN001
     return JudgeRuntimeContext(
         operation_id="op-1",
+        attempt_index=0,
         managed_paths=JudgeManagedPaths(
             root_dir=tmp_path,
             judge_request_path=tmp_path / "judge_request.json",
@@ -116,11 +121,21 @@ def test_judge_runtime_service_emits_minimal_lifecycle_events(monkeypatch, tmp_p
 
     assert output.result_data.verdict == "passed"
     assert [event.event_type for event in sink.events] == [
-        "agent_started",
+        "judge_started",
         "judge_context_loaded",
-        "judge_agent_completed",
-        "agent_ended",
+        "judge_evidence_ready",
+        "judge_prompt_ready",
+        "judge_tool_calls_completed",
+        "judge_decision_ready",
+        "judge_completed",
     ]
+    for event in sink.events:
+        assert event.agent_role == "judge"
+        assert event.timeline_scope == "parent_run"
+        assert event.attempt_index == 0
+        assert event.app_id == "app-1"
+        assert event.plan_id == "plan-1"
+        assert event.case_id == "case-1"
 
 
 def test_judge_runtime_service_raises_on_cooperative_cancel(monkeypatch, tmp_path: Path) -> None:
@@ -141,7 +156,14 @@ def test_judge_runtime_service_raises_on_cooperative_cancel(monkeypatch, tmp_pat
         raise AssertionError("expected cooperative cancel to raise")
 
     assert [event.event_type for event in sink.events] == [
-        "agent_started",
+        "judge_started",
         "judge_context_loaded",
-        "agent_canceled",
+        "judge_canceled",
     ]
+    for event in sink.events:
+        assert event.agent_role == "judge"
+        assert event.timeline_scope == "parent_run"
+        assert event.attempt_index == 0
+        assert event.app_id == "app-1"
+        assert event.plan_id == "plan-1"
+        assert event.case_id == "case-1"

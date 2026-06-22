@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 from munk.config import ResolvedConfig, resolve_role_model_config
 from munk.running import RunnerProtocolError
 from munk.services.diagnostics_models import ArtifactCheck, DiagnosticsFailureCategory, OperationDiagnostics
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from munk.config.schema import AgentRole
@@ -30,6 +31,7 @@ class OperationDiagnosticsService:
         path: Path,
         required_fields: tuple[str, ...] = (),
         expected_schema_version: str | None = None,
+        model_type: type[BaseModel] | None = None,
         required: bool = True,
     ) -> ArtifactCheck:
         exists = path.exists()
@@ -55,6 +57,16 @@ class OperationDiagnosticsService:
                 summary=f"invalid json: {exc}",
             )
 
+        if not isinstance(payload, dict):
+            return ArtifactCheck(
+                artifact_id=artifact_id,
+                path=path,
+                required=required,
+                exists=True,
+                valid=False,
+                summary=f"expected json object, got {type(payload).__name__}",
+            )
+
         missing_fields = [field for field in required_fields if field not in payload]
         if missing_fields:
             return ArtifactCheck(
@@ -78,6 +90,19 @@ class OperationDiagnosticsService:
                     f"{payload.get('schema_version')!r} != {expected_schema_version!r}"
                 ),
             )
+
+        if model_type is not None:
+            try:
+                model_type.model_validate(payload)
+            except Exception as exc:  # noqa: BLE001
+                return ArtifactCheck(
+                    artifact_id=artifact_id,
+                    path=path,
+                    required=required,
+                    exists=True,
+                    valid=False,
+                    summary=f"invalid {model_type.__name__}: {exc}",
+                )
 
         return ArtifactCheck(
             artifact_id=artifact_id,

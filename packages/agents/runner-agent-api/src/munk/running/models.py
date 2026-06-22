@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,6 +12,9 @@ from munk.device import DeviceDriver
 from munk.perception import PerceptionProvider
 from munk.testing import TestCase
 from munk.token_usage import TokenUsage
+
+if TYPE_CHECKING:
+    from munk.services.models import RunPaths
 
 RuntimeOverrideValue = str | int | float | bool
 RunnerExecutionStatus = Literal["completed", "failed", "incomplete"]
@@ -104,6 +107,48 @@ class RunnerManagedPaths:
     runner_memory_path: Path | None
     llm_transcript_path: Path | None
     context_prep_path: Path | None
+    runner_issues_path: Path | None = None
+
+    @classmethod
+    def from_run_paths(cls, paths: "RunPaths") -> "RunnerManagedPaths":
+        return cls(
+            root_dir=paths.run_dir,
+            request_dump_path=paths.case_path or (paths.run_dir / "runner_request.json"),
+            raw_dir=paths.raw_dir,
+            annotated_dir=paths.annotated_dir,
+            runtime_logs_dir=paths.runtime_logs_dir,
+            observation_frames_dir=paths.observation_frames_dir,
+            observation_diffs_dir=paths.observation_diffs_dir,
+            observation_tree_dir=paths.observation_tree_dir,
+            decision_trace_path=paths.decision_trace_path,
+            runner_history_path=paths.runner_history_path,
+            runner_memory_path=paths.runner_memory_path,
+            llm_transcript_path=paths.llm_transcript_path,
+            context_prep_path=paths.context_prep_path,
+            runner_issues_path=paths.runner_issues_path,
+        )
+
+    def to_run_paths(self) -> "RunPaths":
+        from munk.services.models import RunPaths
+
+        return RunPaths(
+            run_dir=self.root_dir,
+            log_path=self.root_dir / "run.log",
+            raw_dir=self.raw_dir,
+            annotated_dir=self.annotated_dir,
+            runtime_logs_dir=self.runtime_logs_dir,
+            observation_frames_dir=self.observation_frames_dir,
+            observation_diffs_dir=self.observation_diffs_dir,
+            observation_tree_dir=self.observation_tree_dir,
+            case_path=self.request_dump_path,
+            result_path=self.root_dir / "result.json",
+            decision_trace_path=self.decision_trace_path,
+            runner_history_path=self.runner_history_path,
+            runner_memory_path=self.runner_memory_path,
+            runner_issues_path=self.runner_issues_path,
+            llm_transcript_path=self.llm_transcript_path,
+            context_prep_path=self.context_prep_path,
+        )
 
 
 @dataclass(frozen=True)
@@ -112,4 +157,5 @@ class RunnerRuntimeContext:
     managed_paths: RunnerManagedPaths
     device: DeviceDriver
     perception: PerceptionProvider
+    attempt_index: int = 0
     progress: AgentEventSink | None = None

@@ -8,8 +8,10 @@ from munk.perception import ObservationTree
 from .tree_models import ParsedTreeNode, filter_parsed_tree_nodes
 from .tree_parsers import (
     filter_android_uixml_nodes,
+    filter_ios_ax_tree_nodes,
     filter_web_dom_nodes,
     parse_android_uixml,
+    parse_ios_ax_tree,
     parse_web_dom_snapshot,
 )
 
@@ -60,6 +62,14 @@ def _filter_web(
     return filter_web_dom_nodes(nodes, screen_size)
 
 
+def _filter_ios(
+    nodes: list[ParsedTreeNode],
+    screen_size: tuple[int, int],
+    current_app_identity: str | None,
+) -> list[ParsedTreeNode]:
+    return filter_ios_ax_tree_nodes(nodes, screen_size, current_bundle_id=current_app_identity)
+
+
 _DEFAULT_TREE_PARSERS = {
     "android_uixml": RegisteredTreeParser(
         source_type="android_uixml",
@@ -70,5 +80,10 @@ _DEFAULT_TREE_PARSERS = {
         source_type="web_dom",
         parse=parse_web_dom_snapshot,
         filter_nodes=_filter_web,
+    ),
+    "ios_ax_tree": RegisteredTreeParser(
+        source_type="ios_ax_tree",
+        parse=parse_ios_ax_tree,
+        filter_nodes=_filter_ios,
     ),
 }

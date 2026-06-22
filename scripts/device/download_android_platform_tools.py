@@ -12,8 +12,10 @@ if str(SRC_DIR) not in sys.path:
 
 from munk.runtime_distribution.build_env import (  # noqa: E402
     ADB_VERSION_MARKER_FILE,
+    extract_android_platform_tools_archive,
     install_android_platform_tools,
     load_android_platform_tools_pin,
+    load_android_platform_tools_version,
     resolve_android_platform_tools_target_platform,
 )
 

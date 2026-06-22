@@ -20,12 +20,11 @@ def apps_create_command(*, request_file: Path, json_output: bool) -> None:
         normalized_app_id = AppRegistry.normalize_app_id(request.profile.app_id)
         if service.app_registry.exists(normalized_app_id):
             raise InvalidMachineRequestError(f"app '{normalized_app_id}' already exists")
-        if not (request.app_knowledge_content or "").strip():
-            raise InvalidMachineRequestError("app_knowledge_content must not be empty when creating an app")
-        validate_app_knowledge_document(
-            request.app_knowledge_content or "",
-            expected_app_id=normalized_app_id,
-        )
+        if (request.app_knowledge_content or "").strip():
+            validate_app_knowledge_document(
+                request.app_knowledge_content or "",
+                expected_app_id=normalized_app_id,
+            )
         profile = request.profile.to_profile().model_copy(update={"app_id": normalized_app_id})
         service.app_registry.save(profile)
         service.app_registry.save_introduction(
@@ -33,16 +32,17 @@ def apps_create_command(*, request_file: Path, json_output: bool) -> None:
             request.introduction_markdown,
             ref=profile.app_introduction_ref,
         )
-        service.app_registry.save_knowledge(
-            profile.app_id,
-            request.app_knowledge_content or "",
-            ref=profile.app_knowledge_ref,
-        )
-        build_app_knowledge_index(
-            app_id=profile.app_id,
-            assets_root=service.app_registry.root_dir,
-            ref=profile.app_knowledge_ref,
-        )
+        if (request.app_knowledge_content or "").strip():
+            service.app_registry.save_knowledge(
+                profile.app_id,
+                request.app_knowledge_content or "",
+                ref=profile.app_knowledge_ref,
+            )
+            build_app_knowledge_index(
+                app_id=profile.app_id,
+                assets_root=service.app_registry.root_dir,
+                ref=profile.app_knowledge_ref,
+            )
         detail = service.build_app_detail(profile.app_id)
         payload = build_success_response(
             command="apps_create",

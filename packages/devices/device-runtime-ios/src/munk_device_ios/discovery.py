@@ -3,12 +3,17 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, cast
+from typing import Any, Callable, Literal, Protocol, cast
 
 from munk.device import DeviceDescriptor, ResolvedDeviceTarget
+from munk.services.ios import IOSBridgeRealDevice, get_default_ios_device_bridge_manager
 
 IOSDeviceKind = Literal["simulator", "real_device"]
 CommandRunner = Callable[[list[str]], str]
+
+
+class SupportsIOSRealDeviceDiscovery(Protocol):
+    def list_real_devices(self) -> list[IOSBridgeRealDevice]: ...
 
 
 def empty_ios_raw() -> dict[str, Any]:
@@ -19,6 +24,7 @@ def empty_ios_raw() -> dict[str, Any]:
 class IOSDeviceDescriptor(DeviceDescriptor):
     kind: IOSDeviceKind
     udid: str | None = None
+    coredevice_identifier: str | None = None
     state: str | None = None
     runtime: str | None = None
     raw: dict[str, Any] = field(default_factory=empty_ios_raw)
@@ -28,19 +34,26 @@ class IOSDeviceDescriptor(DeviceDescriptor):
 class ResolvedIOSDeviceTarget(ResolvedDeviceTarget):
     kind: IOSDeviceKind
     udid: str | None = None
+    coredevice_identifier: str | None = None
     is_booted: bool | None = None
     state: str | None = None
     raw: dict[str, Any] = field(default_factory=empty_ios_raw)
 
 
-def list_ios_devices(*, command_runner: CommandRunner | None = None) -> list[IOSDeviceDescriptor]:
+def list_ios_devices(
+    *,
+    command_runner: CommandRunner | None = None,
+    bridge_manager: SupportsIOSRealDeviceDiscovery | None = None,
+) -> list[IOSDeviceDescriptor]:
     simulators = [
         descriptor
         for descriptor in _list_simulator_devices(command_runner=command_runner)
-        if descriptor.availability == "available" and descriptor.is_booted is True
+        if descriptor.availability == "available"
     ]
     real_devices = [
-        descriptor for descriptor in _list_real_devices(command_runner=command_runner) if descriptor.availability == "available"
+        descriptor
+        for descriptor in _list_real_devices_via_bridge(bridge_manager=bridge_manager)
+        if descriptor.availability == "available"
     ]
     return sorted(
         [*simulators, *real_devices],
@@ -60,7 +73,7 @@ def resolve_ios_device_target(
 ) -> ResolvedIOSDeviceTarget:
     if device_ref:
         for descriptor in descriptors:
-            if descriptor.device_ref == device_ref:
+            if _matches_device_ref(descriptor, device_ref):
                 return _to_resolved_target(descriptor, default_wda_url=default_wda_url)
         raise ValueError(f"unknown ios device_ref: {device_ref}")
 
@@ -92,8 +105,9 @@ def _to_resolved_target(descriptor: IOSDeviceDescriptor, *, default_wda_url: str
         display_name=descriptor.display_name,
         kind=descriptor.kind,
         udid=descriptor.udid,
-        executable=descriptor.kind == "simulator",
-        launch_endpoint=default_wda_url if descriptor.kind == "simulator" else None,
+        coredevice_identifier=descriptor.coredevice_identifier,
+        executable=descriptor.availability == "available",
+        launch_endpoint=default_wda_url,
         is_booted=descriptor.is_booted,
         state=descriptor.state,
         raw=dict(descriptor.raw),
@@ -147,39 +161,13 @@ def _list_simulator_devices(*, command_runner: CommandRunner | None) -> list[IOS
     return results
 
 
-def _list_real_devices(*, command_runner: CommandRunner | None) -> list[IOSDeviceDescriptor]:
-    payload = _run_json_command(
-        ["xcrun", "devicectl", "list", "devices", "--quiet", "--json-output", "-"],
-        command_runner=command_runner,
-        swallow_errors=True,
-    )
-    results: list[IOSDeviceDescriptor] = []
-    for entry in _find_device_dicts(payload):
-        udid = _lookup_string(entry, "identifier", "udid", "hardwareProperties.udid")
-        name = _lookup_string(entry, "deviceProperties.name", "name")
-        if udid is None or name is None:
-            continue
-        availability = "available"
-        state = _lookup_string(entry, "connectionProperties.state", "state", "deviceProperties.bootState")
-        if state is not None and state.lower() in {"offline", "disconnected", "unavailable"}:
-            availability = "offline"
-        results.append(
-            IOSDeviceDescriptor(
-                platform="ios",
-                device_ref=udid,
-                udid=udid,
-                display_name=name,
-                kind="real_device",
-                availability=availability,
-                is_booted=None,
-                state=state,
-                runtime=None,
-                raw=entry,
-            )
-        )
+def _list_real_devices_via_bridge(*, bridge_manager: SupportsIOSRealDeviceDiscovery | None) -> list[IOSDeviceDescriptor]:
+    manager = bridge_manager or get_default_ios_device_bridge_manager()
+    real_devices = manager.list_real_devices()
     unique: dict[str, IOSDeviceDescriptor] = {}
-    for item in results:
-        unique[item.device_ref] = item
+    for item in real_devices:
+        descriptor = _bridge_device_to_descriptor(item)
+        unique[descriptor.device_ref] = descriptor
     return list(unique.values())
 
 
@@ -194,7 +182,7 @@ def _run_json_command(
         loaded = json.loads(output)
         if isinstance(loaded, dict):
             return cast(dict[str, Any], loaded)
-    except (FileNotFoundError, subprocess.CalledProcessError, json.JSONDecodeError):
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError):
         if swallow_errors:
             return {}
         raise
@@ -206,21 +194,30 @@ def _default_command_runner(command: list[str]) -> str:
     return completed.stdout
 
 
-def _find_device_dicts(payload: Any) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    stack: list[Any] = [payload]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, dict):
-            maybe_udid = _lookup_string(current, "identifier", "udid", "hardwareProperties.udid")
-            maybe_name = _lookup_string(current, "deviceProperties.name", "name")
-            if maybe_udid is not None and maybe_name is not None:
-                results.append(current)
-            stack.extend(current.values())
-            continue
-        if isinstance(current, list):
-            stack.extend(current)
-    return results
+def _bridge_device_to_descriptor(device: IOSBridgeRealDevice) -> IOSDeviceDescriptor:
+    availability = "available"
+    if device.state is not None and device.state.lower() in {"offline", "disconnected", "unavailable"}:
+        availability = "offline"
+    coredevice_identifier = _lookup_string(device.raw, "coredevice_identifier", "identifier")
+    raw = dict(device.raw)
+    raw.setdefault("platform_version", device.platform_version)
+    raw.setdefault("real_device_udid", device.udid)
+    if device.backend_kind is not None:
+        raw.setdefault("bridge_backend_kind", device.backend_kind)
+    raw.setdefault("bridge_visible", True)
+    return IOSDeviceDescriptor(
+        platform="ios",
+        device_ref=device.udid,
+        udid=device.udid,
+        display_name=device.name,
+        kind="real_device",
+        coredevice_identifier=coredevice_identifier,
+        availability=availability,
+        is_booted=_infer_real_device_boot_state(device.state, availability=availability),
+        state=device.state,
+        runtime=None,
+        raw=raw,
+    )
 
 
 def _lookup_string(mapping: dict[str, Any], *paths: str) -> str | None:
@@ -243,3 +240,18 @@ def _as_str(value: Any) -> str | None:
     if isinstance(value, str):
         return value
     return str(value)
+
+
+def _infer_real_device_boot_state(state: str | None, *, availability: str) -> bool | None:
+    if state is None:
+        return True if availability == "available" else False if availability == "offline" else None
+    normalized = state.lower()
+    if normalized in {"offline", "disconnected", "unavailable"}:
+        return False
+    if normalized in {"connected", "available", "booted"}:
+        return True
+    return True if availability == "available" else False if availability == "offline" else None
+
+
+def _matches_device_ref(descriptor: IOSDeviceDescriptor, device_ref: str) -> bool:
+    return descriptor.device_ref == device_ref

@@ -13,8 +13,8 @@ class LocalOptimizeRuntime:
     def __init__(self, *, resolved_config: Any) -> None:
         self._service = OptimizeRuntimeService(resolved_config=resolved_config)
 
-    def optimize(self, request):  # noqa: ANN001
-        return self._service.optimize(request)
+    def optimize(self, request, *, context=None):  # noqa: ANN001
+        return self._service.optimize(request, context=context)
 
 
 class LocalOptimizeRuntimeFactory:

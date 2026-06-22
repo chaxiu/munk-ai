@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from munk.adapters.shared.app_lifecycle import AppLifecycleResult, AppLifecycleService
+from munk.adapters.shared.device_control import DeviceControlService
 from munk.adapters.shared.device_queries import list_devices_payload
 from munk.adapters.shared.machine_requests import AppInstallRequest, AppLaunchRequest, AppStopRequest
 from munk.agent_base.action import Action, ActionType
@@ -22,6 +23,8 @@ from .device_tool_models import (
     AppInstallInput,
     AppLaunchInput,
     AppStopInput,
+    DeviceStateInput,
+    DeviceUnlockInput,
     DevicesListInput,
     SessionAbortInput,
     SessionActInput,
@@ -35,6 +38,10 @@ from .device_tool_models import (
 from .device_tool_outputs import (
     AppLifecycleData,
     AppLifecycleOutput,
+    InteractiveActionDiffSummaryData,
+    DeviceUnlockData,
+    DeviceStateOutput,
+    DeviceUnlockOutput,
     DevicesListOutput,
     InteractiveActionData,
     InteractiveSessionData,
@@ -57,15 +64,35 @@ class DeviceMcpToolHandlers:
         *,
         interactive_service_factory: Callable[[], InteractiveService],
         app_lifecycle_service_factory: Callable[[], AppLifecycleService] | None = None,
+        device_control_service_factory: Callable[[], DeviceControlService] | None = None,
         workspace_root: Callable[[], Path] | None = None,
     ) -> None:
         self._interactive_service_factory = interactive_service_factory
         self._app_lifecycle_service_factory = app_lifecycle_service_factory or AppLifecycleService
+        self._device_control_service_factory = device_control_service_factory or DeviceControlService
         self._workspace_root = workspace_root or Path.cwd
 
     def devices_list(self, request: DevicesListInput) -> DevicesListOutput:
         data = list_devices_payload(request.platform)
         return DevicesListOutput(summary=f"found {len(data.items)} device(s)", data=data)
+
+    def device_state(self, request: DeviceStateInput) -> DeviceStateOutput:
+        data = self._device_control_service_factory().get_state(
+            device_ref=request.device_ref,
+            platform=request.platform,
+        )
+        return DeviceStateOutput(
+            summary=f"loaded device state for {data.device_ref}",
+            data=data,
+        )
+
+    def device_unlock(self, request: DeviceUnlockInput) -> DeviceUnlockOutput:
+        result = self._device_control_service_factory().unlock(
+            device_ref=request.device_ref,
+            platform=request.platform,
+            strategy=request.strategy,
+        )
+        return DeviceUnlockOutput(summary=result.message, data=_build_device_unlock_data(result))
 
     def app_launch(self, request: AppLaunchInput) -> AppLifecycleOutput:
         result = self._app_lifecycle_service_factory().launch(
@@ -201,7 +228,7 @@ class DeviceMcpToolHandlers:
         result = service.act(
             request.session_id,
             action_request,
-            settle_timeout_sec=request.settle_timeout_sec,
+            settle_timeout_sec=request.timeout_sec,
         )
         session = service.get_session(request.session_id)
         return _build_session_act_output(
@@ -233,13 +260,23 @@ class DeviceMcpToolHandlers:
 
 
 def _build_action(action: SessionActionInput) -> Action:
+    if action.type == "pull_to_refresh":
+        return Action.pull_to_refresh(
+            start_x_ratio=action.start_x_ratio,
+            start_y_ratio=action.start_y_ratio,
+            distance_ratio=action.distance_ratio,
+            summary=action.summary,
+        )
     return Action(
         type=ActionType(action.type),
         box=action.box,
         point=action.point,
         text=action.text,
+        text_mode=action.text_mode,
         direction=action.direction,
-        distance_px=action.distance_px,
+        start_x_ratio=action.start_x_ratio,
+        start_y_ratio=action.start_y_ratio,
+        distance_ratio=action.distance_ratio,
         duration=action.duration,
         dismiss_keyboard=action.dismiss_keyboard,
         summary=action.summary,
@@ -257,6 +294,19 @@ def _build_app_lifecycle_data(result: AppLifecycleResult) -> AppLifecycleData:
     )
 
 
+def _build_device_unlock_data(result) -> DeviceUnlockData:  # noqa: ANN001
+    return DeviceUnlockData(
+        platform=result.platform,
+        device_ref=result.device_ref,
+        strategy=result.strategy,
+        success=result.success,
+        changed=result.changed,
+        message=result.message,
+        before=result.before,
+        after=result.after,
+    )
+
+
 def _build_session_act_output(
     session: InteractiveSession,
     result: InteractiveActionResult,
@@ -264,9 +314,11 @@ def _build_session_act_output(
     request: InteractiveActionRequest,
     detail: str,
 ) -> SessionActOutput:
+    summary = detail == "summary"
     compact = detail == "compact"
     return SessionActOutput(
         summary=result.effect_summary,
+        detail=detail,  # type: ignore[arg-type]
         session=_build_session_data(session),
         action=_build_action_data(
             result.action,
@@ -275,8 +327,9 @@ def _build_session_act_output(
             label=request.label,
         ),
         normalized_action=_build_action_data(result.normalized_action),
-        before=None if compact else build_observation_payload(result.before, detail="full"),
-        after=build_observation_payload(result.after, detail="compact" if compact else "full"),
+        diff=_build_action_diff_summary_data(result),
+        before=None if (summary or compact) else build_observation_payload(result.before, detail="full"),
+        after=None if summary else build_observation_payload(result.after, detail="compact" if compact else "full"),
         before_summary=result.before.summary,
         after_summary=result.after.summary,
         executed=result.executed,
@@ -289,6 +342,15 @@ def _build_session_act_output(
         settle_summary=result.settle_summary,
         error_type=result.error_type,
         error_message=result.error_message,
+    )
+
+
+def _build_action_diff_summary_data(result: InteractiveActionResult) -> InteractiveActionDiffSummaryData:
+    return InteractiveActionDiffSummaryData(
+        before_summary=result.before.summary,
+        after_summary=result.after.summary,
+        effect_summary=result.effect_summary,
+        settle_summary=result.settle_summary,
     )
 
 
@@ -347,6 +409,10 @@ def _build_action_data(
         box=action.box,
         point=action.point,
         text=action.text,
+        direction=action.direction,
+        start_x_ratio=action.start_x_ratio,
+        start_y_ratio=action.start_y_ratio,
+        distance_ratio=action.distance_ratio,
         start=action.start,
         end=action.end,
         duration=action.duration,

@@ -11,7 +11,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
@@ -42,6 +42,8 @@ from install_wda_shared import (  # noqa: E402
 DEFAULT_WDA_LOCAL_PORT = 8100
 DEFAULT_WDA_REMOTE_PORT = 8100
 DEFAULT_IPROXY_STARTUP_WAIT_SEC = 1.0
+DEFAULT_GO_IOS_STARTUP_WAIT_SEC = 1.0
+DEFAULT_GO_IOS_MIN_MAJOR_VERSION = 17
 REAL_DEVICE_SOURCE_SUFFIX = "-real-device"
 PBX_OBJECT_HEADER_TEMPLATE = r"^\s*{object_id} /\* .*? \*/ = \{{"
 WEB_DRIVER_AGENT_LIB = "WebDriverAgentLib"
@@ -51,6 +53,8 @@ XCTEST_RUNTIME_FRAMEWORK_PATTERNS = (
     "Testing.framework",
     "libXCTestSwiftSupport.dylib",
 )
+TRANSPORT_KIND_IPROXY = "iproxy"
+TRANSPORT_KIND_GO_IOS = "go_ios_tunnel"
 
 
 @dataclass(frozen=True)
@@ -74,7 +78,12 @@ class _NativeTargetInfo:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Download, build, install and launch WebDriverAgent for a real iOS device.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Legacy/manual helper: download, build, install and launch WebDriverAgent for a real iOS device. "
+            "Current Munk runtime execution uses ios-device-bridge for real-device discovery/session."
+        )
+    )
     parser.add_argument("--device-udid", required=True, help="Connected iOS real-device UDID.")
     parser.add_argument("--signing-env-file", type=Path, default=DEFAULT_IOS_SIGNING_ENV_FILE, help="Signing env file for iOS real-device WDA build.")
     parser.add_argument("--wda-version", default=DEFAULT_WDA_VERSION, help=f"WDA git tag to download. Default: {DEFAULT_WDA_VERSION}")
@@ -137,8 +146,9 @@ def install_real_device_wda(
     run = command_runner or default_command_runner
     sleeper = sleep_fn or time.sleep
     _ensure_real_device_tooling(run)
-    _ensure_iproxy_available(run)
     _ensure_real_device_available(options.device_udid, run)
+    transport_kind = _resolve_real_device_transport_kind(options.device_udid, run)
+    _ensure_real_device_transport_available(transport_kind, run)
     _ensure_real_device_developer_access(options.device_udid, run)
     signing_result = _check_signing(options.signing_env_file, run)
     signing_payload = _load_signing_payload(options.signing_env_file)
@@ -169,11 +179,13 @@ def install_real_device_wda(
         _launch_bundle_id(signing_payload),
         run,
     )
-    iproxy_pid = _start_iproxy(
+    iproxy_pid = _start_real_device_transport(
+        transport_kind=transport_kind,
         local_port=options.wda_local_port,
         remote_port=options.wda_remote_port,
         device_udid=options.device_udid,
         sleep_fn=sleeper,
+        command_runner=run,
     )
     wait_for_healthy(options.wda_url, status_checker=status_checker, sleep_fn=sleeper)
     return InstallWDAResult(
@@ -200,46 +212,39 @@ def _ensure_real_device_tooling(command_runner: CommandRunner) -> None:
         raise InstallWDAError("environment_check_failed", f"required real-device tooling is unavailable: {exc}") from exc
 
 
-def _ensure_iproxy_available(command_runner: CommandRunner) -> None:
+def _ensure_real_device_transport_available(transport_kind: str, command_runner: CommandRunner) -> None:
+    command = ["which", "ios"] if transport_kind == TRANSPORT_KIND_GO_IOS else ["which", "iproxy"]
+    tool_name = "go-ios (`ios`)" if transport_kind == TRANSPORT_KIND_GO_IOS else "iproxy"
+    stage = "transport_check_failed" if transport_kind == TRANSPORT_KIND_GO_IOS else "port_forward_failed"
     try:
-        command_runner(["which", "iproxy"], True)
+        command_runner(command, True)
     except Exception as exc:  # noqa: BLE001
-        raise InstallWDAError("port_forward_failed", f"iproxy is unavailable: {exc}") from exc
+        if transport_kind == TRANSPORT_KIND_GO_IOS:
+            raise InstallWDAError(
+                stage,
+                "iOS 17+ real-device WDA transport requires go-ios; install it with `npm install -g go-ios` "
+                f"and ensure `{tool_name}` is on PATH. Underlying error: {exc}",
+            ) from exc
+        raise InstallWDAError(stage, f"{tool_name} is unavailable: {exc}") from exc
 
 
 def _ensure_real_device_available(device_udid: str, command_runner: CommandRunner) -> None:
-    try:
-        payload_text = command_runner(["xcrun", "devicectl", "list", "devices", "--quiet", "--json-output", "-"], True)
-    except Exception as exc:  # noqa: BLE001
-        raise InstallWDAError("device_check_failed", f"failed to query iOS real devices: {exc}") from exc
-    if payload_text is None:
-        raise InstallWDAError("device_check_failed", "devicectl returned empty device list")
-    try:
-        payload = json.loads(payload_text)
-    except json.JSONDecodeError as exc:
-        raise InstallWDAError("device_check_failed", f"devicectl returned invalid JSON: {exc}") from exc
-    for entry in _find_device_dicts(payload):
-        entry_udid = _lookup_string(entry, "identifier", "udid", "hardwareProperties.udid")
-        if entry_udid != device_udid:
-            continue
-        state = (_lookup_string(entry, "connectionProperties.state", "state", "deviceProperties.bootState") or "").lower()
-        if state in {"offline", "disconnected", "unavailable"}:
-            raise InstallWDAError("device_check_failed", f"selected iOS real device is not available: {device_udid}")
-        device_properties = entry.get("deviceProperties")
-        if isinstance(device_properties, dict) and device_properties.get("ddiServicesAvailable") is False:
-            pairing_state = _lookup_string(entry, "connectionProperties.pairingState") or "unknown"
-            tunnel_state = _lookup_string(entry, "connectionProperties.tunnelState") or "unknown"
-            raise InstallWDAError(
-                "device_check_failed",
-                (
-                    "selected iOS real device is listed but developer services are unavailable: "
-                    f"{device_udid} (pairingState={pairing_state}, tunnelState={tunnel_state}). "
-                    "Unlock the device, trust this Mac, reconnect the USB cable, and open Xcode Devices and Simulators once."
-                ),
-            )
-        return
-    else:
-        raise InstallWDAError("device_check_failed", f"selected iOS real device was not found: {device_udid}")
+    entry = _load_real_device_entry(device_udid, command_runner)
+    state = (_lookup_string(entry, "connectionProperties.state", "state", "deviceProperties.bootState") or "").lower()
+    if state in {"offline", "disconnected", "unavailable"}:
+        raise InstallWDAError("device_check_failed", f"selected iOS real device is not available: {device_udid}")
+    device_properties = entry.get("deviceProperties")
+    if isinstance(device_properties, dict) and device_properties.get("ddiServicesAvailable") is False:
+        pairing_state = _lookup_string(entry, "connectionProperties.pairingState") or "unknown"
+        tunnel_state = _lookup_string(entry, "connectionProperties.tunnelState") or "unknown"
+        raise InstallWDAError(
+            "device_check_failed",
+            (
+                "selected iOS real device is listed but developer services are unavailable: "
+                f"{device_udid} (pairingState={pairing_state}, tunnelState={tunnel_state}). "
+                "Unlock the device, trust this Mac, reconnect the USB cable, and open Xcode Devices and Simulators once."
+            ),
+        )
 
 
 def _ensure_real_device_developer_access(device_udid: str, command_runner: CommandRunner) -> None:
@@ -258,6 +263,47 @@ def _ensure_real_device_developer_access(device_udid: str, command_runner: Comma
                 f"Underlying error: {exc}"
             ),
         ) from exc
+
+
+def _load_real_device_entry(device_udid: str, command_runner: CommandRunner) -> dict[str, Any]:
+    try:
+        payload_text = command_runner(["xcrun", "devicectl", "list", "devices", "--quiet", "--json-output", "-"], True)
+    except Exception as exc:  # noqa: BLE001
+        raise InstallWDAError("device_check_failed", f"failed to query iOS real devices: {exc}") from exc
+    if payload_text is None:
+        raise InstallWDAError("device_check_failed", "devicectl returned empty device list")
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError as exc:
+        raise InstallWDAError("device_check_failed", f"devicectl returned invalid JSON: {exc}") from exc
+    for entry in _find_device_dicts(payload):
+        if _device_entry_matches_udid(entry, device_udid):
+            return entry
+    raise InstallWDAError("device_check_failed", f"selected iOS real device was not found: {device_udid}")
+
+
+def _resolve_real_device_transport_kind(device_udid: str, command_runner: CommandRunner) -> str:
+    entry = _load_real_device_entry(device_udid, command_runner)
+    os_version = _lookup_string(entry, "deviceProperties.osVersionNumber", "deviceProperties.osVersion")
+    if os_version is None:
+        return TRANSPORT_KIND_IPROXY
+    major_segment = os_version.split(".", 1)[0].strip()
+    try:
+        major_version = int(major_segment)
+    except ValueError:
+        return TRANSPORT_KIND_IPROXY
+    if major_version >= DEFAULT_GO_IOS_MIN_MAJOR_VERSION:
+        return TRANSPORT_KIND_GO_IOS
+    return TRANSPORT_KIND_IPROXY
+
+
+def _is_go_ios_tunnel_connected(device_udid: str, command_runner: CommandRunner) -> bool:
+    try:
+        entry = _load_real_device_entry(device_udid, command_runner)
+    except InstallWDAError:
+        return False
+    tunnel_state = (_lookup_string(entry, "connectionProperties.tunnelState") or "").strip().lower()
+    return tunnel_state == "connected"
 
 
 def _check_signing(signing_env_file: Path, command_runner: CommandRunner) -> CheckIOSWDASigningResult:
@@ -428,6 +474,90 @@ def _start_iproxy(
     return int(process.pid)
 
 
+def _start_go_ios_transport(
+    *,
+    local_port: int,
+    remote_port: int,
+    device_udid: str,
+    sleep_fn: SleepFn,
+    command_runner: CommandRunner | None = None,
+) -> int:
+    ios_path = shutil.which("ios")
+    if not ios_path:
+        raise InstallWDAError(
+            "transport_check_failed",
+            "iOS 17+ real-device WDA transport requires go-ios; install it with `npm install -g go-ios` first",
+        )
+    tunnel_is_connected = False
+    if command_runner is not None:
+        tunnel_is_connected = _is_go_ios_tunnel_connected(device_udid, command_runner)
+    if not tunnel_is_connected:
+        tunnel_command = ["sudo", "-n", ios_path, f"--udid={device_udid}", "tunnel", "start"]
+        try:
+            subprocess.run(  # noqa: S603
+                tunnel_command,
+                cwd=ROOT_DIR,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            stdout = (exc.stdout or "").strip()
+            stderr = (exc.stderr or "").strip()
+            details: list[str] = [
+                "failed to start go-ios tunnel for iOS 17+ real-device WDA",
+                f"command={' '.join(tunnel_command)}",
+                f"exit_code={exc.returncode}",
+            ]
+            if stdout:
+                details.append(f"stdout={stdout}")
+            if stderr:
+                details.append(f"stderr={stderr}")
+            details.append(
+                "ensure `sudo ios tunnel start` is permitted on this Mac, or start the tunnel manually before retrying"
+            )
+            raise InstallWDAError("transport_check_failed", "; ".join(details)) from exc
+    process = subprocess.Popen(  # noqa: S603
+        [ios_path, f"--udid={device_udid}", "forward", str(local_port), str(remote_port)],
+        cwd=ROOT_DIR,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    sleep_fn(DEFAULT_GO_IOS_STARTUP_WAIT_SEC)
+    if process.poll() is not None:
+        raise InstallWDAError(
+            "transport_check_failed",
+            "go-ios forward exited early; ensure `sudo ios tunnel start` is active for the selected device",
+        )
+    return int(process.pid)
+
+
+def _start_real_device_transport(
+    *,
+    transport_kind: str,
+    local_port: int,
+    remote_port: int,
+    device_udid: str,
+    sleep_fn: SleepFn,
+    command_runner: CommandRunner | None = None,
+) -> int:
+    if transport_kind == TRANSPORT_KIND_GO_IOS:
+        return _start_go_ios_transport(
+            local_port=local_port,
+            remote_port=remote_port,
+            device_udid=device_udid,
+            sleep_fn=sleep_fn,
+            command_runner=command_runner,
+        )
+    return _start_iproxy(
+        local_port=local_port,
+        remote_port=remote_port,
+        device_udid=device_udid,
+        sleep_fn=sleep_fn,
+    )
+
+
 def _launch_bundle_id(signing_payload: dict[str, str]) -> str:
     configured = signing_payload.get("IOS_WDA_LAUNCH_BUNDLE_ID")
     if configured:
@@ -455,7 +585,7 @@ def _decode_mobileprovision(path: Path, command_runner: CommandRunner) -> dict[s
         raise InstallWDAError("signing_check_failed", f"runner provisioning profile is not valid plist data: {path}: {exc}") from exc
     if not isinstance(loaded, dict):
         raise InstallWDAError("signing_check_failed", f"runner provisioning profile has unexpected payload type: {path}")
-    return loaded
+    return cast(dict[str, Any], loaded)
 
 
 def _codesign_bundle(path: Path, *, identity: str, command_runner: CommandRunner) -> None:
@@ -499,19 +629,61 @@ def _strip_shell_quotes(value: str) -> str:
 
 
 def _find_device_dicts(payload: Any) -> list[dict[str, Any]]:
+    top_level_devices = _lookup_top_level_devices(payload)
+    if top_level_devices:
+        return top_level_devices
+
     results: list[dict[str, Any]] = []
     stack: list[Any] = [payload]
     while stack:
         current = stack.pop()
         if isinstance(current, dict):
-            maybe_udid = _lookup_string(current, "identifier", "udid", "hardwareProperties.udid")
-            if maybe_udid is not None:
-                results.append(current)
+            current_dict = cast(dict[str, Any], current)
+            if _looks_like_device_entry(current_dict):
+                results.append(current_dict)
             stack.extend(current.values())
             continue
         if isinstance(current, list):
             stack.extend(current)
     return results
+
+
+def _lookup_top_level_devices(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    payload_dict = cast(dict[str, Any], payload)
+    result = payload_dict.get("result")
+    if not isinstance(result, dict):
+        return []
+    result_dict = cast(dict[str, Any], result)
+    devices_obj = result_dict.get("devices")
+    if not isinstance(devices_obj, list):
+        return []
+    devices = cast(list[Any], devices_obj)
+    top_level_devices: list[dict[str, Any]] = []
+    for item in devices:
+        if isinstance(item, dict):
+            top_level_devices.append(cast(dict[str, Any], item))
+    return top_level_devices
+
+
+def _looks_like_device_entry(entry: dict[str, Any]) -> bool:
+    hardware_properties = entry.get("hardwareProperties")
+    device_properties = entry.get("deviceProperties")
+    connection_properties = entry.get("connectionProperties")
+    return (
+        isinstance(hardware_properties, dict)
+        and isinstance(device_properties, dict)
+        and isinstance(connection_properties, dict)
+        and _lookup_string(entry, "hardwareProperties.udid", "udid") is not None
+    )
+
+
+def _device_entry_matches_udid(entry: dict[str, Any], device_udid: str) -> bool:
+    return any(
+        _lookup_string(entry, path) == device_udid
+        for path in ("hardwareProperties.udid", "udid", "identifier")
+    )
 
 
 def _lookup_string(mapping: dict[str, Any], *paths: str) -> str | None:
@@ -521,7 +693,7 @@ def _lookup_string(mapping: dict[str, Any], *paths: str) -> str | None:
             if not isinstance(current, dict):
                 current = None
                 break
-            current = current.get(segment)
+            current = cast(dict[str, Any], current).get(segment)
         if current is None:
             continue
         if isinstance(current, str):

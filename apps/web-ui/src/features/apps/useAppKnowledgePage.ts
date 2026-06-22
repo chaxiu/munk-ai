@@ -3,10 +3,14 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  createEmptyKnowledgeCardEditorErrors,
   createEmptyKnowledgeCardForm,
   formFromKnowledgeCard,
+  shouldConfirmCardTypeReset,
   toKnowledgeCardInput,
+  updateFormEditorMode,
   updateFormCardType,
+  validateKnowledgeCardForm,
 } from '@/features/apps/knowledgeEditor'
 import { parseKnowledgeDocument } from '@/features/apps/knowledgePresentation'
 import { useAppDetailQuery } from '@/features/apps/queries/useAppDetailQuery'
@@ -31,7 +35,7 @@ export function useAppKnowledgePage() {
   const form = ref(createEmptyKnowledgeCardForm())
   const actionError = ref<string | null>(null)
   const actionMessage = ref<string | null>(null)
-  const payloadError = ref<string | null>(null)
+  const formErrors = ref(createEmptyKnowledgeCardEditorErrors())
 
   const appId = computed(() => {
     const value = route.params.appId
@@ -139,7 +143,7 @@ export function useAppKnowledgePage() {
       return
     }
     form.value = formFromKnowledgeCard(card)
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
   }, { immediate: true })
 
   async function handleBackToApps() {
@@ -173,7 +177,7 @@ export function useAppKnowledgePage() {
     isCreating.value = true
     actionError.value = null
     actionMessage.value = null
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
     form.value = createEmptyKnowledgeCardForm()
     void syncSelectedCard(router, appId.value, selectedCardId.value, null)
   }
@@ -182,14 +186,14 @@ export function useAppKnowledgePage() {
     isCreating.value = false
     actionError.value = null
     actionMessage.value = null
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
     void syncSelectedCard(router, appId.value, selectedCardId.value, cardId)
   }
 
   function handleResetEditor() {
     actionError.value = null
     actionMessage.value = null
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
     if (isCreating.value) {
       form.value = createEmptyKnowledgeCardForm(form.value.cardType)
       return
@@ -200,8 +204,36 @@ export function useAppKnowledgePage() {
   }
 
   function handleCardTypeChange(value: KnowledgeCardType) {
+    if (value === form.value.cardType) {
+      return
+    }
+    if (shouldConfirmCardTypeReset(form.value)) {
+      const confirmed = window.confirm(t('apps.knowledge.messages.changeTypeConfirm', {
+        currentType: typeLabel(t, form.value.cardType),
+        nextType: typeLabel(t, value),
+      }))
+      if (!confirmed) {
+        return
+      }
+    }
     form.value = updateFormCardType(form.value, value)
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
+  }
+
+  function handleEditorModeChange(value: 'structured' | 'json') {
+    try {
+      form.value = updateFormEditorMode(form.value, value)
+      formErrors.value = {
+        ...formErrors.value,
+        payload: null,
+        payloadFields: {},
+      }
+    } catch {
+      formErrors.value = {
+        ...formErrors.value,
+        payload: t('apps.knowledge.messages.payloadInvalid'),
+      }
+    }
   }
 
   async function handleSaveCard() {
@@ -210,7 +242,12 @@ export function useAppKnowledgePage() {
     }
     actionError.value = null
     actionMessage.value = null
-    payloadError.value = null
+    const validation = validateKnowledgeCardForm(form.value)
+    form.value = validation.normalizedForm
+    formErrors.value = presentKnowledgeCardEditorErrors(t, validation.errors)
+    if (!validation.isValid) {
+      return
+    }
     try {
       const card = toKnowledgeCardInput({
         appId: appId.value,
@@ -222,6 +259,7 @@ export function useAppKnowledgePage() {
         form.value = formFromKnowledgeCard(result.card)
         isCreating.value = false
         actionMessage.value = t('apps.knowledge.messages.createSuccess', { title: result.card.title })
+      formErrors.value = createEmptyKnowledgeCardEditorErrors()
         await syncSelectedCard(router, appId.value, selectedCardId.value, result.card.card_id)
         return
       }
@@ -235,13 +273,9 @@ export function useAppKnowledgePage() {
       })
       form.value = formFromKnowledgeCard(result.card)
       actionMessage.value = t('apps.knowledge.messages.updateSuccess', { title: result.card.title })
+      formErrors.value = createEmptyKnowledgeCardEditorErrors()
     } catch (error) {
-      const message = translateUnknownError(error) ?? t('apps.knowledge.messages.actionFailed')
-      if (message.includes('payload')) {
-        payloadError.value = t('apps.knowledge.messages.payloadInvalid')
-      } else {
-        actionError.value = message
-      }
+      actionError.value = translateUnknownError(error) ?? t('apps.knowledge.messages.actionFailed')
     }
   }
 
@@ -255,7 +289,7 @@ export function useAppKnowledgePage() {
     }
     actionError.value = null
     actionMessage.value = null
-    payloadError.value = null
+    formErrors.value = createEmptyKnowledgeCardEditorErrors()
     try {
       await cardMutations.deleteCard.mutateAsync({
         appId: appId.value,
@@ -286,7 +320,7 @@ export function useAppKnowledgePage() {
     form,
     actionError,
     actionMessage,
-    payloadError,
+    formErrors,
     isSaving,
     isDeleting,
     selectedCardId,
@@ -305,6 +339,7 @@ export function useAppKnowledgePage() {
     handleSelectCard,
     handleResetEditor,
     handleCardTypeChange,
+    handleEditorModeChange,
     handleSaveCard,
     handleDeleteCard,
   }
@@ -352,4 +387,18 @@ function sourceLabel(t: ReturnType<typeof useI18n>['t'], kind: KnowledgeSourceKi
 
 function cardStatusLabel(t: ReturnType<typeof useI18n>['t'], status: KnowledgeCardStatus): string {
   return t(`apps.knowledge.cardStatus.${status}`)
+}
+
+function presentKnowledgeCardEditorErrors(
+  t: ReturnType<typeof useI18n>['t'],
+  errors: ReturnType<typeof createEmptyKnowledgeCardEditorErrors>,
+) {
+  return {
+    title: errors.title ? t('apps.knowledge.messages.titleRequired') : null,
+    confidence: errors.confidence ? t('apps.knowledge.messages.confidenceInvalid') : null,
+    payload: errors.payload ? t('apps.knowledge.messages.payloadInvalid') : null,
+    payloadFields: Object.fromEntries(
+      Object.entries(errors.payloadFields).map(([key]) => [key, t('apps.knowledge.messages.requiredField')])
+    ),
+  }
 }

@@ -39,18 +39,7 @@ describe('CreateAppPage', () => {
     createAppMock.mockReset()
   })
 
-  async function selectKnowledgeFile(wrapper: ReturnType<typeof mount>, content: string, fileName = 'knowledge.json') {
-    const fileInput = wrapper.find('input[type="file"]')
-    const file = new File([content], fileName, { type: 'application/json' })
-    Object.defineProperty(fileInput.element, 'files', {
-      value: [file],
-      configurable: true,
-    })
-    await fileInput.trigger('change')
-    await flushPromises()
-  }
-
-  it('requires an app knowledge file before submit is enabled', async () => {
+  it('enables submit without an app knowledge file once required fields are filled', async () => {
     const wrapper = mount(CreateAppPage, {
       global: {
         plugins: [i18n],
@@ -62,10 +51,6 @@ describe('CreateAppPage', () => {
     await inputs[1]!.setValue('New App')
     await inputs[2]!.setValue('com.example.new-app')
     await wrapper.find('textarea').setValue('New app intro')
-
-    expect(wrapper.find('.primary-button').attributes('disabled')).toBeDefined()
-
-    await selectKnowledgeFile(wrapper, '{"首页":{"enter":"打开首页","recognize":"看到首页"}}')
 
     expect(wrapper.find('.primary-button').attributes('disabled')).toBeUndefined()
   })
@@ -89,7 +74,6 @@ describe('CreateAppPage', () => {
     await inputs[1]!.setValue('New App')
     await inputs[2]!.setValue('com.example.new-app')
     await wrapper.find('textarea').setValue('New app intro')
-    await selectKnowledgeFile(wrapper, '{"首页":{"enter":"打开首页","recognize":"看到首页"}}')
     await wrapper.find('.primary-button').trigger('click')
     await flushPromises()
 
@@ -108,8 +92,8 @@ describe('CreateAppPage', () => {
         web: null,
       },
       introduction_markdown: 'New app intro',
-      app_knowledge_file_name: 'knowledge.json',
-      app_knowledge_content: '{"首页":{"enter":"打开首页","recognize":"看到首页"}}',
+      app_knowledge_file_name: null,
+      app_knowledge_content: null,
     })
     expect(pushMock).toHaveBeenCalledWith({ name: 'apps' })
   })

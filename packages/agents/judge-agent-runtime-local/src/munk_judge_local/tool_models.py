@@ -4,7 +4,14 @@ import re
 from dataclasses import dataclass, field
 from typing import cast
 
-from munk.judging.models import JudgeEvidence
+from munk.judging.models import (
+    JudgeEvidence,
+    is_runner_history_evidence,
+    is_runner_memory_evidence,
+    is_screen_diff_evidence,
+    is_screen_frame_evidence,
+    is_screenshot_evidence,
+)
 
 from munk.runtime_defaults import DEFAULT_VL_MAX_SIDE
 
@@ -31,31 +38,21 @@ class JudgeRunDeps:
 
     def runner_history_by_step(self) -> dict[int, dict[str, object]]:
         for item in self.evidence_pack.evidence:
-            if item.kind != "runner_history":
+            if not is_runner_history_evidence(item):
                 continue
-            entries = item.payload.get("entries")
-            if not isinstance(entries, list):
-                continue
-            entries_list = cast(list[object], entries)
             indexed: dict[int, dict[str, object]] = {}
-            for entry in entries_list:
-                if not isinstance(entry, dict):
+            for entry in item.payload.entries:
+                if not isinstance(entry.step_index, int):
                     continue
-                entry_dict = cast(dict[str, object], entry)
-                step_index = entry_dict.get("step_index")
-                if not isinstance(step_index, int):
-                    continue
-                indexed[step_index] = dict(entry_dict)
+                indexed[entry.step_index] = cast(dict[str, object], entry.model_dump(mode="json"))
             return indexed
         return {}
 
     def runner_memory_entries(self) -> list[dict[str, object]]:
         for item in self.evidence_pack.evidence:
-            if item.kind != "runner_memory":
+            if not is_runner_memory_evidence(item):
                 continue
-            entries = item.payload.get("entries")
-            if isinstance(entries, list):
-                return [cast(dict[str, object], entry) for entry in entries if isinstance(entry, dict)]
+            return [cast(dict[str, object], entry.model_dump(mode="json")) for entry in item.payload.entries]
         return []
 
     def runner_memory_by_key(self) -> dict[str, dict[str, object]]:
@@ -80,6 +77,12 @@ class JudgeRunDeps:
             for item in self.evidence_pack.recent_raw_screenshots
         }
 
+    def annotated_screenshot_refs_by_step(self) -> dict[int, JudgeScreenshotRef]:
+        return {
+            item.step_index: item
+            for item in self.evidence_pack.recent_annotated_screenshots
+        }
+
     def _evidence_by_step(self, expected_kind: str) -> dict[int, JudgeEvidence]:
         indexed: dict[int, JudgeEvidence] = {}
         for item in self.evidence_pack.evidence:
@@ -92,9 +95,8 @@ class JudgeRunDeps:
 
 
 def _extract_step_index(item: JudgeEvidence) -> int | None:
-    raw_step_index = item.payload.get("step_index")
-    if isinstance(raw_step_index, int):
-        return raw_step_index
+    if is_screen_frame_evidence(item) or is_screen_diff_evidence(item) or is_screenshot_evidence(item):
+        return item.payload.step_index
     match = _STEP_INDEX_PATTERN.search(item.evidence_id)
     if match is None:
         return None

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from munk.agent_base.llm import prepare_llm_transcript_path
 from munk.agent_runtime import AgentRuntimeEvent, CancelController
+from munk.agent_runtime.events import build_agent_runtime_host_data_payload
 from munk.reviewing.models import ReviewRequest
 from munk.reviewing.runtime import ReviewManagedPaths, ReviewRuntimeContext
 from munk.services.operations.service import OperationTracker
@@ -16,10 +17,7 @@ class TrackerReviewProgressSink:
         self._tracker = tracker
 
     def emit(self, event: AgentRuntimeEvent) -> None:
-        data = dict(event.data)
-        data["lifecycle_state"] = event.lifecycle_state
-        data["agent_role"] = event.agent_role
-        data["timestamp"] = event.timestamp
+        data = build_agent_runtime_host_data_payload(event, timestamp_key="timestamp")
         self._tracker.append_event(event_type=event.event_type, message=event.message, data=data)
         self._tracker.update_progress(
             lifecycle_state=event.lifecycle_state,

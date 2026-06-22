@@ -14,10 +14,22 @@ from .knowledge import (
     knowledge_app_id_matches,
     register_knowledge_tools,
 )
+from .case_run_evidence import (
+    CaseRunEvidenceToolProvider,
+    build_artifact_manifest_payload,
+    build_attempt_summary_payload,
+    build_attempts_overview_payload,
+    build_decision_trace_tail_payload,
+    build_event_history_tail_payload,
+    build_retry_handoffs_payload,
+    build_unavailable_payload,
+    register_case_run_evidence_tools,
+)
 from .run_evidence import register_run_evidence_tools
 
 __all__ = [
     "AI_GUIDANCE_FIELDS",
+    "CaseRunEvidenceToolProvider",
     "FIELD_DESCRIPTIONS",
     "KNOWLEDGE_GET_TOOL",
     "KNOWLEDGE_LIST_TOOL",
@@ -25,6 +37,13 @@ __all__ = [
     "KNOWLEDGE_SUBMIT_CANDIDATE_TOOL",
     "KnowledgeToolDescriptions",
     "KnowledgeToolProvider",
+    "build_artifact_manifest_payload",
+    "build_attempt_summary_payload",
+    "build_attempts_overview_payload",
+    "build_decision_trace_tail_payload",
+    "build_event_history_tail_payload",
+    "build_retry_handoffs_payload",
+    "build_unavailable_payload",
     "build_knowledge_get_payload",
     "build_knowledge_list_payload",
     "build_knowledge_mismatch_payload",
@@ -32,6 +51,7 @@ __all__ = [
     "build_knowledge_submit_candidate_payload",
     "knowledge_app_id_matches",
     "register_ai_guidance_tools",
+    "register_case_run_evidence_tools",
     "register_knowledge_tools",
     "register_run_evidence_tools",
 ]

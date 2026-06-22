@@ -17,8 +17,10 @@ __all__ = [
     "ResolvedModelConfig",
     "ResolvedOrchestrationConfig",
     "ResolvedRuntimeConfig",
+    "RuntimeOverridePatch",
     "ResolvedConfig",
     "ResolvedConfigFile",
+    "SettleMode",
     "default_config_path",
     "load_config_context",
     "load_config_file",
@@ -49,6 +51,7 @@ _EXPORTS = {
     "ResolvedModelConfig": ("munk.config.resolve", "ResolvedModelConfig"),
     "ResolvedOrchestrationConfig": ("munk.config.resolve", "ResolvedOrchestrationConfig"),
     "ResolvedRuntimeConfig": ("munk.config.resolve", "ResolvedRuntimeConfig"),
+    "RuntimeOverridePatch": ("munk.config.resolve", "RuntimeOverridePatch"),
     "ResolvedConfig": ("munk.config.load", "ResolvedConfig"),
     "ResolvedConfigFile": ("munk.config.load", "ResolvedConfigFile"),
     "default_config_path": ("munk.config.load", "default_config_path"),
@@ -64,6 +67,7 @@ _EXPORTS = {
     "resolve_config_path": ("munk.config.load", "resolve_config_path"),
     "workspace_config_path": ("munk.config.load", "workspace_config_path"),
     "RuntimeConfig": ("munk.config.schema", "RuntimeConfig"),
+    "SettleMode": ("munk.config.schema", "SettleMode"),
 }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from munk.artifacts import ARTIFACT_ID_DIAGNOSTICS
 from munk.execution.models import ExecutedPlanResult, PhasedOperationResult
 from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.operations.models import VerificationVerdict
@@ -37,7 +38,7 @@ def build_execution_artifacts(execution_result: ExecutedPlanResult) -> dict[str,
         "execution_plan": str(execution_result.summary_path.parent / "plan.json"),
     }
     if execution_result.diagnostics_path is not None:
-        artifacts["diagnostics"] = str(execution_result.diagnostics_path)
+        artifacts[ARTIFACT_ID_DIAGNOSTICS] = str(execution_result.diagnostics_path)
     if execution_result.upstream_review_result_path is not None:
         artifacts["upstream_review_result"] = str(execution_result.upstream_review_result_path)
     if execution_result.upstream_review_orchestration_path is not None:
@@ -57,7 +58,7 @@ def load_contract_versions(
         except Exception:
             pass
         else:
-            versions.update(manifest.schema_versions)
+            versions.update(manifest.schema_versions.to_mapping())
     for key, value in fallback.items():
         if value is not None and key not in versions:
             versions[key] = value

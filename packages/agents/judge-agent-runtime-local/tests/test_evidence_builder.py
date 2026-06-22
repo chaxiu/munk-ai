@@ -26,6 +26,7 @@ def build_request(tmp_path) -> JudgeRequest:  # noqa: ANN001
             observation_diffs_path=tmp_path / "diffs",
             observation_tree_path=tmp_path / "tree",
             runner_history_path=tmp_path / "runner_history.json",
+            runner_issues_path=tmp_path / "runner_issues.json",
             raw_screenshots_path=tmp_path / "raw",
         ),
     )
@@ -112,9 +113,45 @@ def test_build_evidence_pack_selects_relevant_observation_as_primary(tmp_path) -
     assert "runner_history" in primary_kinds
     assert "screen_frame" in primary_kinds
     frame_item = next(item for item in pack.primary_evidence if item.kind == "screen_frame")
-    compact_tree = frame_item.payload["excerpt"]["compact_tree"]
-    assert compact_tree["node_count"] == 1
-    assert compact_tree["nodes"][0]["txt"] == "New Task"
+    compact_tree = frame_item.payload.compact_tree
+    assert compact_tree.node_count == 1
+    assert compact_tree.nodes[0].text == "New Task"
     assert pack.recent_raw_screenshots[0].step_index == 1
     assert pack.recent_raw_screenshots[0].tree_evidence_id == "screen_frame-step_0001"
     assert pack.evidence[0].evidence_id == "execution"
+
+
+def test_build_evidence_pack_extracts_runner_issue_summary(tmp_path) -> None:  # noqa: ANN001
+    issue_path = tmp_path / "runner_issues.json"
+    issue_path.write_text(
+        json.dumps(
+            {
+                "issues": [
+                    {
+                        "step_index": 2,
+                        "severity": "warning",
+                        "summary": "image did not load on the current page",
+                        "timestamp": "2026-06-19T00:00:00Z",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    pack = build_evidence_pack(request=build_request(tmp_path))
+
+    assert pack.runner_issue_summary == [
+        {
+            "step_index": 2,
+            "severity": "warning",
+            "summary": "image did not load on the current page",
+            "record": {
+                "step_index": 2,
+                "severity": "warning",
+                "summary": "image did not load on the current page",
+                "timestamp": "2026-06-19T00:00:00Z",
+            },
+        }
+    ]
+    assert all(item.kind != "runner_issue" for item in pack.primary_evidence)

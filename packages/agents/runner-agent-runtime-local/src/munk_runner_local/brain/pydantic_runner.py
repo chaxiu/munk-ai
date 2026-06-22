@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import replace
 from typing import Any, cast
 
 from munk.agent_base.action import Action
 from munk.agent_base.base import ActionHistoryEntry, Brain, ScreenState
-from munk.agent_base.image_payload import encode_png_for_max_side
+from munk.agent_base.image_payload import encode_image_for_max_side
 from munk.agent_base.llm import run_agent_sync_compatible
 from munk.agent_base.output_strategy import append_system_prompt_suffix, build_structured_output_spec
 from munk.agent_base.platform_profile import PlatformRunnerProfile, get_runner_profile
@@ -70,6 +71,11 @@ class PydanticAiRunnerBrain(Brain):
         prompt_max_elements: int = MUNK_CODE_DEFAULTS.runner.prompt_max_elements,
         max_history: int = MUNK_CODE_DEFAULTS.runner.max_history,
         vl_max_side: int = DEFAULT_VL_MAX_SIDE,
+        vl_image_format: str = MUNK_CODE_DEFAULTS.runtime.vl_image_format,
+        vl_fallback_image_format: str = MUNK_CODE_DEFAULTS.runtime.vl_fallback_image_format,
+        vl_webp_quality: int = MUNK_CODE_DEFAULTS.runtime.vl_webp_quality,
+        vl_jpeg_quality: int = MUNK_CODE_DEFAULTS.runtime.vl_jpeg_quality,
+        include_screenshot: bool = False,
         platform: str | None = None,
         profile: PlatformRunnerProfile | None = None,
         prepared_context_text: str = "none",
@@ -86,12 +92,18 @@ class PydanticAiRunnerBrain(Brain):
         self.prompt_max_elements = min(prompt_max_elements, max_elements)
         self.max_history = max_history
         self.vl_max_side = vl_max_side
+        self.vl_image_format = vl_image_format
+        self.vl_fallback_image_format = vl_fallback_image_format
+        self.vl_webp_quality = vl_webp_quality
+        self.vl_jpeg_quality = vl_jpeg_quality
+        self.include_screenshot = include_screenshot
         self.profile = profile or get_runner_profile(platform)
         self.prepared_context_text = prepared_context_text
         self.prepared_knowledge_bundle = prepared_knowledge_bundle
         self.prepared_selected_card_ids = prepared_selected_card_ids
         self.context_prep_fallback_reason = context_prep_fallback_reason
         self._current_step_index: int | None = None
+        self._run_started_at_monotonic: float | None = None
         self._history: list[ActionHistoryEntry] = []
         self._memory_store = RunnerMemoryStore()
         output_spec = build_structured_output_spec(
@@ -115,6 +127,9 @@ class PydanticAiRunnerBrain(Brain):
     def on_step_started(self, step_index: int) -> None:
         self._current_step_index = step_index
 
+    def on_run_started(self, started_at_monotonic: float) -> None:
+        self._run_started_at_monotonic = started_at_monotonic
+
     def apply_context_prep_output(
         self,
         output: ContextPrepOutput,
@@ -133,9 +148,10 @@ class PydanticAiRunnerBrain(Brain):
         self._attach_last_observation(screen)
         logger.info("pydantic_runner step=%s", self._current_step_index)
         deps = self._build_deps(screen)
-        action = self._run_decision_attempt(screen, deps, retry_on_missing_action=True)
+        return self._run_decision_attempt(screen, deps, retry_on_missing_action=True)
+
+    def on_action_committed(self, action: Action) -> None:
         self._record(action)
-        return action
 
     def _build_deps(self, screen: ScreenState) -> RunnerStepDeps:
         return RunnerStepDeps(
@@ -150,10 +166,18 @@ class PydanticAiRunnerBrain(Brain):
             history_entries=self._history,
             max_elements=self.max_elements,
             run_dir=self.paths.run_dir,
+            raw_dir=self.paths.raw_dir,
+            annotated_dir=self.paths.annotated_dir,
+            vl_max_side=self.vl_max_side,
+            vl_image_format=self.vl_image_format,
+            vl_fallback_image_format=self.vl_fallback_image_format,
+            vl_webp_quality=self.vl_webp_quality,
+            vl_jpeg_quality=self.vl_jpeg_quality,
             memory_store=self._memory_store,
             event_sink=self.event_sink,
             trace_path=self.paths.decision_trace_path,
             runner_memory_path=self.paths.runner_memory_path,
+            runner_issues_path=self.paths.runner_issues_path,
             step_index=self._current_step_index,
         )
 
@@ -257,8 +281,6 @@ class PydanticAiRunnerBrain(Brain):
             last_action_feedback=self._last_action_feedback(screen),
             goal_progress=self._goal_progress(screen),
             prepared_context_text=self.prepared_context_text,
-            prepared_knowledge_text=self._format_prepared_knowledge_text(),
-            context_prep_fallback_reason=self.context_prep_fallback_reason,
             screen_summary=build_screen_summary_text(screen),
             targets_text=build_targets_seed_text(
                 screen,
@@ -270,30 +292,30 @@ class PydanticAiRunnerBrain(Brain):
         content: list[UserContent] = [
             TextContent(content=prompt_text)
         ]
-        image = self._screen_image(screen)
-        if image is not None:
-            content.append(image)
+        if self.include_screenshot:
+            image = self._screen_image(screen)
+            if image is not None:
+                content.append(image)
         return content
-
-    def _format_prepared_knowledge_text(self) -> str:
-        if not self.prepared_knowledge_bundle:
-            return "none"
-        blocks: list[str] = []
-        for item in self.prepared_knowledge_bundle:
-            lines = [f"- card_id: {item.card_id}"]
-            lines.append(f"  title: {item.title}")
-            lines.append(f"  card_type: {item.card_type}")
-            lines.extend(f"  {line}" for line in item.summary_text.splitlines())
-            blocks.append("\n".join(lines))
-        return "\n".join(blocks)
 
     def _screen_image(self, screen: ScreenState) -> BinaryImage | None:
         if screen.image_bgr is None:
             return None
-        png_bytes = encode_png_for_max_side(screen.image_bgr, self.vl_max_side)
-        if not png_bytes:
+        image_payload = encode_image_for_max_side(
+            screen.image_bgr,
+            self.vl_max_side,
+            preferred_format=self.vl_image_format,
+            fallback_format=self.vl_fallback_image_format,
+            webp_quality=self.vl_webp_quality,
+            jpeg_quality=self.vl_jpeg_quality,
+        )
+        if image_payload is None:
             return None
-        return BinaryImage(png_bytes, media_type="image/png", identifier="current_screen")
+        return BinaryImage(
+            image_payload.data,
+            media_type=image_payload.media_type,
+            identifier="current_screen",
+        )
 
     def _attach_last_observation(self, screen: ScreenState) -> None:
         if not self._history:
@@ -326,7 +348,12 @@ class PydanticAiRunnerBrain(Brain):
         return observation.summary
 
     def _record(self, action: Action) -> None:
-        self._history.append(build_action_history_entry(action))
+        self._history.append(
+            build_action_history_entry(
+                action,
+                relative_time_sec=self._relative_time_sec(),
+            )
+        )
         self._write_history_artifact()
 
     def _write_history_artifact(self) -> None:
@@ -344,6 +371,11 @@ class PydanticAiRunnerBrain(Brain):
         if memory_path is None:
             return
         memory_path.write_text(self._memory_store.artifact_json(), encoding="utf-8")
+
+    def _relative_time_sec(self) -> float | None:
+        if self._run_started_at_monotonic is None:
+            return None
+        return max(0.0, time.monotonic() - self._run_started_at_monotonic)
 
     @staticmethod
     def _build_output_excerpt(output: object) -> str:

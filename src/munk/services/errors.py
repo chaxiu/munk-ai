@@ -53,6 +53,23 @@ class CaseNotFoundError(PlanExecutionError):
     """Raised when the requested case cannot be found in a plan."""
 
 
+class InvalidCaseDefinitionError(PlanExecutionError):
+    """Raised when a case is missing required execution or judging fields."""
+
+    def __init__(
+        self,
+        *,
+        context: str,
+        case_id: str | None,
+        issues: list[str],
+    ) -> None:
+        self.context = context
+        self.case_id = case_id
+        self.issues = issues
+        case_label = case_id or "<unknown>"
+        super().__init__(f"invalid case definition for '{case_label}' in {context}: {'; '.join(issues)}")
+
+
 class StartStateError(MunkServiceError):
     """Raised when case start-state preparation cannot be completed."""
 
@@ -104,6 +121,46 @@ class DeviceConflictError(OperationError):
 
 class OperationCancelledError(OperationError):
     """Raised when execution is cooperatively cancelled."""
+
+
+class OperationPayloadValidationError(OperationError):
+    """Raised when a typed operation payload fails canonical owner validation."""
+
+    def __init__(
+        self,
+        *,
+        kind: str,
+        payload_role: str,
+        model_name: str,
+        issues: list[str],
+    ) -> None:
+        self.kind = kind
+        self.payload_role = payload_role
+        self.model_name = model_name
+        self.issues = list(issues)
+        super().__init__(
+            f"invalid {payload_role} payload for operation kind '{kind}' "
+            f"against '{model_name}': {'; '.join(self.issues)}"
+        )
+
+
+class OperationEventPayloadValidationError(OperationError):
+    """Raised when a typed operation event payload fails canonical owner validation."""
+
+    def __init__(
+        self,
+        *,
+        event_type: str,
+        model_name: str,
+        issues: list[str],
+    ) -> None:
+        self.event_type = event_type
+        self.model_name = model_name
+        self.issues = list(issues)
+        super().__init__(
+            f"invalid event payload for operation event '{event_type}' "
+            f"against '{model_name}': {'; '.join(self.issues)}"
+        )
 
 
 class ScheduleError(MunkServiceError):

@@ -44,13 +44,6 @@ class LocalReviewRuntimeFactory:
             "build_manifest_path": str(build_manifest_path),
             "model_dir": str(DEFAULT_REVIEW_MODEL_DIR),
         }
-        if not knowledge_root.exists():
-            return ReviewRuntimeHealth(
-                runtime_id=self.runtime_id,
-                status="error",
-                message="review knowledge root is missing",
-                details=details,
-            )
         if not DEFAULT_REVIEW_MODEL_DIR.exists():
             return ReviewRuntimeHealth(
                 runtime_id=self.runtime_id,

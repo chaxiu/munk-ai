@@ -33,9 +33,12 @@ munk-shared-api = { path = "../../shared/shared-api", editable = true }
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = false
+include = ["munk_review_local"]
 
-[tool.setuptools.package-data]
-munk_review_local = ["resources/**/*"]
+[tool.setuptools.exclude-package-data]
+munk_review_local = ["resources/review_knowledge/**/*"]

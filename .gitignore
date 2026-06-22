@@ -30,6 +30,7 @@ build/
 dist/
 tmp/
 .tmp/
+.dbg/
 development-log/
 public/
 
@@ -60,3 +61,4 @@ packages/shared/knowledge-runtime-local/src/munk_knowledge_local/resources
 
 # Local Knowledge
 project-memory.md
+munk-auto/

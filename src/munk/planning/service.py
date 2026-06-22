@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from munk.agent_runtime.events import build_agent_runtime_host_data_payload
 from munk.app_assets.storage import AppRegistry
 from munk.config import ResolvedConfig
 from munk.planning.models import ChangePlanInput, RequirementInput
@@ -46,7 +47,12 @@ class _CallbackProgressSink:
             return
         if event.event_type in {"agent_started", "agent_ended", "agent_failed", "agent_canceled"}:
             return
-        self._callback(event.event_type, event.message, dict(event.data))
+        payload = (
+            build_agent_runtime_host_data_payload(event, timestamp_key="timestamp")
+            if hasattr(event, "lifecycle_state") and hasattr(event, "agent_role") and hasattr(event, "timestamp")
+            else dict(event.data)
+        )
+        self._callback(event.event_type, event.message, payload)
 
 
 class _CancelAdapter:

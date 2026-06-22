@@ -292,7 +292,8 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
         title="Verify Change",
         description=(
             "Generate or execute change-driven verification for a code change.\n"
-            "Recommended V1 path: set enable_plan_agent=true and provide change context such as changed_files, diff_text, or change_summary.\n"
+            "Recommended V1 path: set enable_plan_agent=true and provide acceptance_criteria plus optional diff/changed_files.\n"
+            "Use provided_cases only as an advanced escape hatch to skip plan generation and rerun fixed cases.\n"
             "Leave review_orchestration_path unset by default because that review-first artifact chain is not the recommended MCP flow yet.\n"
             "Returns operation_id, phase, status, and related identifiers.\n"
             "Does not execute a run unless auto_run is true, and auto_run requires an execution target."
@@ -309,7 +310,11 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
             bool,
             Field(description="Whether to execute verification after planning. When true, also provide an execution target such as device_ref plus package, bundle_id, or base_url."),
         ] = False,
-        change_summary: Annotated[str | None, Field(description="Optional concise change summary.")] = None,
+        acceptance_criteria: Annotated[
+            list[str],
+            Field(description="Recommended acceptance criteria from the issue or orchestrator. Primary input for change-driven plan generation."),
+        ] = Field(default_factory=list),
+        change_summary: Annotated[str | None, Field(description="Optional concise summary of what changed or how the fix was implemented.")] = None,
         changed_files: Annotated[list[str], Field(description="Optional changed file paths.")] = Field(default_factory=list),
         diff_text: Annotated[str | None, Field(description="Optional unified diff text.")] = None,
         review_orchestration_path: Annotated[
@@ -324,11 +329,6 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
             Path | None,
             Field(description="Optional path to an existing technical design document in the workspace."),
         ] = None,
-        previous_report_path: Annotated[Path | None, Field(description="Optional previous report path.")] = None,
-        previous_result_paths: Annotated[
-            list[Path],
-            Field(description="Optional prior result paths used as extra evidence."),
-        ] = Field(default_factory=list),
         device_ref: Annotated[
             str | None,
             Field(description="Optional target device reference used only when auto_run is true."),
@@ -339,6 +339,10 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
             dict[str, RuntimeOverrideValue],
             Field(description="Optional runtime overrides forwarded to execution."),
         ] = Field(default_factory=dict),
+        fail_fast: Annotated[
+            bool,
+            Field(description="Whether to stop plan execution after the first failed case when auto_run is true."),
+        ] = False,
         package: Annotated[str | None, Field(description="Optional Android package name for auto_run execution.")] = None,
         bundle_id: Annotated[str | None, Field(description="Optional iOS bundle identifier for auto_run execution.")] = None,
         base_url: Annotated[str | None, Field(description="Optional web base URL for auto_run execution.")] = None,
@@ -350,18 +354,18 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
                 app_id=app_id,
                 enable_plan_agent=enable_plan_agent,
                 auto_run=auto_run,
+                acceptance_criteria=acceptance_criteria,
                 change_summary=change_summary,
                 changed_files=changed_files,
                 diff_text=diff_text,
                 review_orchestration_path=review_orchestration_path,
                 requirement_doc_path=requirement_doc_path,
                 technical_doc_path=technical_doc_path,
-                previous_report_path=previous_report_path,
-                previous_result_paths=previous_result_paths,
                 device_ref=device_ref,
                 artifact_path=artifact_path,
                 assets_root=assets_root,
                 runtime_overrides=runtime_overrides,
+                fail_fast=fail_fast,
                 package=package,
                 bundle_id=bundle_id,
                 base_url=base_url,

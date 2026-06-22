@@ -3,11 +3,16 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
+from munk.artifacts import ARTIFACT_ID_ARTIFACT_MANIFEST, ARTIFACT_ID_CASE
 from munk.execution.models import CaseExecutionRequest
-from munk.services.artifact_manifest_models import ReproductionEntry, ReproductionTargetKind
+from munk.services.artifact_manifest_models import ReproductionEntry
 from munk.services.artifact_manifest_service import ArtifactManifestService
+from munk.services.operations.command_specs import (
+    build_operation_cli_command,
+    reproduction_target_kind_for_operation,
+)
 from munk.services.operations.models import OperationRecord
 from munk.services.operations.paths import operation_dir
 
@@ -41,9 +46,9 @@ class ReproductionService:
             encoding="utf-8",
         )
         return ReproductionEntry(
-            target_kind=self._reproduction_target_kind(record.kind),
+            target_kind=reproduction_target_kind_for_operation(record.kind),
             source_operation_id=record.operation_id,
-            command=self._command_for_kind(record.kind, request_path),
+            command=build_operation_cli_command(record.kind, request_file=request_path),
             request_file=request_path,
             reason="replay original machine request",
         )
@@ -86,7 +91,7 @@ class ReproductionService:
                 ReproductionEntry(
                     target_kind="run_case",
                     source_operation_id=record.operation_id,
-                    command=self._command_for_kind("run_case", request_file),
+                    command=build_operation_cli_command("run_case", request_file=request_file),
                     request_file=request_file,
                     case_id=case_request.case.case_id,
                     reason=f"reproduce {case_run.verdict} case from {record.kind}",
@@ -96,35 +101,13 @@ class ReproductionService:
 
     @staticmethod
     def _case_request_path(artifacts: dict[str, Any]) -> Path | None:
-        case_ref = artifacts.get("case")
+        case_ref = artifacts.get(ARTIFACT_ID_CASE)
         if case_ref is None:
             return None
         raw_path = getattr(case_ref, "path", None)
         if raw_path is None:
             return None
         return Path(raw_path)
-
-    @staticmethod
-    def _command_for_kind(kind: str, request_file: Path) -> str:
-        if kind == "plan":
-            return f"munk plan --request-file {request_file} --json"
-        if kind == "run_case":
-            return f"munk run case --request-file {request_file} --json"
-        if kind == "run_plan":
-            return f"munk run plan --request-file {request_file} --json"
-        if kind == "run_plans":
-            return f"munk run plans --request-file {request_file} --json"
-        if kind == "verify_change":
-            return f"munk verify change --request-file {request_file} --json"
-        if kind == "review":
-            return f"munk review --request-file {request_file} --json"
-        raise ValueError(f"unsupported reproduction kind: {kind}")
-
-    @staticmethod
-    def _reproduction_target_kind(kind: str) -> ReproductionTargetKind:
-        if kind in {"plan", "run_case", "run_plan", "run_plans", "verify_change", "review"}:
-            return cast(ReproductionTargetKind, kind)
-        raise ValueError(f"unsupported reproduction target kind: {kind}")
 
     def _resolve_repro_dir(self, record: OperationRecord) -> Path:
         root_dir = self._root_dir(record)
@@ -142,7 +125,7 @@ class ReproductionService:
         return operation_dir(record.operation_id)
 
     def _manifest_path(self, record: OperationRecord) -> Path | None:
-        raw_path = record.artifacts_json.get("artifact_manifest")
+        raw_path = record.artifacts_json.get(ARTIFACT_ID_ARTIFACT_MANIFEST)
         if raw_path:
             return Path(raw_path)
         return None

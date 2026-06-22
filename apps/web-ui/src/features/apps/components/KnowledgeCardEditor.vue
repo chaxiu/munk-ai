@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { PlusCircle, Save, Trash2 } from '@lucide/vue'
+import { Braces, FilePenLine, PlusCircle, Save, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { KnowledgeCardEditorForm } from '@/features/apps/knowledgeEditor'
+import type { KnowledgeCardEditorErrors, KnowledgeCardEditorForm, KnowledgeEditorMode } from '@/features/apps/knowledgeEditor'
+import KnowledgePayloadEditor from '@/features/apps/components/KnowledgePayloadEditor.vue'
 import type { KnowledgeCard, KnowledgeCardType, KnowledgeSourceKind } from '@/shared/api/knowledge'
 import AppEmptyState from '@/shared/components/AppEmptyState.vue'
 import { useTime } from '@/shared/time/useTime'
@@ -22,7 +23,7 @@ const props = defineProps<{
   isDeleting: boolean
   actionError: string | null
   actionMessage: string | null
-  payloadError: string | null
+  formErrors: KnowledgeCardEditorErrors
   cardTypeOptions: Array<{ value: string, label: string }>
   sourceKindOptions: Array<{ value: string, label: string }>
   statusOptions: Array<{ value: string, label: string }>
@@ -36,11 +37,13 @@ const emit = defineEmits<{
   delete: []
   newCard: []
   cardTypeChange: [value: KnowledgeCardType]
+  editorModeChange: [value: KnowledgeEditorMode]
 }>()
 
 const { t } = useI18n()
 const time = useTime()
 const hasEditorContent = computed(() => props.isCreating || Boolean(props.selectedCard))
+const isJsonMode = computed(() => form.value.editorMode === 'json')
 
 function sourceLabel(kind: KnowledgeSourceKind): string {
   return t(`apps.knowledge.sources.${kind}`)
@@ -122,7 +125,7 @@ function sourceLabel(kind: KnowledgeSourceKind): string {
         </div>
 
         <div class="grid gap-4 md:grid-cols-2">
-          <UiField :label="$t('apps.knowledge.fields.title')">
+          <UiField :label="$t('apps.knowledge.fields.title')" :error="props.formErrors.title">
             <UiInput v-model="form.title" :disabled="props.isSaving || props.isDeleting" />
           </UiField>
           <UiField :label="$t('apps.knowledge.fields.cardType')">
@@ -136,7 +139,11 @@ function sourceLabel(kind: KnowledgeSourceKind): string {
           <UiField :label="$t('apps.knowledge.fields.status')">
             <UiSelect v-model="form.status" :options="props.statusOptions" :disabled="props.isSaving || props.isDeleting" />
           </UiField>
-          <UiField :label="$t('apps.knowledge.fields.confidence')" :hint="$t('apps.knowledge.fields.confidenceHint')">
+          <UiField
+            :label="$t('apps.knowledge.fields.confidence')"
+            :hint="$t('apps.knowledge.fields.confidenceHint')"
+            :error="props.formErrors.confidence"
+          >
             <UiInput v-model="form.confidence" :disabled="props.isSaving || props.isDeleting" inputmode="decimal" />
           </UiField>
           <UiField :label="$t('apps.knowledge.fields.sourceKind')">
@@ -151,13 +158,37 @@ function sourceLabel(kind: KnowledgeSourceKind): string {
           <UiTextarea v-model="form.sourceNote" :rows="3" :disabled="props.isSaving || props.isDeleting" />
         </UiField>
 
-        <UiField
-          :label="$t('apps.knowledge.fields.payload')"
-          :hint="$t('apps.knowledge.fields.payloadHint')"
-          :error="props.payloadError"
-        >
-          <UiTextarea v-model="form.payloadText" :rows="14" :disabled="props.isSaving || props.isDeleting" />
-        </UiField>
+        <section class="grid gap-4 rounded-2xl border border-border-muted bg-surface-muted/30 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="grid gap-1">
+              <h4 class="text-sm font-semibold text-text-primary">{{ $t('apps.knowledge.fields.payload') }}</h4>
+              <p class="text-sm text-text-secondary">
+                {{ isJsonMode ? $t('apps.knowledge.fields.payloadHint') : $t('apps.knowledge.fields.payloadStructuredHint') }}
+              </p>
+            </div>
+            <UiButton
+              type="button"
+              variant="secondary"
+              size="sm"
+              :disabled="props.isSaving || props.isDeleting"
+              @click="$emit('editorModeChange', isJsonMode ? 'structured' : 'json')"
+            >
+              <FilePenLine v-if="isJsonMode" class="h-4 w-4" />
+              <Braces v-else class="h-4 w-4" />
+              {{ isJsonMode ? $t('apps.knowledge.actions.showStructuredEditor') : $t('apps.knowledge.actions.showJsonEditor') }}
+            </UiButton>
+          </div>
+
+          <KnowledgePayloadEditor
+            v-model:payload-draft="form.payloadDraft"
+            v-model:json-mode-text="form.jsonModeText"
+            :card-type="form.cardType"
+            :editor-mode="form.editorMode"
+            :disabled="props.isSaving || props.isDeleting"
+            :payload-error="props.formErrors.payload"
+            :payload-field-errors="props.formErrors.payloadFields"
+          />
+        </section>
       </div>
     </div>
   </div>

@@ -6,10 +6,12 @@ from typing import Protocol
 
 from munk.agent_base.llm import prepare_llm_transcript_path
 from munk.agent_runtime import AgentRuntimeEvent, CancelController
+from munk.agent_runtime.events import build_agent_runtime_host_data_payload
 from munk.planning.models import ChangePlanInput, RequirementInput
 from munk.planning.runtime import PlanManagedPaths, PlanResolvedAppContext, PlanRuntimeContext
 from munk.services.errors import AppAssetNotFoundError
-from munk.services.knowledge import build_knowledge_provider_from_document, load_app_knowledge_document
+from munk.services.knowledge import build_app_knowledge_tools, load_app_knowledge_document
+from munk.services.planning.event_payloads import build_plan_operation_progress_payload
 from munk.services.running.paths import create_unique_run_dir
 
 
@@ -29,46 +31,17 @@ class TrackerPlanProgressSink:
         self._tracker = tracker
 
     def emit(self, event: AgentRuntimeEvent) -> None:
-        data = dict(event.data)
-        data["lifecycle_state"] = event.lifecycle_state
-        data["agent_role"] = event.agent_role
-        data["timestamp"] = event.timestamp
+        data = build_agent_runtime_host_data_payload(event, timestamp_key="timestamp")
         self._tracker.append_event(event_type=event.event_type, message=event.message, data=data)
         self._tracker.update_progress(
-            lifecycle_state=event.lifecycle_state,
-            agent_role=event.agent_role,
-            event_timestamp=event.timestamp,
-            **self._plan_progress_payload(event.event_type, data),
+            **build_plan_operation_progress_payload(
+                event.event_type,
+                data,
+                lifecycle_state=event.lifecycle_state,
+                agent_role=event.agent_role,
+                event_timestamp=event.timestamp,
+            )
         )
-
-    @staticmethod
-    def _plan_progress_payload(event_type: str, data: dict[str, object]) -> dict[str, object]:
-        progress: dict[str, object] = {"plan_event_type": event_type}
-        stage_map = {
-            "plan_context_loaded": "context_loaded",
-            "plan_agent_ready": "agent_ready",
-            "plan_skeleton_generation_started": "skeleton_generation_started",
-            "plan_skeleton_generated": "skeleton_generated",
-            "plan_case_generation_started": "case_generation_started",
-            "plan_case_generated": "case_generated",
-            "plan_finalize_started": "finalize_started",
-            "plan_finalize_completed": "finalize_completed",
-        }
-        if event_type in stage_map:
-            progress["stage"] = stage_map[event_type]
-        for key in (
-            "app_id",
-            "plan_id",
-            "plan_name",
-            "target_case_count",
-            "completed_case_count",
-            "case_index",
-            "case_id",
-            "case_title",
-        ):
-            if key in data and data[key] is not None:
-                progress[key] = data[key]
-        return progress
 
 
 class TrackerCancelController(CancelController):
@@ -147,7 +120,12 @@ def _load_app_context(app_id: str, *, storage):  # noqa: ANN001
         from munk.app_knowledge import AppKnowledgeImportDocument
 
         document = AppKnowledgeImportDocument(app_id=app_id, cards=[])
-    return app_profile, app_introduction, build_knowledge_provider_from_document(document)
+    return app_profile, app_introduction, build_app_knowledge_tools(
+        app_id=app_id,
+        assets_root=storage.app_registry.root_dir,
+        document=document,
+        resolved_config={"app_registry_root": storage.app_registry.root_dir},
+    )
 
 
 def _resolve_root_dir(request: RequirementInput | ChangePlanInput) -> Path:

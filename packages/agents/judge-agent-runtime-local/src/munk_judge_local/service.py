@@ -47,26 +47,41 @@ class JudgeRuntimeService:
             agent_role="judge",
             operation_id=context.operation_id,
             event_sink=context.progress,
+            timeline_scope="parent_run",
+            attempt_index=context.attempt_index,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
         )
         started_at = datetime.now(timezone.utc).isoformat()
         started = time.monotonic()
         emitter.emit_started(
+            event_type="judge_started",
             message="judge runtime started",
-            data={"app_id": request.app_id, "case_id": request.case_id},
+            summary="judge runtime started",
         )
         try:
             self._write_json(context.managed_paths.judge_request_path, request.model_dump(mode="json"))
             emitter.emit_progress(
                 event_type="judge_context_loaded",
                 message="judge context loaded",
-                data={
-                    "app_id": request.app_id,
-                    "case_id": request.case_id,
-                    "root_dir": str(context.managed_paths.root_dir),
-                },
+                timeline_phase="context_loaded",
+                summary="judge context loaded",
+                data={"root_dir": str(context.managed_paths.root_dir)},
             )
             self._raise_if_cancelled(cancel_controller)
             evidence_pack = build_evidence_pack(request=request)
+            emitter.emit_progress(
+                event_type="judge_evidence_ready",
+                message="judge evidence prepared",
+                timeline_phase="evidence_ready",
+                summary="judge evidence prepared",
+                data={
+                    "evidence_count": len(evidence_pack.evidence),
+                    "primary_evidence_count": len(evidence_pack.primary_evidence),
+                    "supporting_evidence_count": len(evidence_pack.supporting_evidence),
+                },
+            )
             hard_rule = apply_hard_rule_gate(request.execution, request.events, evidence_pack)
             if hard_rule is not None:
                 result_data = JudgeRuntimeResultData(
@@ -82,9 +97,9 @@ class JudgeRuntimeService:
                 emitter.emit_progress(
                     event_type="judge_hard_rule_completed",
                     message="judge hard rule completed",
+                    timeline_phase="decision_ready",
+                    summary="judge hard rule completed",
                     data={
-                        "app_id": request.app_id,
-                        "case_id": request.case_id,
                         "verdict": hard_rule.verdict,
                     },
                 )
@@ -96,10 +111,10 @@ class JudgeRuntimeService:
                     token_usage=summarize_llm_transcript_usage(context.managed_paths.llm_transcript_path),
                 )
                 emitter.emit_ended(
+                    event_type="judge_completed",
                     message="judge runtime completed",
+                    summary="judge runtime completed",
                     data={
-                        "app_id": request.app_id,
-                        "case_id": request.case_id,
                         "verdict": output.result_data.verdict,
                         "tool_call_count": 0,
                     },
@@ -121,14 +136,27 @@ class JudgeRuntimeService:
             self._write_json(context.managed_paths.tool_calls_path, {"tool_calls": tool_calls})
             context.managed_paths.judge_prompt_path.write_text(self._judge_agent.last_prompt, encoding="utf-8")
             emitter.emit_progress(
-                event_type="judge_agent_completed",
-                message="judge agent completed",
+                event_type="judge_prompt_ready",
+                message="judge prompt ready",
+                timeline_phase="prompt_ready",
+                summary="judge prompt ready",
                 data={
-                    "app_id": request.app_id,
-                    "case_id": request.case_id,
-                    "verdict": agent_output.verdict,
-                    "tool_call_count": len(tool_calls),
+                    "prompt_path": str(context.managed_paths.judge_prompt_path),
                 },
+            )
+            emitter.emit_progress(
+                event_type="judge_tool_calls_completed",
+                message="judge tool calls completed",
+                timeline_phase="tool_calls_completed",
+                summary="judge tool calls completed",
+                data={"tool_call_count": len(tool_calls)},
+            )
+            emitter.emit_progress(
+                event_type="judge_decision_ready",
+                message="judge decision ready",
+                timeline_phase="decision_ready",
+                summary="judge decision ready",
+                data={"verdict": agent_output.verdict, "tool_call_count": len(tool_calls)},
             )
             self._raise_if_cancelled(cancel_controller)
             output = JudgeRuntimeOutput(
@@ -153,25 +181,26 @@ class JudgeRuntimeService:
             )
         except OperationCancelledError:
             emitter.emit_canceled(
+                event_type="judge_canceled",
                 message="judge runtime canceled",
-                data={"app_id": request.app_id, "case_id": request.case_id},
+                summary="judge runtime canceled",
             )
             raise
         except Exception as exc:
             emitter.emit_failed(
+                event_type="judge_failed",
                 message="judge runtime failed",
+                summary="judge runtime failed",
                 data={
-                    "app_id": request.app_id,
-                    "case_id": request.case_id,
                     "error_type": exc.__class__.__name__,
                 },
             )
             raise
         emitter.emit_ended(
+            event_type="judge_completed",
             message="judge runtime completed",
+            summary="judge runtime completed",
             data={
-                "app_id": request.app_id,
-                "case_id": request.case_id,
                 "verdict": output.result_data.verdict,
                 "tool_call_count": len(output.tool_calls),
             },

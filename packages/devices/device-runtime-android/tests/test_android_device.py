@@ -127,6 +127,15 @@ def test_android_device_scroll_passes_seconds_duration_to_uiautomator2() -> None
     assert fake.swipe_calls == [(10, 20, 30, 40, 1.5)]
 
 
+def test_android_device_drag_passes_seconds_duration_to_uiautomator2() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    device.drag((10, 20), (30, 40), duration=1.5)
+
+    assert fake.swipe_calls == [(10, 20, 30, 40, 1.5)]
+
+
 def test_android_device_long_press_prefers_uiautomator2_long_click() -> None:
     fake = FakeU2Device()
     device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
@@ -192,6 +201,15 @@ def test_android_device_scroll_uses_device_default_when_duration_is_none() -> No
     device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
 
     device.scroll((1, 2), (3, 4), duration=None)
+
+    assert fake.swipe_calls == [(1, 2, 3, 4)]
+
+
+def test_android_device_drag_uses_device_default_when_duration_is_none() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    device.drag((1, 2), (3, 4), duration=None)
 
     assert fake.swipe_calls == [(1, 2, 3, 4)]
 

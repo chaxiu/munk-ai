@@ -17,25 +17,53 @@ def build_runner_action_feedback(action: Action) -> ActionFeedback | None:
         if action.end is not None:
             fields.append(("end", action.end))
         return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
+    if action.type == ActionType.DRAG:
+        if action.start is not None:
+            fields.append(("start", action.start))
+        if action.end is not None:
+            fields.append(("end", action.end))
+        return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
     if action.type in {ActionType.CLICK, ActionType.LONG_PRESS}:
         resolved_point = _resolve_point(action)
         if resolved_point is not None:
             fields.append(("resolved_point", resolved_point))
         return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
-    if action.type == ActionType.INPUT:
+    if action.type in {ActionType.INPUT, ActionType.EDIT_TEXT}:
         if action.text is not None:
             fields.append(("text_applied", action.text))
-        return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
-    if action.type == ActionType.CLEAR_AND_INPUT:
-        if action.text is not None:
-            fields.append(("text_applied", action.text))
+        if action.type == ActionType.EDIT_TEXT and action.text_mode is not None:
+            fields.append(("text_mode", action.text_mode))
         input_target = action.box if action.box is not None else action.point
-        if input_target is not None:
+        if action.type == ActionType.EDIT_TEXT and input_target is not None:
             fields.append(("input_target", input_target))
         return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
-    if action.type in {ActionType.BACK, ActionType.HOME, ActionType.WAIT}:
+    if action.type in {ActionType.BACK, ActionType.HOME, ActionType.RESTART_APP, ActionType.WAIT}:
         return ActionFeedback(action_type=action.type.value, status="executed")
     return None
+
+
+def augment_runner_action_feedback(
+    action: Action,
+    *,
+    feedback: ActionFeedback | None,
+    duration_ms: int | None = None,
+    changes: tuple[str, ...] = (),
+) -> ActionFeedback | None:
+    effective = feedback
+    if effective is None and (duration_ms is not None or changes):
+        effective = ActionFeedback(action_type=action.type.value, status="executed")
+    if effective is None:
+        return None
+    fields = list(effective.fields)
+    if duration_ms is not None:
+        fields.append(("duration_ms", duration_ms))
+    if changes:
+        fields.append(("changes", list(changes)))
+    return ActionFeedback(
+        action_type=effective.action_type,
+        status=effective.status,
+        fields=tuple(fields),
+    )
 
 
 def _resolve_point(action: Action) -> tuple[int, int] | None:

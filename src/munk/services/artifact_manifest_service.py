@@ -7,11 +7,14 @@ from munk.execution.models import CaseExecutionResult, JudgeVerdict
 from munk.services.artifact_manifest_models import (
     ArtifactKind,
     ArtifactManifest,
+    ArtifactManifestSummary,
+    ArtifactSchemaVersions,
     ArtifactRef,
     ArtifactScope,
     CaseArtifactEntry,
     ReproductionEntry,
     ReproductionTargetKind,
+    UpstreamReviewArtifacts,
 )
 
 
@@ -25,7 +28,7 @@ class ArtifactManifestService:
         operation_kind: ReproductionTargetKind | None = None,
         verification_verdict: JudgeVerdict | None = None,
         reproduction: list[ReproductionEntry] | None = None,
-        metadata: dict[str, object] | None = None,
+        schema_versions: ArtifactSchemaVersions | dict[str, str] | None = None,
     ) -> ArtifactManifest:
         return ArtifactManifest(
             operation_id=operation_id,
@@ -38,7 +41,8 @@ class ArtifactManifestService:
             ),
             case_runs=[],
             reproduction=list(reproduction or []),
-            metadata=dict(metadata or {}),
+            schema_versions=self._schema_versions(schema_versions),
+            summary=ArtifactManifestSummary(case_count=0),
         )
 
     def build_case_manifest(
@@ -54,6 +58,7 @@ class ArtifactManifestService:
         operation_kind: ReproductionTargetKind | None = None,
         verification_verdict: JudgeVerdict | None = None,
         reproduction: list[ReproductionEntry] | None = None,
+        schema_versions: ArtifactSchemaVersions | dict[str, str] | None = None,
     ) -> ArtifactManifest:
         return ArtifactManifest(
             operation_id=operation_id,
@@ -79,7 +84,8 @@ class ArtifactManifestService:
                 )
             ],
             reproduction=list(reproduction or []),
-            metadata={"case_count": 1},
+            schema_versions=self._schema_versions(schema_versions),
+            summary=ArtifactManifestSummary(case_count=1),
         )
 
     def build_plan_manifest(
@@ -94,6 +100,7 @@ class ArtifactManifestService:
         operation_kind: ReproductionTargetKind | None = None,
         verification_verdict: JudgeVerdict | None = None,
         reproduction: list[ReproductionEntry] | None = None,
+        schema_versions: ArtifactSchemaVersions | dict[str, str] | None = None,
     ) -> ArtifactManifest:
         return ArtifactManifest(
             operation_id=operation_id,
@@ -113,8 +120,39 @@ class ArtifactManifestService:
                 for item in case_results
             ],
             reproduction=list(reproduction or []),
-            metadata={"case_count": len(case_results)},
+            schema_versions=self._schema_versions(schema_versions),
+            summary=ArtifactManifestSummary(case_count=len(case_results)),
         )
+
+    def augment_manifest(
+        self,
+        manifest: ArtifactManifest,
+        *,
+        primary_artifacts: dict[str, str] | None = None,
+        schema_versions: ArtifactSchemaVersions | dict[str, str] | None = None,
+        reproduction: list[ReproductionEntry] | None = None,
+        upstream_review: UpstreamReviewArtifacts | None = None,
+    ) -> ArtifactManifest:
+        update: dict[str, object] = {}
+        if primary_artifacts:
+            update["primary_artifacts"] = {
+                **manifest.primary_artifacts,
+                **self.build_artifact_refs(
+                    artifacts=primary_artifacts,
+                    scope=self._primary_scope(manifest),
+                ),
+            }
+        if schema_versions:
+            current_versions = manifest.schema_versions.to_mapping()
+            current_versions.update(self._schema_versions(schema_versions).to_mapping())
+            update["schema_versions"] = ArtifactSchemaVersions.from_mapping(current_versions)
+        if reproduction is not None:
+            update["reproduction"] = list(reproduction)
+        if upstream_review is not None:
+            update["upstream_review"] = upstream_review
+        if not update:
+            return manifest
+        return manifest.model_copy(update=update)
 
     def build_artifact_refs(
         self,
@@ -158,7 +196,10 @@ class ArtifactManifestService:
         *,
         reproduction: list[ReproductionEntry],
     ) -> ArtifactManifest:
-        return manifest.model_copy(update={"reproduction": list(reproduction)})
+        return self.augment_manifest(
+            manifest,
+            reproduction=reproduction,
+        )
 
     def _case_entry_from_result(
         self,
@@ -235,3 +276,21 @@ class ArtifactManifestService:
                 ],
             }
         )
+
+    @staticmethod
+    def _primary_scope(manifest: ArtifactManifest) -> ArtifactScope:
+        if manifest.primary_artifacts:
+            return next(iter(manifest.primary_artifacts.values())).scope
+        if manifest.case_runs:
+            return "plan_run"
+        return "operation"
+
+    @staticmethod
+    def _schema_versions(
+        versions: ArtifactSchemaVersions | dict[str, str] | None,
+    ) -> ArtifactSchemaVersions:
+        if versions is None:
+            return ArtifactSchemaVersions()
+        if isinstance(versions, ArtifactSchemaVersions):
+            return versions
+        return ArtifactSchemaVersions.from_mapping(versions)

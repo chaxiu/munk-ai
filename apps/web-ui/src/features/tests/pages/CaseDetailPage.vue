@@ -21,7 +21,6 @@ import { type CaseEditorFormModel, buildCaseUpsertRequest, createCaseEditorForm,
 import { formatDeviceLabel } from '@/features/devices/deviceLabels'
 import { useDevicesQuery } from '@/features/devices/queries/useDevicesQuery'
 import { useAppDetailQuery } from '@/features/apps/queries/useAppDetailQuery'
-import { useAppsQuery } from '@/features/apps/queries/useAppsQuery'
 import { useCaseDetailQuery } from '@/features/tests/queries/useCaseDetailQuery'
 import { useRewriteCasePreviewMutation } from '@/features/tests/queries/useRewriteCasePreviewMutation'
 import { useReplaceCaseMutation } from '@/features/tests/queries/useReplaceCaseMutation'
@@ -43,10 +42,7 @@ const caseId = computed(() => String(route.params.caseId))
 
 const query = useCaseDetailQuery(appId, planId, caseId)
 const devicesQuery = useDevicesQuery('all')
-const appsQuery = useAppsQuery(computed(() => ({ platform: 'android' })))
-const packageName = ref('')
 const selectedDeviceRef = ref('')
-const selectedFallbackAppId = ref('')
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
@@ -64,6 +60,12 @@ const form = reactive<CaseEditorFormModel>({
   expectedText: '',
   procedureText: '',
   postActionText: '',
+  objectiveClarificationsText: '',
+  preflightChecksText: '',
+  interactionHintsText: '',
+  disambiguationRulesText: '',
+  recoveryHintsText: '',
+  judgeHintsText: '',
   isCoreCase: false,
   startMode: 'reset',
   startPageId: '',
@@ -80,20 +82,11 @@ const inferredAppId = computed(() => {
   return fromRoute || null
 })
 
-const effectiveAppId = computed(() => inferredAppId.value ?? (selectedFallbackAppId.value.trim() || null))
+const effectiveAppId = computed(() => inferredAppId.value)
 const appDetailQuery = useAppDetailQuery(effectiveAppId)
 
-const appOptions = computed(() => (
-  (appsQuery.data.value ?? []).map((item) => ({
-    label: `${item.app_id} (${item.platform}${item.entry_identity ? ` / ${item.entry_identity}` : ''})`,
-    value: item.app_id,
-  }))
-))
-
 const selectedAppDetail = computed(() => appDetailQuery.data.value)
-const resolvedPackageName = computed(() => selectedAppDetail.value?.profile.android?.package_name?.trim() ?? '')
-const needsAppSelection = computed(() => !inferredAppId.value)
-const needsPackageInput = computed(() => !resolvedPackageName.value)
+const resolvedAppTarget = computed(() => selectedAppDetail.value?.app_target ?? null)
 
 const recentRunsQuery = useQuery({
   queryKey: ['tests', 'recent-runs', appId.value, planId.value, caseId.value],
@@ -131,7 +124,7 @@ const runDisabled = computed(() => (
   submitting.value
   || !selectedDeviceRef.value
   || !effectiveAppId.value
-  || !packageName.value.trim()
+  || !resolvedAppTarget.value
 ))
 
 const deviceOptions = computed(() => (
@@ -162,15 +155,8 @@ function translateUnknownError(error: unknown): string | null {
 }
 
 watch(effectiveAppId, () => {
-  packageName.value = ''
   submitError.value = null
 })
-
-watch(resolvedPackageName, (value) => {
-  if (value) {
-    packageName.value = value
-  }
-}, { immediate: true })
 
 watch(() => query.data.value, (detail) => {
   if (!detail) {
@@ -254,7 +240,7 @@ async function handleRunCase() {
         plan_id: planId.value,
         case_id: caseId.value,
         device_ref: selectedDeviceRef.value,
-        package: packageName.value.trim(),
+        app_target: resolvedAppTarget.value ?? undefined,
       },
       { wait: false, detach: false }
     )
@@ -399,39 +385,48 @@ async function handleSaveCase() {
             <UiTextarea v-model="form.postActionText" :rows="8" :disabled="replaceCaseMutation.isPending.value" />
           </UiField>
         </div>
+        <div class="grid gap-2">
+          <h3 class="text-base font-semibold text-text-primary">{{ t('caseDetail.aiGuidanceTitle') }}</h3>
+          <p class="text-sm text-text-secondary">{{ t('caseDetail.aiGuidanceDescription') }}</p>
+          <p class="text-xs text-text-secondary">{{ t('caseDetail.listFieldHint') }}</p>
+        </div>
+        <div class="grid gap-4 xl:grid-cols-3">
+          <UiField :label="t('caseDetail.fields.objectiveClarifications')">
+            <UiTextarea v-model="form.objectiveClarificationsText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+          <UiField :label="t('caseDetail.fields.preflightChecks')">
+            <UiTextarea v-model="form.preflightChecksText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+          <UiField :label="t('caseDetail.fields.interactionHints')">
+            <UiTextarea v-model="form.interactionHintsText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+          <UiField :label="t('caseDetail.fields.disambiguationRules')">
+            <UiTextarea v-model="form.disambiguationRulesText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+          <UiField :label="t('caseDetail.fields.recoveryHints')">
+            <UiTextarea v-model="form.recoveryHintsText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+          <UiField :label="t('caseDetail.fields.judgeHints')">
+            <UiTextarea v-model="form.judgeHintsText" :rows="6" :disabled="replaceCaseMutation.isPending.value" />
+          </UiField>
+        </div>
       </AppCard>
 
       <AppCard class="grid gap-4">
         <h2 class="app-section-title">{{ t('caseDetail.executionTitle') }}</h2>
         <p class="app-section-description">{{ t('caseDetail.executionDescription') }}</p>
         <div class="grid gap-4 md:grid-cols-2">
-          <UiField v-if="needsAppSelection" :label="t('caseDetail.appFieldLabel')">
-            <UiSelect
-              v-model="selectedFallbackAppId"
-              :options="appOptions"
-              :placeholder="t('caseDetail.appSelectPlaceholder')"
-              :disabled="appsQuery.isFetching.value"
-            />
-          </UiField>
-          <UiField v-else :label="t('caseDetail.appFieldLabel')">
+          <UiField :label="t('caseDetail.appFieldLabel')">
             <UiInput :model-value="effectiveAppId ?? ''" :disabled="true" />
           </UiField>
           <UiField :label="t('caseDetail.selectDevicePlaceholder')">
             <UiSelect v-model="selectedDeviceRef" :options="deviceOptions" :placeholder="t('caseDetail.selectDevicePlaceholder')" />
           </UiField>
-          <UiField :label="t('caseDetail.packageFieldLabel')">
-            <UiInput
-              v-model="packageName"
-              :placeholder="t('caseDetail.packagePlaceholder')"
-              :disabled="!needsPackageInput"
-            />
-          </UiField>
         </div>
-        <p v-if="needsAppSelection" class="text-sm text-text-secondary">{{ t('caseDetail.appSelectHint') }}</p>
+        <p v-if="!effectiveAppId" class="text-sm text-text-secondary">{{ t('caseDetail.appMissingHint') }}</p>
         <p v-else class="text-sm text-text-secondary">{{ t('caseDetail.appResolvedHint') }}</p>
-        <p class="text-sm text-text-secondary">
-          {{ needsPackageInput ? t('caseDetail.packageManualHint') : t('caseDetail.packageResolvedHint') }}
-        </p>
+        <p v-if="effectiveAppId && !resolvedAppTarget" class="text-sm text-text-secondary">{{ t('caseDetail.targetMissingHint') }}</p>
+        <p v-else-if="resolvedAppTarget" class="text-sm text-text-secondary">{{ t('caseDetail.targetResolvedHint') }}</p>
         <p v-if="submitError" class="text-sm text-error-text">{{ submitError }}</p>
         <div class="flex justify-end">
           <UiButton type="button" variant="primary" :disabled="runDisabled" @click="handleRunCase">

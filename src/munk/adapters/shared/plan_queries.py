@@ -14,6 +14,7 @@ from munk.adapters.shared.payload_models import (
 from munk.planning.index_store import IndexedCaseRecord, IndexedPlanRecord, PlanCaseIndexStore
 from munk.planning.models import RequirementPlan
 from munk.planning.storage import PlanStore
+from munk.services.optimization.operation_payloads import parse_optimize_case_operation_result_payload
 from munk.services.operations.registry import OperationRegistry
 from munk.testing import TestCase
 
@@ -149,6 +150,7 @@ def build_case_detail_data(
         start_page_id=case.start_state.page_id,
         max_steps=budget.max_steps if budget is not None else None,
         max_seconds=budget.max_seconds if budget is not None else None,
+        ai_guidance=case.ai_guidance,
         latest_optimize=latest_optimize,
     )
 
@@ -196,16 +198,15 @@ def _find_latest_optimize_operation(app_id: str, plan_id: str, case_id: str) -> 
     for record in records:
         if record.app_id != app_id or record.plan_id != plan_id or record.case_id != case_id:
             continue
-        result_json = record.result_json if isinstance(record.result_json, dict) else {}
-        patched_fields = result_json.get("patched_fields")
+        payload = parse_optimize_case_operation_result_payload(record.result_json)
         return LatestOptimizeOperationData(
             operation_id=record.operation_id,
             status=record.status,
             created_at=record.created_at,
             started_at=record.started_at,
             finished_at=record.finished_at,
-            summary=result_json.get("summary") if isinstance(result_json.get("summary"), str) else None,
-            patched_fields=[item for item in patched_fields if isinstance(item, str) and item] if isinstance(patched_fields, list) else [],
+            summary=payload.summary if payload is not None else None,
+            patched_fields=list(payload.patched_fields) if payload is not None else [],
             error_message=record.error_message,
         )
     return None

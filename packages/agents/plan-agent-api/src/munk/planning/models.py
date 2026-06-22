@@ -36,14 +36,13 @@ class RequirementInput(BaseModel):
 
 class ChangePlanInput(BaseModel):
     app_id: str
+    acceptance_criteria: list[str] = Field(default_factory=empty_strings)
     change_summary: str | None = None
     changed_files: list[str] = Field(default_factory=empty_strings)
     diff_text: str | None = None
     review_orchestration_path: Path | None = None
     requirement_doc_path: Path | None = None
     technical_doc_path: Path | None = None
-    previous_report_path: Path | None = None
-    previous_result_paths: list[Path] = Field(default_factory=empty_paths)
     assets_root: Path | None = None
 
 class RequirementPlan(BaseModel):
@@ -52,6 +51,7 @@ class RequirementPlan(BaseModel):
     app_id: str
     source: str
     version: str
+    acceptance_criteria: list[str] = Field(default_factory=empty_strings)
     cases: list[TestCase] = Field(default_factory=empty_test_cases)
     source_metadata: dict[str, str] = Field(default_factory=empty_string_map)
 

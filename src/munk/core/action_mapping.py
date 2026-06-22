@@ -52,11 +52,12 @@ def map_action_to_device(
             duration=action.duration,
             summary=action.summary,
         )
-    if action.type == ActionType.CLEAR_AND_INPUT and action.box and action.text is not None:
-        return Action.clear_and_input(
-            scale_box(action.box),
-            action.text,
-            dismiss_keyboard=action.dismiss_keyboard is not False,
+    if action.type == ActionType.EDIT_TEXT and action.text is not None:
+        return Action.edit_text(
+            text=action.text,
+            mode=action.text_mode or "append",
+            target_box=scale_box(action.box) if action.box is not None else None,
+            dismiss_keyboard=action.dismiss_keyboard,
             summary=action.summary,
         )
     if action.type == ActionType.INPUT and action.text is not None:
@@ -65,18 +66,40 @@ def map_action_to_device(
             summary=action.summary,
             dismiss_keyboard=action.dismiss_keyboard,
         )
-    if action.type in {ActionType.SCROLL, ActionType.SWIPE} and action.direction and action.distance_px is not None:
-        scale = scale_y if action.direction in {"up", "down"} else scale_x
-        scaled_distance = max(1, int(round(action.distance_px * scale)))
+    if action.type == ActionType.PULL_TO_REFRESH:
+        return Action.pull_to_refresh(
+            start_x_ratio=action.start_x_ratio,
+            start_y_ratio=action.start_y_ratio,
+            distance_ratio=action.distance_ratio,
+            summary=action.summary,
+        )
+    if action.type == ActionType.DRAG and action.start is not None and action.end is not None:
+        return Action.drag(
+            start=scale_point(action.start),
+            end=scale_point(action.end),
+            duration=action.duration,
+            summary=action.summary,
+        )
+    if (
+        action.type in {ActionType.SCROLL, ActionType.SWIPE}
+        and action.direction
+        and action.start_x_ratio is not None
+        and action.start_y_ratio is not None
+        and action.distance_ratio is not None
+    ):
         if action.type == ActionType.SCROLL:
             return Action.scroll(
                 direction=action.direction,
-                distance_px=scaled_distance,
+                start_x_ratio=action.start_x_ratio,
+                start_y_ratio=action.start_y_ratio,
+                distance_ratio=action.distance_ratio,
                 summary=action.summary,
             )
         return Action.swipe(
             direction=action.direction,
-            distance_px=scaled_distance,
+            start_x_ratio=action.start_x_ratio,
+            start_y_ratio=action.start_y_ratio,
+            distance_ratio=action.distance_ratio,
             summary=action.summary,
         )
     return action

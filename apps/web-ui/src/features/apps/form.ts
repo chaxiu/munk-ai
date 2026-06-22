@@ -14,6 +14,7 @@ export type AppFormModel = {
   androidPackageName: string
   androidActivityName: string
   iosBundleId: string
+  iosWdaBundleId: string
   webBaseUrl: string
   webOrigin: string
 }
@@ -31,6 +32,7 @@ export function createAppFormModel(platform: AppPlatform = 'android'): AppFormMo
     androidPackageName: '',
     androidActivityName: '',
     iosBundleId: '',
+    iosWdaBundleId: '',
     webBaseUrl: '',
     webOrigin: '',
   }
@@ -48,6 +50,7 @@ export function populateAppForm(form: AppFormModel, detail: AppDetailData): void
   form.androidPackageName = detail.profile.android?.package_name ?? ''
   form.androidActivityName = detail.profile.android?.activity_name ?? ''
   form.iosBundleId = detail.profile.ios?.bundle_id ?? ''
+  form.iosWdaBundleId = detail.profile.ios?.wda_bundle_id ?? ''
   form.webBaseUrl = detail.profile.web?.base_url ?? ''
   form.webOrigin = detail.profile.web?.origin ?? ''
 }
@@ -69,6 +72,7 @@ export function buildAppUpsertRequest(form: AppFormModel): AppUpsertRequest {
       ios: form.platform === 'ios'
         ? {
             bundle_id: form.iosBundleId.trim(),
+            wda_bundle_id: form.iosWdaBundleId.trim() || null,
           }
         : null,
       web: form.platform === 'web'
@@ -86,9 +90,6 @@ export function buildAppUpsertRequest(form: AppFormModel): AppUpsertRequest {
 
 export function isAppFormSubmittable(form: AppFormModel): boolean {
   if (!form.appId.trim() || !form.appName.trim() || !form.introductionMarkdown.trim()) {
-    return false
-  }
-  if (!form.hasExistingAppKnowledge && !form.appKnowledgeContent.trim()) {
     return false
   }
   if (form.platform === 'android') {

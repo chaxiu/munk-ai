@@ -6,6 +6,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any
 
 from munk.adapters.local_api.app_context import LocalApiAppContext
+from munk.services.ios import get_default_ios_device_bridge_manager
 
 _logger = logging.getLogger(__name__)
 
@@ -47,5 +48,6 @@ def build_local_api_lifespan(
                     )
                 if context.recording_service is not None:
                     context.recording_service.shutdown()
+                get_default_ios_device_bridge_manager().shutdown()
 
     return lifespan

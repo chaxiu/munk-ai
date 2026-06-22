@@ -10,17 +10,14 @@ _TEXT_DETAIL_RE = re.compile(r"text=(?P<quote>['\"])(?P<value>.*?)(?P=quote)")
 def build_goal_progress_summary(entries: list[ActionHistoryEntry], screen: ScreenState) -> str:
     recent_entries = entries[-3:]
     if not recent_entries:
-        return "progress_state=unknown\nrecent_action_chain=none\nlatest_outcome=none\nlatest_input_visible_on_screen=n/a"
+        return "progress_state=unknown\nlatest_input_text=none\nlatest_input_visible_on_screen=n/a"
 
-    recent_action_chain = " -> ".join(entry.action_type for entry in recent_entries)
     latest_outcome = _latest_outcome_summary(recent_entries)
     recent_input_texts = _recent_input_texts(recent_entries)
     visible_recent_inputs = [text for text in recent_input_texts if _screen_contains_text(screen, text)]
 
     lines = [
         f"progress_state={_classify_progress_state(latest_outcome, visible_recent_inputs)}",
-        f"recent_action_chain={recent_action_chain}",
-        f"latest_outcome={latest_outcome}",
     ]
     if recent_input_texts:
         lines.append(f"latest_input_text={recent_input_texts[0]!r}")
@@ -44,7 +41,7 @@ def build_prompt_history_summary(entries: list[ActionHistoryEntry]) -> str:
         return "none"
     lines = [f"recent_action_chain={' -> '.join(entry.action_type for entry in recent_entries)}"]
     for index, entry in enumerate(recent_entries, start=1):
-        item = f"{index}) {entry.action_type} | {entry.summary}"
+        item = f"{index}) {_format_history_time(entry)}{entry.action_type} | {entry.summary}"
         if entry.detail:
             item = f"{item} | detail={entry.detail}"
         if entry.outcome_summary:
@@ -63,7 +60,7 @@ def _latest_outcome_summary(entries: list[ActionHistoryEntry]) -> str:
 def _recent_input_texts(entries: list[ActionHistoryEntry]) -> list[str]:
     texts: list[str] = []
     for entry in reversed(entries):
-        if entry.action_type not in {"input", "clear_and_input"}:
+        if entry.action_type not in {"input", "edit_text"}:
             continue
         if not entry.detail:
             continue
@@ -77,20 +74,25 @@ def _recent_input_texts(entries: list[ActionHistoryEntry]) -> list[str]:
 
 
 def _screen_contains_text(screen: ScreenState, expected: str) -> bool:
-    candidate = expected.strip().lower()
+    candidate = _normalize_progress_text(expected)
     if not candidate:
         return False
     frame = screen.screen_frame
     if frame is not None:
         for node in frame.tree_nodes:
-            for value in (node.text, node.content_desc):
-                if isinstance(value, str) and value.strip().lower() == candidate:
-                    return True
-    for element in screen.elements:
-        for value in (element.text, element.content_desc):
-            if isinstance(value, str) and value.strip().lower() == candidate:
+            if _normalize_progress_text(node.text) == candidate:
                 return True
+    for element in screen.elements:
+        if _normalize_progress_text(element.text) == candidate:
+            return True
     return False
+
+
+def _normalize_progress_text(value: str | None) -> str:
+    if not value:
+        return ""
+    collapsed = " ".join(value.split()).casefold()
+    return "".join(ch for ch in collapsed if ch.isalnum())
 
 
 def _classify_progress_state(latest_outcome: str, visible_recent_inputs: list[str]) -> str:
@@ -104,3 +106,9 @@ def _classify_progress_state(latest_outcome: str, visible_recent_inputs: list[st
     if "screen_changed=yes" in normalized:
         return "advanced"
     return "unknown"
+
+
+def _format_history_time(entry: ActionHistoryEntry) -> str:
+    if entry.relative_time_sec is None:
+        return ""
+    return f"t+{entry.relative_time_sec:.1f}s | "

@@ -119,7 +119,7 @@ class VerifyChangeInput(BaseModel):
     app_id: str = Field(description="Application identifier associated with the change.")
     provided_cases: list[TestCase] = Field(
         default_factory=list,
-        description="Optional explicit test cases. Leave empty for the default change-driven planning path.",
+        description="Advanced escape hatch: skip plan generation and run these exact cases. Requires full TestCase contract knowledge.",
     )
     enable_plan_agent: bool = Field(
         default=False,
@@ -129,7 +129,14 @@ class VerifyChangeInput(BaseModel):
         default=False,
         description="Whether to execute verification after planning. When true, also provide an execution target such as device_ref plus package, bundle_id, or base_url.",
     )
-    change_summary: str | None = Field(default=None, description="Optional concise change summary.")
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="Recommended acceptance criteria from the issue or orchestrator. Primary input for change-driven plan generation.",
+    )
+    change_summary: str | None = Field(
+        default=None,
+        description="Optional concise summary of what changed or how the fix was implemented.",
+    )
     changed_files: list[str] = Field(default_factory=list, description="Optional changed file paths.")
     diff_text: str | None = Field(default=None, description="Optional unified diff text.")
     review_orchestration_path: Path | None = Field(
@@ -144,11 +151,6 @@ class VerifyChangeInput(BaseModel):
         default=None,
         description="Optional path to an existing technical design document in the workspace.",
     )
-    previous_report_path: Path | None = Field(default=None, description="Optional previous report path.")
-    previous_result_paths: list[Path] = Field(
-        default_factory=empty_paths,
-        description="Optional prior result paths used as extra evidence.",
-    )
     app_target: AppTarget | None = Field(
         default=None,
         description="Optional explicit execution target. Preferred when the target is already known.",
@@ -159,6 +161,10 @@ class VerifyChangeInput(BaseModel):
     runtime_overrides: dict[str, RuntimeOverrideValue] = Field(
         default_factory=empty_runtime_overrides,
         description="Optional runtime overrides forwarded to execution.",
+    )
+    fail_fast: bool = Field(
+        default=False,
+        description="Whether to stop plan execution after the first failed case when auto_run is true.",
     )
     package: str | None = Field(
         default=None,

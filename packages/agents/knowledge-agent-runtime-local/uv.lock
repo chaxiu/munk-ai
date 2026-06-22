@@ -745,6 +745,7 @@ source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "munk-knowledge-agent-api" },
+    { name = "munk-shared-tools-api" },
     { name = "pydantic-ai-slim", extra = ["google", "openai"] },
     { name = "pyyaml" },
 ]
@@ -758,6 +759,7 @@ test = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "munk-knowledge-agent-api", editable = "../knowledge-agent-api" },
+    { name = "munk-shared-tools-api", editable = "../../shared/shared-tools-api" },
     { name = "pydantic-ai-slim", extras = ["openai", "google"], specifier = ">=1.86.1" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
     { name = "pyyaml", specifier = ">=6.0.1" },
@@ -816,6 +818,27 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.7.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
+name = "munk-shared-tools-api"
+version = "0.1.0"
+source = { editable = "../../shared/shared-tools-api" }
+dependencies = [
+    { name = "munk-agent-base" },
+    { name = "munk-knowledge-api" },
+    { name = "pydantic" },
+    { name = "pydantic-ai-slim" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "munk-agent-base", editable = "../../shared/agent-base" },
+    { name = "munk-knowledge-api", editable = "../../shared/knowledge-api" },
+    { name = "pydantic", specifier = ">=2.7.0" },
+    { name = "pydantic-ai-slim", specifier = ">=1.86.1" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
 ]
 provides-extras = ["test"]

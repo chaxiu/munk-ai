@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
+from munk.artifacts import ARTIFACT_ID_DIAGNOSTICS
 from munk.config import ResolvedConfig
 from munk.judging.models import (
     JUDGE_RESULT_SCHEMA_VERSION,
@@ -37,7 +38,7 @@ class MaterializedJudgeArtifacts:
             "judge_result": str(self.result.judge_result_path),
         }
         if self.result.diagnostics_path is not None:
-            artifacts["diagnostics"] = str(self.result.diagnostics_path)
+            artifacts[ARTIFACT_ID_DIAGNOSTICS] = str(self.result.diagnostics_path)
         optional_paths = {
             "judge_request": self.judge_request_path,
             "judge_prompt": self.judge_prompt_path,

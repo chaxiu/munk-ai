@@ -11,6 +11,8 @@ from munk.recording import (
     ForwardingAck,
     ForwardingStep,
     ObservedTapCommand,
+    PointerForwardingPayload,
+    PointerStepPayload,
     RecordingAnalysisResult,
     RecordingInteractionContractError,
     RecordingReplayResult,
@@ -19,6 +21,7 @@ from munk.recording import (
     RecordInteractionCommand,
 )
 from munk.testing import TestCase
+from munk.services.errors import InvalidCaseDefinitionError
 from munk_recording_local.service import RecordingService
 from munk_recording_local.store import RecordingStore
 
@@ -28,6 +31,35 @@ def build_app_target(app_id: str = "demo-app", package_name: str = "com.demo.app
         app_id=app_id,
         platform="android",
         android=AndroidAppIdentity(package_name=package_name),
+    )
+
+
+def build_pointer_ack(*, include_device_result: bool = False) -> ForwardingAck:
+    kwargs = {"device_result": {"ok": True}} if include_device_result else {}
+    return ForwardingAck(
+        kind="pointer",
+        payload=PointerForwardingPayload(
+            pointer_id=0,
+            start_x=2,
+            start_y=3,
+            end_x=2,
+            end_y=3,
+            width=5,
+            height=6,
+        ),
+        steps=[
+            ForwardingStep(
+                seq=1,
+                step_kind="pointer_down",
+                payload=PointerStepPayload(pointer_id=0, x=2, y=3),
+            ),
+            ForwardingStep(
+                seq=2,
+                step_kind="pointer_up",
+                payload=PointerStepPayload(pointer_id=0, x=2, y=3),
+            ),
+        ],
+        **kwargs,
     )
 
 
@@ -188,15 +220,7 @@ def test_record_interaction_preserves_pointer_forwarding_kind(monkeypatch, tmp_p
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                        ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                        ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-                device_result={"ok": True},
-            ),
+            forwarding_ack=build_pointer_ack(include_device_result=True),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )
@@ -267,14 +291,7 @@ def test_analyze_and_export_stopped_recording(monkeypatch, tmp_path: Path) -> No
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )
@@ -318,14 +335,7 @@ def test_load_recording_assets_includes_compact_tree_excerpt_and_diff(monkeypatc
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6, "label": "Demo Task"},
         ),
     )
@@ -357,14 +367,7 @@ def test_load_recording_assets_builds_tree_diff_for_changed_nodes(monkeypatch, t
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6, "label": "Demo Task"},
         ),
     )
@@ -392,14 +395,7 @@ def test_ensure_analysis_reuses_cached_result(monkeypatch, tmp_path: Path) -> No
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )
@@ -448,14 +444,7 @@ def test_ensure_export_reuses_existing_manifest(monkeypatch, tmp_path: Path) -> 
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )
@@ -491,6 +480,48 @@ def test_ensure_export_reuses_existing_manifest(monkeypatch, tmp_path: Path) -> 
     assert analysis_calls == 1
 
 
+def test_ensure_export_rejects_case_without_expected(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("MUNK_HOME", str(tmp_path))
+    backend = FakeBackend()
+    service = RecordingService(
+        backend_factory=lambda serial: backend,
+        capture_interval_seconds=60.0,
+    )
+    session = service.create_session(app_target=build_app_target(), device_ref=None, case_id="case-1")
+    service.begin_session(session.recording_id)
+    service.record_interaction(
+        session.recording_id,
+        RecordInteractionCommand(
+            client_command_id="cmd-1",
+            kind="click",
+            forwarding_ack=build_pointer_ack(),
+            payload={"x": 2, "y": 3, "width": 5, "height": 6},
+        ),
+    )
+    service.stop_session(session.recording_id)
+
+    def analysis_runner(bundle: dict[str, object], progress_callback=None) -> RecordingAnalysisResult:  # noqa: ANN001
+        _ = progress_callback
+        return RecordingAnalysisResult(
+            recording_id=str(bundle["recording_id"]),
+            status="completed",
+            test_case=TestCase(
+                case_id="case-1",
+                title="Generated Case",
+                intent="Verify the recorded flow",
+                procedure=["Tap generated button"],
+                expected=[],
+                runner_goal="Replay the recorded flow and verify the visible state change",
+            ),
+            export_ready=True,
+        )
+
+    service.bind_analysis_runner(analysis_runner)
+
+    with pytest.raises(InvalidCaseDefinitionError, match="expected must not be empty"):
+        service.export_case(session.recording_id)
+
+
 def test_ensure_analysis_retries_after_cached_failure(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("MUNK_HOME", str(tmp_path))
     backend = FakeBackend()
@@ -505,14 +536,7 @@ def test_ensure_analysis_retries_after_cached_failure(monkeypatch, tmp_path: Pat
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )
@@ -569,14 +593,7 @@ def test_replay_case_reuses_exported_test_case_and_writes_manifest(monkeypatch, 
         RecordInteractionCommand(
             client_command_id="cmd-1",
             kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                payload={"x": 2, "y": 3, "width": 5, "height": 6},
-                steps=[
-                    ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": 2, "y": 3}),
-                    ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": 2, "y": 3}),
-                ],
-            ),
+            forwarding_ack=build_pointer_ack(),
             payload={"x": 2, "y": 3, "width": 5, "height": 6},
         ),
     )

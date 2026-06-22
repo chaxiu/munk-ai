@@ -62,6 +62,18 @@ class WebDevice:
         page.mouse.move(start[0], start[1])
         page.mouse.wheel(start[0] - end[0], start[1] - end[1])
 
+    def drag(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None = None,
+    ) -> None:
+        page = self._ensure_page()
+        page.mouse.move(start[0], start[1])
+        page.mouse.down()
+        page.mouse.move(end[0], end[1], steps=_drag_move_steps(duration))
+        page.mouse.up()
+
     def press(self, key: str) -> None:
         page = self._ensure_page()
         normalized = key.strip().lower()
@@ -326,6 +338,14 @@ def _parse_bool(value: str | None, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _drag_move_steps(duration: float | None) -> int:
+    if duration is None:
+        return 1
+    if duration <= 0:
+        return 1
+    return min(max(int(round(duration * 60.0)), 1), 240)
 
 
 def _read_console_message_type(message: Any) -> str:

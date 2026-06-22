@@ -34,6 +34,14 @@ class FakeDeviceDriver:
     ) -> None:
         del start, end, duration
 
+    def drag(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None = None,
+    ) -> None:
+        del start, end, duration
+
     def press(self, key: str) -> None:
         del key
 

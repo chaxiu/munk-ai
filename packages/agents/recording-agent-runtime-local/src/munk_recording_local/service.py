@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from threading import Event, Lock, Thread
-from time import monotonic
 from typing import Any, Callable, cast
 
 from munk.app import AppTarget
 from munk.recording import (
-    ForwardingAck,
     ForwardingEvent,
-    ForwardingStep,
     LiveViewFrame,
     ObservationSnapshot,
     ObservedTapCommand,
-    RecordedCurrentAppState,
     RecordedInputEvent,
     RecordingAnalysisResult,
     RecordingAssetManifest,
@@ -29,17 +24,22 @@ from munk.recording import (
     validate_record_interaction_contract,
 )
 from munk.recording.models import now_iso
+from munk.services.case_validation import validate_case_definition
+from munk.services.errors import InvalidCaseDefinitionError
 from munk.testing import TestCase
 
 from .analysis import build_recording_asset_bundle
 from .android_backend import AndroidRecordingBackend
 from .exporter import export_analysis_case
+from .interaction_builders import build_forwarding_event, build_recording_event, tap_to_interaction
+from .observation_capture import ObservationCaptureCoordinator
 from .paths import ensure_recording_assets_home
 from .store import RecordingStore
 
 DEFAULT_CAPTURE_INTERVAL_SECONDS = 1.0
 DEFAULT_STABILIZATION_INTERVAL_SECONDS = 0.2
 DEFAULT_STABILIZATION_TIMEOUT_SECONDS = 2.0
+BackendFactory = Callable[[str | None], AndroidRecordingBackend]
 
 
 @dataclass
@@ -60,7 +60,7 @@ class RecordingService:
         self,
         *,
         store: RecordingStore | None = None,
-        backend_factory=AndroidRecordingBackend.connect,
+        backend_factory: BackendFactory = AndroidRecordingBackend.connect,
         capture_interval_seconds: float = DEFAULT_CAPTURE_INTERVAL_SECONDS,
         stabilization_interval_seconds: float = DEFAULT_STABILIZATION_INTERVAL_SECONDS,
         stabilization_timeout_seconds: float = DEFAULT_STABILIZATION_TIMEOUT_SECONDS,
@@ -70,6 +70,11 @@ class RecordingService:
         self._capture_interval_seconds = capture_interval_seconds
         self._stabilization_interval_seconds = stabilization_interval_seconds
         self._stabilization_timeout_seconds = stabilization_timeout_seconds
+        self._observation_capture = ObservationCaptureCoordinator(
+            store=self._store,
+            stabilization_interval_seconds=stabilization_interval_seconds,
+            stabilization_timeout_seconds=stabilization_timeout_seconds,
+        )
         # Runtime session state is intentionally process-local in A3B.
         # Disk assets remain durable for inspection/export, but are not used
         # to recover active sessions after process restart.
@@ -123,11 +128,11 @@ class RecordingService:
             backend = self._backend_factory(state.session.device_ref)
             if state.session.app_target.entry_identity:
                 backend.app_start(state.session.app_target.entry_identity)
-            frame = self._capture_frame(session=state.session, backend=backend, seq=1)
-            initial_observation = self._persist_observation(
+            frame = self._observation_capture.capture_frame(session=state.session, backend=backend, seq=1)
+            initial_observation = self._observation_capture.persist_observation(
                 session=state.session,
                 backend=backend,
-                observation_id=self._next_observation_id(state),
+                observation_id=self._observation_capture.next_observation_id(state.latest_manifest),
                 frame_seq=frame.seq,
                 stabilized=True,
             )
@@ -182,7 +187,7 @@ class RecordingService:
         return self._finish_session(recording_id, final_status="cancelled")
 
     def record_tap(self, recording_id: str, command: ObservedTapCommand) -> RecordedInputEvent:
-        timeline_entry = self.record_interaction(recording_id, self._tap_to_interaction(command))
+        timeline_entry = self.record_interaction(recording_id, tap_to_interaction(command))
         state = self._require_state(recording_id)
         events = state.recorded_events or []
         for event in reversed(events):
@@ -202,25 +207,32 @@ class RecordingService:
         backend = self._backend_factory(state.session.device_ref)
         before_observation = state.latest_observation
         if before_observation is None:
-            before_observation = self._persist_observation(
+            before_observation = self._observation_capture.persist_observation(
                 session=state.session,
                 backend=backend,
-                observation_id=self._next_observation_id(state),
+                observation_id=self._observation_capture.next_observation_id(state.latest_manifest),
                 frame_seq=state.session.latest_frame_seq,
                 stabilized=True,
             )
             state.latest_observation = before_observation
-        forwarding_event = self._build_forwarding_event(state.session, command, state)
-        manifest = self._store.append_forwarding_event(state.session, forwarding_event)
-        after_observation = self._capture_stable_after_observation(
-            state=state,
-            backend=backend,
+        forwarding_event = build_forwarding_event(
+            recording_id=state.session.recording_id,
+            command=command,
+            next_index=len(state.forwarding_events or []) + 1,
         )
-        recording_event = self._build_recording_event(
+        manifest = self._store.append_forwarding_event(state.session, forwarding_event)
+        after_observation = self._observation_capture.capture_stable_after_observation(
             session=state.session,
+            backend=backend,
+            latest_manifest=state.latest_manifest,
+            latest_frame_seq=state.session.latest_frame_seq,
+            stop_event=state.stop_event,
+        )
+        recording_event = build_recording_event(
+            recording_id=state.session.recording_id,
             command=command,
             after_observation=after_observation,
-            state=state,
+            next_index=len(state.recorded_events or []) + 1,
         )
         manifest = self._store.append_recording_event(state.session, recording_event)
         entry = TimelineEntry(
@@ -346,7 +358,14 @@ class RecordingService:
             and existing_export.case_path.exists()
             and existing_export.analysis_path.exists()
         ):
-            return existing_analysis, existing_export
+            try:
+                validate_case_definition(
+                    existing_case,
+                    context=f"cached recording export for '{recording_id}'",
+                )
+                return existing_analysis, existing_export
+            except InvalidCaseDefinitionError:
+                pass
         export_result = export_analysis_case(self._store, recording_id=recording_id, analysis=existing_analysis)
         return existing_analysis, export_result
 
@@ -415,7 +434,7 @@ class RecordingService:
             state = self._require_state(recording_id)
             next_seq = (state.session.latest_frame_seq or 0) + 1
             try:
-                frame = self._capture_frame(session=state.session, backend=backend, seq=next_seq)
+                frame = self._observation_capture.capture_frame(session=state.session, backend=backend, seq=next_seq)
             except Exception as exc:
                 failed_session = state.session.model_copy(
                     update={
@@ -435,274 +454,9 @@ class RecordingService:
             state.latest_manifest = self._store.read_manifest(updated_session.asset_dir)
             self._store.write_session(updated_session)
 
-    def _capture_frame(
-        self,
-        *,
-        session: RecordingSession,
-        backend: AndroidRecordingBackend,
-        seq: int,
-    ) -> LiveViewFrame:
-        image = backend.screenshot_bgr()
-        current = backend.app_current()
-        entry_identity = current.entry_identity
-        activity_name = current.activity_name
-        frame = LiveViewFrame(
-            recording_id=session.recording_id,
-            seq=seq,
-            image_path=self._store.frame_image_path(session.asset_dir, seq),
-            width=int(image.shape[1]),
-            height=int(image.shape[0]),
-            entry_identity=entry_identity,
-            activity_name=activity_name,
-        )
-        self._store.write_frame(session, frame, image)
-        return frame
-
-    def _capture_stable_after_observation(
-        self,
-        *,
-        state: _SessionRuntimeState,
-        backend: AndroidRecordingBackend,
-    ) -> ObservationSnapshot:
-        deadline = monotonic() + self._stabilization_timeout_seconds
-        last_candidate: _ObservationCandidate | None = None
-        stable_hits = 0
-        while True:
-            candidate = self._capture_observation_candidate(backend=backend)
-            if last_candidate is not None and candidate.observation_hash == last_candidate.observation_hash:
-                stable_hits += 1
-            else:
-                stable_hits = 1
-            last_candidate = candidate
-            if stable_hits >= 2:
-                return self._persist_observation_from_candidate(
-                    session=state.session,
-                    candidate=candidate,
-                    observation_id=self._next_observation_id(state),
-                    frame_seq=state.session.latest_frame_seq,
-                    stabilized=True,
-                )
-            if monotonic() >= deadline:
-                return self._persist_observation_from_candidate(
-                    session=state.session,
-                    candidate=candidate,
-                    observation_id=self._next_observation_id(state),
-                    frame_seq=state.session.latest_frame_seq,
-                    stabilized=False,
-                )
-            state.stop_event.wait(self._stabilization_interval_seconds) if state.stop_event else None
-
-    def _persist_observation(
-        self,
-        *,
-        session: RecordingSession,
-        backend: AndroidRecordingBackend,
-        observation_id: str,
-        frame_seq: int | None,
-        stabilized: bool,
-    ) -> ObservationSnapshot:
-        candidate = self._capture_observation_candidate(backend=backend)
-        return self._persist_observation_from_candidate(
-            session=session,
-            candidate=candidate,
-            observation_id=observation_id,
-            frame_seq=frame_seq,
-            stabilized=stabilized,
-        )
-
-    def _persist_observation_from_candidate(
-        self,
-        *,
-        session: RecordingSession,
-        candidate: "_ObservationCandidate",
-        observation_id: str,
-        frame_seq: int | None,
-        stabilized: bool,
-    ) -> ObservationSnapshot:
-        observation = ObservationSnapshot(
-            observation_id=observation_id,
-            recording_id=session.recording_id,
-            image_path=self._store.observation_image_path(session.asset_dir, observation_id),
-            metadata_path=self._store.observation_meta_path(session.asset_dir, observation_id),
-            ui_tree_path=self._store.observation_tree_path(session.asset_dir, observation_id)
-            if candidate.ui_tree_text is not None
-            else None,
-            entry_identity=candidate.entry_identity,
-            surface_identity=candidate.surface_identity,
-            current_app_state=candidate.current_app_state,
-            frame_seq=frame_seq,
-            tree_available=candidate.ui_tree_text is not None,
-            ui_tree_hash=candidate.ui_tree_hash,
-            screenshot_hash=candidate.screenshot_hash,
-            stabilized=stabilized,
-        )
-        self._store.write_observation(
-            session,
-            observation,
-            candidate.image,
-            metadata=observation.model_dump(mode="json"),
-            ui_tree_text=candidate.ui_tree_text,
-        )
-        return observation
-
-    def _capture_observation_candidate(self, *, backend: AndroidRecordingBackend) -> "_ObservationCandidate":
-        image = backend.screenshot_bgr()
-        current = backend.app_current()
-        entry_identity = current.entry_identity
-        surface_identity = current.surface_identity
-        observation_tree = backend.capture_observation_tree()
-        ui_tree_text = observation_tree.payload if observation_tree is not None else None
-        ui_tree_hash = _hash_text(cast(str | None, ui_tree_text)) if ui_tree_text is not None else None
-        screenshot_hash = _hash_bytes(image.tobytes())
-        observation_hash = f"{entry_identity}|{surface_identity}|{ui_tree_hash or screenshot_hash}"
-        current_app_state = RecordedCurrentAppState(
-            platform=current.platform,
-            entry_identity=entry_identity,
-            surface_identity=surface_identity,
-            url=current.url,
-            title=current.title,
-            load_state=current.load_state,
-            raw=_trim_current_app_state_raw(cast(dict[str, object], current.raw)),
-        )
-        return _ObservationCandidate(
-            image=image,
-            entry_identity=entry_identity,
-            surface_identity=surface_identity,
-            current_app_state=current_app_state,
-            ui_tree_text=ui_tree_text,
-            ui_tree_hash=ui_tree_hash,
-            screenshot_hash=screenshot_hash,
-            observation_hash=observation_hash,
-        )
-
-    @staticmethod
-    def _next_observation_id(state: _SessionRuntimeState) -> str:
-        next_index = (state.latest_manifest.observation_count if state.latest_manifest is not None else 0) + 1
-        return f"obs_{next_index:06d}"
-
-    @staticmethod
-    def _tap_to_interaction(command: ObservedTapCommand) -> RecordInteractionCommand:
-        x_ratio = command.x_ratio if command.x_ratio is not None else round(command.x / command.width, 6)
-        y_ratio = command.y_ratio if command.y_ratio is not None else round(command.y / command.height, 6)
-        steps = [
-            ForwardingStep(seq=1, step_kind="pointer_down", payload={"x": command.x, "y": command.y}),
-            ForwardingStep(seq=2, step_kind="pointer_up", payload={"x": command.x, "y": command.y}),
-        ]
-        return RecordInteractionCommand(
-            client_command_id=f"tap-{command.x}-{command.y}",
-            kind="click",
-            forwarding_ack=ForwardingAck(
-                kind="pointer",
-                dispatched_at=now_iso(),
-                payload={
-                    "x": command.x,
-                    "y": command.y,
-                    "width": command.width,
-                    "height": command.height,
-                    "x_ratio": x_ratio,
-                    "y_ratio": y_ratio,
-                    "source": command.source,
-                },
-                steps=steps,
-            ),
-            payload={
-                "x": command.x,
-                "y": command.y,
-                "width": command.width,
-                "height": command.height,
-                "x_ratio": x_ratio,
-                "y_ratio": y_ratio,
-            },
-            source=command.source,
-        )
-
-    @staticmethod
-    def _build_forwarding_event(
-        session: RecordingSession,
-        command: RecordInteractionCommand,
-        state: _SessionRuntimeState,
-    ) -> ForwardingEvent:
-        next_index = len(state.forwarding_events or []) + 1
-        return ForwardingEvent(
-            forwarding_event_id=f"fwd_{next_index:06d}",
-            recording_id=session.recording_id,
-            client_command_id=command.client_command_id,
-            kind=command.forwarding_ack.kind,
-            dispatched_at=command.forwarding_ack.dispatched_at,
-            ack_at=command.forwarding_ack.ack_at,
-            payload=command.forwarding_ack.payload,
-            steps=command.forwarding_ack.steps,
-            device_result=command.forwarding_ack.device_result,
-        )
-
-    @staticmethod
-    def _build_recording_event(
-        *,
-        session: RecordingSession,
-        command: RecordInteractionCommand,
-        after_observation: ObservationSnapshot,
-        state: _SessionRuntimeState,
-    ) -> RecordedInputEvent:
-        next_index = len(state.recorded_events or []) + 1
-        return RecordedInputEvent(
-            event_id=f"evt_{next_index:06d}",
-            recording_id=session.recording_id,
-            kind=command.kind,
-            summary=_build_summary(command),
-            source=command.source,
-            payload={
-                **command.payload,
-                "client_command_id": command.client_command_id,
-                "after_observation_id": after_observation.observation_id,
-                "entry_identity": after_observation.entry_identity,
-                "surface_identity": after_observation.surface_identity,
-            },
-        )
-
     def _require_state(self, recording_id: str) -> _SessionRuntimeState:
         with self._lock:
             state = self._sessions.get(recording_id)
         if state is None:
             raise RecordingSessionNotFoundError(f"recording session '{recording_id}' was not found")
         return state
-
-
-@dataclass
-class _ObservationCandidate:
-    image: object
-    entry_identity: str | None
-    surface_identity: str | None
-    current_app_state: RecordedCurrentAppState | None
-    ui_tree_text: str | None
-    ui_tree_hash: str | None
-    screenshot_hash: str
-    observation_hash: str
-
-
-def _hash_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def _hash_bytes(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
-
-
-def _trim_current_app_state_raw(raw: dict[str, object]) -> dict[str, object]:
-    allowed_keys = {"url", "title", "load_state", "origin", "surface_identity"}
-    return {key: value for key, value in raw.items() if key in allowed_keys and value is not None}
-
-
-def _build_summary(command: RecordInteractionCommand) -> str:
-    payload = command.payload or command.forwarding_ack.payload
-    if command.kind == "click":
-        return f"click at ({payload.get('x')}, {payload.get('y')})"
-    if command.kind == "swipe":
-        return (
-            f"swipe from ({payload.get('start_x')}, {payload.get('start_y')}) "
-            f"to ({payload.get('end_x')}, {payload.get('end_y')})"
-        )
-    if command.kind == "input":
-        return f"input text: {payload.get('text', '')}"
-    return "press back"

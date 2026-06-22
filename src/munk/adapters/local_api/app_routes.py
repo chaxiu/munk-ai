@@ -98,28 +98,28 @@ def build_app_router(*, service_factory: Callable[[], AppAssetService] | None = 
             )
         try:
             profile = request.profile.to_profile().model_copy(update={"app_id": normalized_app_id})
-            if not (request.app_knowledge_content or "").strip():
-                raise ValueError("app_knowledge_content must not be empty when creating an app")
-            validate_app_knowledge_document(
-                request.app_knowledge_content or "",
-                expected_app_id=normalized_app_id,
-            )
+            if (request.app_knowledge_content or "").strip():
+                validate_app_knowledge_document(
+                    request.app_knowledge_content or "",
+                    expected_app_id=normalized_app_id,
+                )
             service.app_registry.save(profile)
             service.app_registry.save_introduction(
                 normalized_app_id,
                 request.introduction_markdown,
                 ref=profile.app_introduction_ref,
             )
-            service.app_registry.save_knowledge(
-                normalized_app_id,
-                request.app_knowledge_content or "",
-                ref=profile.app_knowledge_ref,
-            )
-            build_app_knowledge_index(
-                app_id=normalized_app_id,
-                assets_root=service.app_registry.root_dir,
-                ref=profile.app_knowledge_ref,
-            )
+            if (request.app_knowledge_content or "").strip():
+                service.app_registry.save_knowledge(
+                    normalized_app_id,
+                    request.app_knowledge_content or "",
+                    ref=profile.app_knowledge_ref,
+                )
+                build_app_knowledge_index(
+                    app_id=normalized_app_id,
+                    assets_root=service.app_registry.root_dir,
+                    ref=profile.app_knowledge_ref,
+                )
             detail = service.build_app_detail(normalized_app_id)
         except Exception as exc:  # noqa: BLE001
             return _error_response(422, "apps_create", "app_validation_failed", str(exc))

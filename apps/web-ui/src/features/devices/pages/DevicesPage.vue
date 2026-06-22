@@ -17,8 +17,24 @@ const selectedPlatform = ref('all')
 const bootedOnly = ref(false)
 const devicesQuery = useDevicesQuery(selectedPlatform)
 
+function bootSortRank(device: DeviceDescriptor): number {
+  if (device.is_booted === true) {
+    return 0
+  }
+  if (device.is_booted === false) {
+    return 1
+  }
+  return 2
+}
+
 const devices = computed(() => {
-  const items = devicesQuery.data.value ?? []
+  const items = [...(devicesQuery.data.value ?? [])].sort((left, right) => {
+    const rankDelta = bootSortRank(left) - bootSortRank(right)
+    if (rankDelta !== 0) {
+      return rankDelta
+    }
+    return left.display_name.localeCompare(right.display_name) || left.device_ref.localeCompare(right.device_ref)
+  })
   if (!bootedOnly.value) {
     return items
   }

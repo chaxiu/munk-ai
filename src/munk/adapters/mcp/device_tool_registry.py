@@ -10,6 +10,8 @@ from munk.adapters.mcp.device_tool_models import (
     AppInstallInput,
     AppLaunchInput,
     AppStopInput,
+    DeviceStateInput,
+    DeviceUnlockInput,
     DevicesListInput,
     SessionAbortInput,
     SessionActInput,
@@ -22,6 +24,8 @@ from munk.adapters.mcp.device_tool_models import (
 )
 from munk.adapters.mcp.device_tool_outputs import (
     AppLifecycleOutput,
+    DeviceStateOutput,
+    DeviceUnlockOutput,
     DevicesListOutput,
     SessionAbortOutput,
     SessionActOutput,
@@ -52,6 +56,50 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         ] = None,
     ) -> DevicesListOutput:
         return handlers.devices_list(DevicesListInput(platform=platform))
+
+    @mcp.tool(
+        name="device_state",
+        title="Get Device State",
+        description=(
+            "Load the current state of one discovered device.\n"
+            "Use this before device_unlock or other device actions when the agent needs lock, screen, and automation readiness signals.\n"
+            "Returns the canonical device-state payload.\n"
+            "Does not claim the device, launch apps, or create a session."
+        ),
+        structured_output=True,
+    )
+    def device_state(
+        device_ref: Annotated[str, Field(description="Target device reference to inspect.")],
+        platform: Annotated[
+            Literal["android", "ios", "web"] | None,
+            Field(description="Optional explicit platform filter used to disambiguate the device reference."),
+        ] = None,
+    ) -> DeviceStateOutput:
+        return handlers.device_state(DeviceStateInput(device_ref=device_ref, platform=platform))
+
+    @mcp.tool(
+        name="device_unlock",
+        title="Unlock Device",
+        description=(
+            "Attempt to unlock one device explicitly.\n"
+            "Use this when the agent needs a direct unlock step instead of relying on app_launch side effects; V1 supports Android swipe only.\n"
+            "Returns before and after device-state payloads together with the unlock result.\n"
+            "Does not launch apps, create a session, or hide unsupported strategies."
+        ),
+        structured_output=True,
+    )
+    def device_unlock(
+        device_ref: Annotated[str, Field(description="Target device reference to unlock.")],
+        platform: Annotated[
+            Literal["android", "ios", "web"] | None,
+            Field(description="Optional explicit platform filter used to disambiguate the device reference."),
+        ] = None,
+        strategy: Annotated[
+            Literal["swipe"],
+            Field(description="Device unlock strategy. V1 supports swipe only."),
+        ] = "swipe",
+    ) -> DeviceUnlockOutput:
+        return handlers.device_unlock(DeviceUnlockInput(device_ref=device_ref, platform=platform, strategy=strategy))
 
     @mcp.tool(
         name="app_launch",
@@ -315,7 +363,7 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         description=(
             "Execute one allowed action inside an interactive session.\n"
             "Use this after an explicit observe step; prefer target_id from the latest session_observe result, with resource_id or label as fallbacks.\n"
-            "Returns a compact action result by default; use detail=full for complete before and after observations, and optionally override the short post-action settle window before after is captured.\n"
+            "Returns a diff summary by default; use detail=compact for post-action targets or detail=full for complete before and after observations, and optionally override the short post-action settle window before after is captured.\n"
             "Canonical example: {\"action\":{\"type\":\"click\",\"target_id\":12}}. Long-press example: {\"action\":{\"type\":\"long_press\",\"target_id\":12,\"duration\":1.2}}. Shorthand examples: {\"action\":{\"click\":12}}, {\"action\":{\"back\":true}}, {\"action\":{\"wait\":1.5}}.\n"
             "Does not run autonomous loops, retries, or judge-based convergence; box and point remain available as manual escape hatches."
         ),
@@ -325,12 +373,12 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         session_id: Annotated[str, Field(description="Interactive session identifier to act on.")],
         action: Annotated[SessionActionInput, Field(description="One allowed interactive action request.")],
         detail: Annotated[
-            Literal["compact", "full"],
-            Field(description="Action result payload detail level. compact is the default agent-facing mode; full returns complete before/after observations."),
-        ] = "compact",
-        settle_timeout_sec: Annotated[
+            Literal["summary", "compact", "full"],
+            Field(description="Action result payload detail level. summary is the default agent-facing mode; compact returns post-action targets and full returns complete before/after observations."),
+        ] = "summary",
+        timeout_sec: Annotated[
             float | None,
-            Field(description="Optional post-action settle timeout in seconds. Defaults to 6.0 for interactive sessions."),
+            Field(description="Optional post-action timeout in seconds while waiting for the screen to settle. Defaults to 6.0 for interactive sessions."),
         ] = None,
     ) -> SessionActOutput:
         return handlers.session_act(
@@ -338,7 +386,7 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
                 session_id=session_id,
                 action=action,
                 detail=detail,
-                settle_timeout_sec=settle_timeout_sec,
+                timeout_sec=timeout_sec,
             )
         )
 

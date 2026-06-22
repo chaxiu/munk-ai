@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from typing import Any, cast
 
-from munk.services.errors import DeviceConflictError, OperationCancelledError
+from munk.services.errors import DeviceConflictError
 from munk.services.machine_contracts import (
     ERROR_RUNTIME_ERROR,
-    EXIT_OPERATION_CANCELLED,
     MachineCommandResponse,
     build_error_result,
     build_success_result,
 )
-from munk.services.operations.command_helpers import merged_tracker_artifacts, result_is_cancelled
 from munk.services.operations.launcher import launch_detached_operation
 from munk.services.operations.models import OperationKind
 from munk.services.operations.query_service import OperationQueryService
 from munk.services.operations.service import OperationCommandResult, OperationService, OperationTracker
+from munk.services.operations.submission_execution import (
+    SubmissionExecutionContext,
+    SubmissionExecutionRunner,
+    submission_telemetry_properties,
+)
 from munk.telemetry import TelemetrySink
 from munk.telemetry.models import TelemetryEntrypoint
 
@@ -34,6 +36,11 @@ class OperationSubmissionService:
         self._query_service = query_service
         self._telemetry = telemetry
         self._entrypoint: TelemetryEntrypoint = entrypoint
+        self._execution_runner = SubmissionExecutionRunner(
+            query_service=query_service,
+            telemetry=telemetry,
+            entrypoint=entrypoint,
+        )
 
     def submit(
         self,
@@ -54,18 +61,21 @@ class OperationSubmissionService:
         background_submitter: Callable[[str, Callable[[], None]], None] | None = None,
         execute: Callable[[OperationTracker], OperationCommandResult],
     ) -> MachineCommandResponse:
+        context = SubmissionExecutionContext(
+            kind=kind,
+            app_id=app_id,
+            plan_id=plan_id,
+            case_id=case_id,
+            requires_device=requires_device,
+            device_ref=device_ref,
+            wait=wait,
+            detach=detach,
+        )
         telemetry_started_at = self._telemetry.capture_command_started(
             entrypoint=self._entrypoint,
             command=command,
-            properties=self._telemetry_properties(
-                kind=kind,
-                app_id=app_id,
-                plan_id=plan_id,
-                case_id=case_id,
-                requires_device=requires_device,
-                device_ref=device_ref,
-                wait=wait,
-                detach=detach,
+            properties=submission_telemetry_properties(
+                context=context,
                 operation_id=None,
             ),
         )
@@ -92,15 +102,8 @@ class OperationSubmissionService:
                 started_at=telemetry_started_at,
                 status="failed",
                 properties={
-                    **self._telemetry_properties(
-                        kind=kind,
-                        app_id=app_id,
-                        plan_id=plan_id,
-                        case_id=case_id,
-                        requires_device=requires_device,
-                        device_ref=device_ref,
-                        wait=wait,
-                        detach=detach,
+                    **submission_telemetry_properties(
+                        context=context,
                         operation_id=None,
                     ),
                     "error_code": "device_conflict",
@@ -135,15 +138,8 @@ class OperationSubmissionService:
                     started_at=telemetry_started_at,
                     status="failed",
                     properties={
-                        **self._telemetry_properties(
-                            kind=kind,
-                            app_id=app_id,
-                            plan_id=plan_id,
-                            case_id=case_id,
-                            requires_device=requires_device,
-                            device_ref=device_ref,
-                            wait=wait,
-                            detach=detach,
+                        **submission_telemetry_properties(
+                            context=context,
                             operation_id=tracker.operation_id,
                         ),
                         "error_code": ERROR_RUNTIME_ERROR,
@@ -163,15 +159,8 @@ class OperationSubmissionService:
                 command=command,
                 started_at=telemetry_started_at,
                 status="submitted",
-                properties=self._telemetry_properties(
-                    kind=kind,
-                    app_id=app_id,
-                    plan_id=plan_id,
-                    case_id=case_id,
-                    requires_device=requires_device,
-                    device_ref=device_ref,
-                    wait=wait,
-                    detach=detach,
+                properties=submission_telemetry_properties(
+                    context=context,
                     operation_id=tracker.operation_id,
                 ),
             )
@@ -197,14 +186,7 @@ class OperationSubmissionService:
                         command=command,
                         execute=execute,
                         telemetry_started_at=telemetry_started_at,
-                        kind=kind,
-                        app_id=app_id,
-                        plan_id=plan_id,
-                        case_id=case_id,
-                        requires_device=requires_device,
-                        device_ref=device_ref,
-                        wait=wait,
-                        detach=detach,
+                        context=context,
                     ),
                 )
             except Exception as exc:
@@ -215,15 +197,8 @@ class OperationSubmissionService:
                     started_at=telemetry_started_at,
                     status="failed",
                     properties={
-                        **self._telemetry_properties(
-                            kind=kind,
-                            app_id=app_id,
-                            plan_id=plan_id,
-                            case_id=case_id,
-                            requires_device=requires_device,
-                            device_ref=device_ref,
-                            wait=wait,
-                            detach=detach,
+                        **submission_telemetry_properties(
+                            context=context,
                             operation_id=tracker.operation_id,
                         ),
                         "error_code": ERROR_RUNTIME_ERROR,
@@ -241,15 +216,8 @@ class OperationSubmissionService:
                 command=command,
                 started_at=telemetry_started_at,
                 status="submitted",
-                properties=self._telemetry_properties(
-                    kind=kind,
-                    app_id=app_id,
-                    plan_id=plan_id,
-                    case_id=case_id,
-                    requires_device=requires_device,
-                    device_ref=device_ref,
-                    wait=wait,
-                    detach=detach,
+                properties=submission_telemetry_properties(
+                    context=context,
                     operation_id=tracker.operation_id,
                 ),
             )
@@ -262,19 +230,12 @@ class OperationSubmissionService:
                 },
             )
 
-        return self._execute_tracker_operation(
+        return self._execution_runner.execute(
             tracker=tracker,
             command=command,
             execute=execute,
             telemetry_started_at=telemetry_started_at,
-            kind=kind,
-            app_id=app_id,
-            plan_id=plan_id,
-            case_id=case_id,
-            requires_device=requires_device,
-            device_ref=device_ref,
-            wait=wait,
-            detach=detach,
+            context=context,
         )
 
     def _execute_tracker_operation_background(
@@ -283,237 +244,15 @@ class OperationSubmissionService:
         tracker: OperationTracker,
         command: str,
         execute: Callable[[OperationTracker], OperationCommandResult],
-        telemetry_started_at,
-        kind: OperationKind,
-        app_id: str | None,
-        plan_id: str | None,
-        case_id: str | None,
-        requires_device: bool,
-        device_ref: str | None,
-        wait: bool,
-        detach: bool,
+        telemetry_started_at: float,
+        context: SubmissionExecutionContext,
     ) -> None:
-        self._execute_tracker_operation(
+        self._execution_runner.execute(
             tracker=tracker,
             command=command,
             execute=execute,
             telemetry_started_at=telemetry_started_at,
-            kind=kind,
-            app_id=app_id,
-            plan_id=plan_id,
-            case_id=case_id,
-            requires_device=requires_device,
-            device_ref=device_ref,
-            wait=wait,
-            detach=detach,
-        )
-
-    def _execute_tracker_operation(
-        self,
-        *,
-        tracker: OperationTracker,
-        command: str,
-        execute: Callable[[OperationTracker], OperationCommandResult],
-        telemetry_started_at,
-        kind: OperationKind,
-        app_id: str | None,
-        plan_id: str | None,
-        case_id: str | None,
-        requires_device: bool,
-        device_ref: str | None,
-        wait: bool,
-        detach: bool,
-    ) -> MachineCommandResponse:
-        tracker.mark_running(pid=os.getpid())
-        tracker.append_event(
-            event_type="operation_started",
-            message="operation started",
-            data={"pid": os.getpid(), "command": command},
-        )
-        try:
-            result = execute(tracker)
-        except KeyboardInterrupt:
-            interrupted = OperationCancelledError("operation interrupted by user")
-            tracker.append_event(
-                event_type="operation_interrupted",
-                message="operation interrupted by user",
-                data={"command": command},
-            )
-            tracker.mark_cancelled()
-            if requires_device:
-                tracker.append_event(
-                    event_type="resource_released",
-                    message="device resource released",
-                    data={"device_ref": device_ref, "reason": "cancelled"},
-                )
-            self._telemetry.capture_command_finished(
-                entrypoint=self._entrypoint,
-                command=command,
-                started_at=telemetry_started_at,
-                status="cancelled",
-                properties=self._telemetry_properties(
-                    kind=kind,
-                    app_id=app_id,
-                    plan_id=plan_id,
-                    case_id=case_id,
-                    requires_device=requires_device,
-                    device_ref=device_ref,
-                    wait=wait,
-                    detach=detach,
-                    operation_id=tracker.operation_id,
-                ),
-            )
-            return build_error_result(
-                command=command,
-                exc=interrupted,
-                details={"operation_id": tracker.operation_id},
-            )
-        except Exception as exc:
-            if result_is_cancelled(exc):
-                tracker.mark_cancelled()
-                if requires_device:
-                    tracker.append_event(
-                        event_type="resource_released",
-                        message="device resource released",
-                        data={"device_ref": device_ref, "reason": "cancelled"},
-                    )
-                self._telemetry.capture_command_finished(
-                    entrypoint=self._entrypoint,
-                    command=command,
-                    started_at=telemetry_started_at,
-                    status="cancelled",
-                    properties=self._telemetry_properties(
-                        kind=kind,
-                        app_id=app_id,
-                        plan_id=plan_id,
-                        case_id=case_id,
-                        requires_device=requires_device,
-                        device_ref=device_ref,
-                        wait=wait,
-                        detach=detach,
-                        operation_id=tracker.operation_id,
-                    ),
-                )
-                return build_error_result(
-                    command=command,
-                    exc=cast(Exception, exc),
-                    details={"operation_id": tracker.operation_id},
-                )
-            tracker.mark_failed(error_code=ERROR_RUNTIME_ERROR, error_message=str(exc))
-            if requires_device:
-                tracker.append_event(
-                    event_type="resource_released",
-                    message="device resource released",
-                    data={"device_ref": device_ref, "reason": "failed"},
-                )
-            self._telemetry.capture_command_finished(
-                entrypoint=self._entrypoint,
-                command=command,
-                started_at=telemetry_started_at,
-                status="failed",
-                properties={
-                    **self._telemetry_properties(
-                        kind=kind,
-                        app_id=app_id,
-                        plan_id=plan_id,
-                        case_id=case_id,
-                        requires_device=requires_device,
-                        device_ref=device_ref,
-                        wait=wait,
-                        detach=detach,
-                        operation_id=tracker.operation_id,
-                    ),
-                    "error_code": ERROR_RUNTIME_ERROR,
-                },
-            )
-            return build_error_result(command=command, exc=cast(Exception, exc))
-
-        result = cast(OperationCommandResult, result)
-        if tracker.cancel_observed or result.status == "cancelled":
-            merged_artifacts = merged_tracker_artifacts(tracker, result.artifacts)
-            tracker.mark_cancelled(
-                result_json=result.result_json or result.data,
-                artifacts=merged_artifacts,
-            )
-            if requires_device:
-                tracker.append_event(
-                    event_type="resource_released",
-                    message="device resource released",
-                    data={"device_ref": device_ref, "reason": "cancelled"},
-                )
-            extra_artifacts, _entries = self._query_service.materialize_reproduction(tracker.operation_id)
-            self._telemetry.capture_command_finished(
-                entrypoint=self._entrypoint,
-                command=command,
-                started_at=telemetry_started_at,
-                status="cancelled",
-                properties=self._telemetry_properties(
-                    kind=kind,
-                    app_id=app_id,
-                    plan_id=plan_id,
-                    case_id=case_id,
-                    requires_device=requires_device,
-                    device_ref=device_ref,
-                    wait=wait,
-                    detach=detach,
-                    operation_id=tracker.operation_id,
-                ),
-            )
-            return build_success_result(
-                command=command,
-                data={
-                    **result.data,
-                    "operation_id": tracker.operation_id,
-                    "status": "cancelled",
-                    "verification_verdict": None,
-                },
-                artifacts={**merged_artifacts, **extra_artifacts},
-                exit_code=EXIT_OPERATION_CANCELLED,
-            )
-
-        merged_artifacts = merged_tracker_artifacts(tracker, result.artifacts)
-        tracker.mark_succeeded(
-            verification_verdict=result.verification_verdict,
-            result_json=result.result_json or result.data,
-            artifacts=merged_artifacts,
-        )
-        if requires_device:
-            tracker.append_event(
-                event_type="resource_released",
-                message="device resource released",
-                data={"device_ref": device_ref, "reason": "succeeded"},
-            )
-        extra_artifacts, _entries = self._query_service.materialize_reproduction(tracker.operation_id)
-        self._telemetry.capture_command_finished(
-            entrypoint=self._entrypoint,
-            command=command,
-            started_at=telemetry_started_at,
-            status="success",
-            properties={
-                **self._telemetry_properties(
-                    kind=kind,
-                    app_id=app_id,
-                    plan_id=plan_id,
-                    case_id=case_id,
-                    requires_device=requires_device,
-                    device_ref=device_ref,
-                    wait=wait,
-                    detach=detach,
-                    operation_id=tracker.operation_id,
-                ),
-                "verification_verdict": result.verification_verdict,
-            },
-        )
-        return build_success_result(
-            command=command,
-            data={
-                **result.data,
-                "operation_id": tracker.operation_id,
-                "status": "succeeded",
-                "verification_verdict": result.verification_verdict,
-            },
-            artifacts={**merged_artifacts, **extra_artifacts},
-            exit_code=result.exit_code,
+            context=context,
         )
 
     def _append_blocking_conflict_event(
@@ -537,28 +276,3 @@ class OperationSubmissionService:
                 "reason": exc.reason,
             },
         )
-
-    @staticmethod
-    def _telemetry_properties(
-        *,
-        kind: OperationKind,
-        app_id: str | None,
-        plan_id: str | None,
-        case_id: str | None,
-        requires_device: bool,
-        device_ref: str | None,
-        wait: bool,
-        detach: bool,
-        operation_id: str | None,
-    ) -> dict[str, Any]:
-        return {
-            "kind": kind,
-            "operation_id": operation_id,
-            "app_id": app_id,
-            "plan_id": plan_id,
-            "case_id": case_id,
-            "requires_device": requires_device,
-            "device_ref_present": device_ref is not None,
-            "wait": wait,
-            "detach": detach,
-        }

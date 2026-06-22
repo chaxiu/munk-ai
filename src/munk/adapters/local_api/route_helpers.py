@@ -20,7 +20,8 @@ from munk.adapters.shared.operation_presenters import build_operation_summary
 from munk.adapters.shared.payload_models import OperationSummaryData
 from munk.services.errors import OperationNotFoundError
 from munk.services.machine_contracts import MachineCommandResponse
-from munk.services.operations.models import OperationRecord
+from munk.services.operations.command_specs import build_operation_cli_argv, validate_local_api_detach_kind
+from munk.services.operations.models import OperationKind, OperationRecord
 from munk.user_data import operations_home
 
 _logger = logging.getLogger(__name__)
@@ -139,24 +140,13 @@ async def response_body_preview(response: Response) -> str:
     return text
 
 
-def build_submit_argv(command: str, payload: dict[str, object]) -> list[str]:
+def build_submit_argv(command: OperationKind, payload: dict[str, object]) -> list[str]:
+    validate_local_api_detach_kind(command)
     request_file = write_request_payload(command, payload)
-    if command == "plan":
-        return ["plan", "--request-file", str(request_file), "--json"]
-    if command == "run_case":
-        return ["run", "case", "--request-file", str(request_file), "--json"]
-    if command == "run_plan":
-        return ["run", "plan", "--request-file", str(request_file), "--json"]
-    if command == "run_plans":
-        return ["run", "plans", "--request-file", str(request_file), "--json"]
-    if command == "verify_change":
-        return ["verify", "change", "--request-file", str(request_file), "--json"]
-    if command == "review":
-        return ["review", "--request-file", str(request_file), "--json"]
-    raise ValueError(f"unsupported local api command: {command}")
+    return build_operation_cli_argv(command, request_file=request_file)
 
 
-def write_request_payload(command: str, payload: dict[str, object]) -> Path:
+def write_request_payload(command: OperationKind, payload: dict[str, object]) -> Path:
     request_dir = operations_home() / "http_requests"
     request_dir.mkdir(parents=True, exist_ok=True)
     path = request_dir / f"{command}_{uuid4().hex}.json"

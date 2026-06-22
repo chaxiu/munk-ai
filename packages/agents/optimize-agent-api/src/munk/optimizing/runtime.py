@@ -5,13 +5,13 @@ from typing import Any, Protocol
 
 from .errors import OptimizeRuntimeConflictError, OptimizeRuntimeUnavailableError
 from .health import OptimizeRuntimeHealth
-from .models import OptimizeRequest, OptimizeResult
+from .models import OptimizeRequest, OptimizeResult, OptimizeRuntimeContext
 
 ENTRY_POINT_GROUP = "munk.optimize.runtimes"
 
 
 class OptimizeRuntime(Protocol):
-    def optimize(self, request: OptimizeRequest) -> OptimizeResult: ...
+    def optimize(self, request: OptimizeRequest, *, context: OptimizeRuntimeContext | None = None) -> OptimizeResult: ...
 
 
 class OptimizeRuntimeFactory(Protocol):

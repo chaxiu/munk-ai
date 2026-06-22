@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from munk.execution.models import ExecutionStatus, JudgeVerdict
 
 ReportOverallVerdict = Literal["passed", "failed", "inconclusive"]
-PLAN_REPAIR_REPORT_SCHEMA_VERSION = "phase7e.plan_repair_report.v1"
+CoverageVerdict = Literal["passed", "failed", "inconclusive", "uncovered"]
+PLAN_REPAIR_REPORT_SCHEMA_VERSION = "1.0.0"
 
 
 def empty_strings() -> list[str]:
@@ -27,6 +28,10 @@ def empty_metadata() -> dict[str, object]:
     return {}
 
 
+def empty_coverage() -> list["AcceptanceCriterionCoverage"]:
+    return []
+
+
 class UpstreamReviewLink(BaseModel):
     review_operation_id: str | None = None
     review_orchestration_path: Path
@@ -37,6 +42,13 @@ class UpstreamReviewLink(BaseModel):
     required_case_ids: list[str] = Field(default_factory=empty_strings)
     advisory_case_titles: list[str] = Field(default_factory=empty_strings)
     contract_version: str
+
+
+class AcceptanceCriterionCoverage(BaseModel):
+    index: int
+    criterion: str
+    case_ids: list[str] = Field(default_factory=empty_strings)
+    verdict: CoverageVerdict
 
 
 class CaseRepairReport(BaseModel):
@@ -51,6 +63,8 @@ class CaseRepairReport(BaseModel):
     judge_reason: str | None = None
     failure_hypothesis: str | None = None
     missing_evidence: list[str] = Field(default_factory=empty_strings)
+    acceptance_criteria_indices: list[int] = Field(default_factory=empty_strings)
+    acceptance_criteria_texts: list[str] = Field(default_factory=empty_strings)
     recommended_artifacts: dict[str, str] = Field(default_factory=empty_str_map)
     recommended_evidence_ids: list[str] = Field(default_factory=empty_strings)
     run_dir: Path
@@ -75,6 +89,8 @@ class PlanRepairReport(BaseModel):
     summary: str
     core_case_summary: str
     totals: PlanRepairTotals
+    acceptance_criteria: list[str] = Field(default_factory=empty_strings)
+    acceptance_criteria_coverage: list[AcceptanceCriterionCoverage] = Field(default_factory=empty_coverage)
     key_failures: list[str] = Field(default_factory=empty_strings)
     key_inconclusive: list[str] = Field(default_factory=empty_strings)
     case_reports: list[CaseRepairReport] = Field(default_factory=empty_case_reports)

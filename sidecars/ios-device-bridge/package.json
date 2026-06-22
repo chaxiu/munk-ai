@@ -1,0 +1,37 @@
+{
+  "type": "module",
+  "name": "ios-device-bridge",
+  "version": "1.0.0",
+  "description": "Munk iOS real-device bridge powered by Appium libraries.",
+  "main": "app.ts",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "npm run build:ts",
+    "test": "npm run build:ts && tsc -p test/tsconfig.json && node --test dist-test/**/*.js",
+    "start": "npm run build:ts && fastify start -l info dist/app.js",
+    "build:ts": "tsc",
+    "watch:ts": "tsc -w",
+    "dev": "fastify start -l info src/app.ts"
+  },
+  "dependencies": {
+    "@fastify/autoload": "^6.0.0",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/sensible": "^6.0.0",
+    "appium-ios-device": "^3.1.14",
+    "appium-ios-remotexpc": "^2.3.0",
+    "appium-webdriveragent": "^14.0.0",
+    "appium-xcuitest-driver": "^11.11.1",
+    "axios": "^1.13.1",
+    "fastify": "^5.0.0",
+    "fastify-cli": "^8.0.0",
+    "portscanner": "^2.2.0",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "fastify-tsconfig": "^3.0.0",
+    "typescript": "~5.9.2"
+  }
+}

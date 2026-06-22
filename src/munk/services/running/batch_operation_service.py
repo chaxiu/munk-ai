@@ -9,7 +9,21 @@ from munk.planning.storage import PlanStore
 from munk.services.errors import BatchPlanExecutionError, OperationCancelledError, PlanNotFoundError
 from munk.services.machine_contracts import EXIT_OK, EXIT_OPERATION_CANCELLED
 from munk.services.operations.command_helpers import merged_tracker_artifacts
+from munk.services.operations.models import OperationRecord, VerificationVerdict
 from munk.services.operations.service import OperationCommandResult, OperationService, OperationTracker
+from munk.services.running.operation_payloads import (
+    build_run_plan_child_operation_progress_payload,
+    build_run_plan_operation_request_payload,
+    build_run_plans_aggregate_payload,
+    build_run_plans_batch_child_started_payload,
+    build_run_plans_batch_finished_payload,
+    build_run_plans_batch_started_payload,
+    build_run_plans_batch_stopped_early_payload,
+    build_run_plans_child_summary_payload,
+    build_run_plans_progress_payload,
+    build_run_plans_result_payload,
+    update_run_plans_aggregate_payload,
+)
 from munk.services.running.operation_service import RunOperationService
 from munk.token_usage import TokenUsage, merge_token_usages
 
@@ -44,22 +58,24 @@ class RunBatchOperationService:
     ) -> OperationCommandResult:
         plan_ids = self._normalize_plan_ids(request.plan_ids)
         plans = self._load_plans(request, plan_ids)
-        aggregate = self._empty_aggregate(total_children=len(plans))
+        total_children = len(plans)
+        aggregate = build_run_plans_aggregate_payload(total_children=total_children)
         tracker.update_progress(
-            phase="running",
-            batch_kind="single_device_multi_plan",
-            total_children=len(plans),
-            completed_children=0,
+            **build_run_plans_progress_payload(
+                phase="running",
+                total_children=total_children,
+                completed_children=0,
+            )
         )
         tracker.append_event(
             event_type="batch_started",
             message="batch plan run started",
-            data={
-                "app_id": request.app_id,
-                "device_ref": request.device_ref,
-                "plan_ids": plan_ids,
-                "total_children": len(plans),
-            },
+            data=build_run_plans_batch_started_payload(
+                app_id=request.app_id,
+                device_ref=request.device_ref,
+                plan_ids=plan_ids,
+                total_children=total_children,
+            ),
         )
 
         child_records: list[dict[str, Any]] = []
@@ -72,7 +88,7 @@ class RunBatchOperationService:
                 request=request,
                 plan=plan,
                 position_index=index,
-                total_children=len(plans),
+                total_children=total_children,
             )
             child_summary = self._execute_child_plan(
                 tracker=tracker,
@@ -80,20 +96,23 @@ class RunBatchOperationService:
                 request=request,
                 plan=plan,
                 resolved_config=resolved_config,
+                total_children=total_children,
+                completed_children=len(child_records),
             )
             child_records.append(child_summary)
-            self._update_aggregate(aggregate, child_summary)
+            aggregate = update_run_plans_aggregate_payload(
+                aggregate,
+                child_summary_payload=child_summary,
+            )
             tracker.update_progress(
-                phase="running",
-                batch_kind="single_device_multi_plan",
-                total_children=len(plans),
-                completed_children=len(child_records),
-                current_child_operation_id=None,
-                current_child_plan_id=None,
-                current_child_title=None,
-                last_child_operation_id=child_summary["operation_id"],
-                last_child_plan_id=child_summary["plan_id"],
-                last_child_title=child_summary["title"],
+                **build_run_plans_progress_payload(
+                    phase="running",
+                    total_children=total_children,
+                    completed_children=len(child_records),
+                    last_child_operation_id=child_summary["operation_id"],
+                    last_child_plan_id=child_summary["plan_id"],
+                    last_child_title=child_summary["title"],
+                )
             )
             tracker.append_event(
                 event_type="batch_child_finished",
@@ -107,45 +126,49 @@ class RunBatchOperationService:
                 tracker.append_event(
                     event_type="batch_stopped_early",
                     message="batch plan run stopped early",
-                    data={"plan_id": plan.plan_id, "operation_id": child_summary["operation_id"]},
+                    data=build_run_plans_batch_stopped_early_payload(
+                        plan_id=plan.plan_id,
+                        operation_id=child_summary["operation_id"],
+                    ),
                 )
                 break
 
-        data = {
-            "app_id": request.app_id,
-            "device_ref": request.device_ref,
-            "batch_kind": "single_device_multi_plan",
-            "plan_ids": plan_ids,
-            "total_children": len(plans),
-            "completed_children": len(child_records),
-            "stopped_early": stopped_early,
-            "token_usage": _aggregate_token_usage_dict(child_records),
-            "children": child_records,
-            "aggregate": aggregate,
-        }
         verification_verdict = self._aggregate_verdict(child_records)
         tracker.update_progress(
-            phase="completed",
-            batch_kind="single_device_multi_plan",
-            total_children=len(plans),
-            completed_children=len(child_records),
-            verification_verdict=cast(Any, verification_verdict),
+            **build_run_plans_progress_payload(
+                phase="completed",
+                total_children=total_children,
+                completed_children=len(child_records),
+                verification_verdict=verification_verdict,
+            )
         )
         tracker.append_event(
             event_type="batch_finished",
             message="batch plan run finished",
-            data={
-                "total_children": len(plans),
-                "completed_children": len(child_records),
-                "verification_verdict": verification_verdict,
-                "stopped_early": stopped_early,
-            },
+            data=build_run_plans_batch_finished_payload(
+                total_children=total_children,
+                completed_children=len(child_records),
+                verification_verdict=verification_verdict,
+                stopped_early=stopped_early,
+            ),
+        )
+        result_payload = build_run_plans_result_payload(
+            app_id=request.app_id,
+            device_ref=request.device_ref,
+            plan_ids=plan_ids,
+            total_children=total_children,
+            completed_children=len(child_records),
+            stopped_early=stopped_early,
+            verification_verdict=verification_verdict,
+            token_usage=_aggregate_token_usage_dict(child_records),
+            children=child_records,
+            aggregate=aggregate,
         )
         return OperationCommandResult(
-            data=data,
+            data=result_payload,
             artifacts={},
             verification_verdict=cast(Any, verification_verdict),
-            result_json=data,
+            result_json=result_payload,
             status="succeeded",
             exit_code=EXIT_OPERATION_CANCELLED if tracker.cancel_observed else EXIT_OK,
         )
@@ -183,13 +206,13 @@ class RunBatchOperationService:
         position_index: int,
         total_children: int,
     ) -> OperationTracker:
+        child_request = request.to_plan_execution_request(plan_id=plan.plan_id)
         return self._operation_service.create_operation(
             kind="run_plan",
-            request_json={
-                **request.model_dump(mode="json"),
-                "plan_id": plan.plan_id,
-                "batch_kind": "single_device_multi_plan",
-            },
+            request_json=build_run_plan_operation_request_payload(
+                child_request,
+                batch_kind="single_device_multi_plan",
+            ),
             app_id=request.app_id,
             plan_id=plan.plan_id,
             case_id=None,
@@ -209,37 +232,49 @@ class RunBatchOperationService:
         request: RunPlansCliRequest,
         plan: RequirementPlan,
         resolved_config: ResolvedConfig,
+        total_children: int,
+        completed_children: int,
     ) -> dict[str, Any]:
         position_label = child_tracker.get_record().position_label
         title = plan.name or plan.plan_id
         child_tracker.mark_running(
             pid=tracker.get_record().pid or child_tracker.get_record().pid or 0,
-            progress={
-                "phase": "running",
-                "position_label": position_label,
-                "parent_operation_id": tracker.operation_id,
-            },
+            progress=build_run_plan_child_operation_progress_payload(
+                phase="running",
+                parent_operation_id=tracker.operation_id,
+                position_label=position_label,
+            ),
         )
         child_tracker.append_event(
             event_type="operation_started",
             message="child plan operation started",
-            data={"parent_operation_id": tracker.operation_id, "position_label": position_label},
+            data=build_run_plans_batch_child_started_payload(
+                operation_id=child_tracker.operation_id,
+                plan_id=plan.plan_id,
+                title=title,
+                parent_operation_id=tracker.operation_id,
+                position_label=position_label,
+            ),
         )
         tracker.update_progress(
-            phase="running",
-            current_child_operation_id=child_tracker.operation_id,
-            current_child_plan_id=plan.plan_id,
-            current_child_title=title,
+            **build_run_plans_progress_payload(
+                phase="running",
+                total_children=total_children,
+                completed_children=completed_children,
+                current_child_operation_id=child_tracker.operation_id,
+                current_child_plan_id=plan.plan_id,
+                current_child_title=title,
+            )
         )
         tracker.append_event(
             event_type="batch_child_started",
             message="batch child started",
-            data={
-                "operation_id": child_tracker.operation_id,
-                "plan_id": plan.plan_id,
-                "title": title,
-                "position_label": position_label,
-            },
+            data=build_run_plans_batch_child_started_payload(
+                operation_id=child_tracker.operation_id,
+                plan_id=plan.plan_id,
+                title=title,
+                position_label=position_label,
+            ),
         )
         try:
             result = self._run_operation_service.execute_plan(
@@ -251,21 +286,21 @@ class RunBatchOperationService:
         except Exception as exc:
             if isinstance(exc, OperationCancelledError):
                 child_tracker.mark_cancelled(
-                    progress={
-                        "phase": "cancelled",
-                        "parent_operation_id": tracker.operation_id,
-                        "position_label": position_label,
-                    }
+                    progress=build_run_plan_child_operation_progress_payload(
+                        phase="cancelled",
+                        parent_operation_id=tracker.operation_id,
+                        position_label=position_label,
+                    )
                 )
                 return self._child_summary_from_record(child_tracker.get_record(), title=title)
             child_tracker.mark_failed(
                 error_code="runtime_error",
                 error_message=str(exc),
-                progress={
-                    "phase": "failed",
-                    "parent_operation_id": tracker.operation_id,
-                    "position_label": position_label,
-                },
+                progress=build_run_plan_child_operation_progress_payload(
+                    phase="failed",
+                    parent_operation_id=tracker.operation_id,
+                    position_label=position_label,
+                ),
             )
             return self._child_summary_from_record(child_tracker.get_record(), title=title)
 
@@ -274,82 +309,32 @@ class RunBatchOperationService:
             child_tracker.mark_cancelled(
                 result_json=result.result_json or result.data,
                 artifacts=merged_artifacts,
-                progress={
-                    "phase": "cancelled",
-                    "parent_operation_id": tracker.operation_id,
-                    "position_label": position_label,
-                },
+                progress=build_run_plan_child_operation_progress_payload(
+                    phase="cancelled",
+                    parent_operation_id=tracker.operation_id,
+                    position_label=position_label,
+                ),
             )
         else:
             child_tracker.mark_succeeded(
                 verification_verdict=result.verification_verdict,
                 result_json=result.result_json or result.data,
                 artifacts=merged_artifacts,
-                progress={
-                    "phase": "completed",
-                    "parent_operation_id": tracker.operation_id,
-                    "position_label": position_label,
-                    "verification_verdict": result.verification_verdict,
-                },
+                progress=build_run_plan_child_operation_progress_payload(
+                    phase="completed",
+                    parent_operation_id=tracker.operation_id,
+                    position_label=position_label,
+                    verification_verdict=result.verification_verdict,
+                ),
             )
         return self._child_summary_from_record(child_tracker.get_record(), title=title)
 
     @staticmethod
-    def _child_summary_from_record(record, *, title: str) -> dict[str, Any]:  # noqa: ANN001
-        return {
-            "operation_id": record.operation_id,
-            "plan_id": record.plan_id,
-            "title": title,
-            "status": record.status,
-            "verification_verdict": record.verification_verdict,
-            "position_index": record.position_index,
-            "position_label": record.position_label,
-            "created_at": record.created_at,
-            "started_at": record.started_at,
-            "finished_at": record.finished_at,
-            "error_code": record.error_code,
-            "error_message": record.error_message,
-            "token_usage": _token_usage_dict_from_result_json(record.result_json),
-        }
+    def _child_summary_from_record(record: OperationRecord, *, title: str) -> dict[str, Any]:
+        return build_run_plans_child_summary_payload(record, title=title)
 
     @staticmethod
-    def _empty_aggregate(*, total_children: int) -> dict[str, Any]:
-        return {
-            "total_children": total_children,
-            "queued_children": total_children,
-            "running_children": 0,
-            "succeeded_children": 0,
-            "failed_children": 0,
-            "cancelled_children": 0,
-            "completed_children": 0,
-            "current_child_operation_id": None,
-            "current_child_plan_id": None,
-            "current_child_title": None,
-            "token_usage": None,
-        }
-
-    @staticmethod
-    def _update_aggregate(aggregate: dict[str, Any], child_summary: dict[str, Any]) -> None:
-        aggregate["completed_children"] = int(aggregate.get("completed_children") or 0) + 1
-        aggregate["queued_children"] = max(0, int(aggregate.get("queued_children") or 0) - 1)
-        aggregate["running_children"] = 0
-        aggregate["token_usage"] = _merge_token_usage_dicts(
-            aggregate.get("token_usage"),
-            child_summary.get("token_usage"),
-        )
-        status = child_summary["status"]
-        if status == "succeeded":
-            aggregate["succeeded_children"] = int(aggregate.get("succeeded_children") or 0) + 1
-        elif status == "failed":
-            aggregate["failed_children"] = int(aggregate.get("failed_children") or 0) + 1
-        elif status == "cancelled":
-            aggregate["cancelled_children"] = int(aggregate.get("cancelled_children") or 0) + 1
-        aggregate["current_child_operation_id"] = None
-        aggregate["current_child_plan_id"] = None
-        aggregate["current_child_title"] = None
-
-    @staticmethod
-    def _aggregate_verdict(children: list[dict[str, Any]]) -> str | None:
+    def _aggregate_verdict(children: list[dict[str, Any]]) -> VerificationVerdict:
         verdicts = [item.get("verification_verdict") for item in children]
         if any(verdict == "failed" for verdict in verdicts):
             return "failed"

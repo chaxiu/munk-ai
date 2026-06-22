@@ -54,6 +54,7 @@ class KnowledgeAgentRequest(BaseModel):
     case_id: str
     case_title: str | None = None
     run_dir: Path
+    structured_evidence: dict[str, object] = Field(default_factory=empty_payload)
     evidence_bundle: KnowledgeAgentEvidenceBundle
 
     @model_validator(mode="after")
@@ -101,4 +102,5 @@ class KnowledgeAgentManagedPaths:
 class KnowledgeAgentRuntimeContext:
     operation_id: str | None
     managed_paths: KnowledgeAgentManagedPaths
+    attempt_index: int | None = None
     progress: AgentEventSink | None = None

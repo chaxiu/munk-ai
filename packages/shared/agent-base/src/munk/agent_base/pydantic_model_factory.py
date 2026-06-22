@@ -17,11 +17,13 @@ from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from munk.config.defaults import MUNK_CODE_DEFAULTS
-from munk.config.resolve import ResolvedModelConfig
+from munk.config.resolve import ResolvedModelConfig, resolve_runtime_config
 from munk.config.schema import GeminiSection, MunkConfig, OpenAICompatibleSection
 from munk.network.proxy import resolve_proxy_config
 from munk.perception.image import BgrImage
 from munk.user_data import cache_home
+
+from .image_payload import EncodedImagePayload, encode_image_for_max_side
 
 from .llm import build_transcript_http_client, run_agent_sync_compatible
 
@@ -61,6 +63,7 @@ def check_vision_support(
     if _is_cached_vision_support_success(resolved):
         return
     model = build_pydantic_ai_model(resolved, config=config)
+    runtime_config = resolve_runtime_config(config) if config is not None else None
     agent = Agent(
         model=cast(Any, model),
         output_type=str,
@@ -68,8 +71,35 @@ def check_vision_support(
         model_settings=cast(Any, _VISION_PREFLIGHT_MODEL_SETTINGS),
     )
     try:
-        result = run_agent_sync_compatible(agent, _build_vision_preflight_prompt(image_bgr=image_bgr))
+        result = run_agent_sync_compatible(
+            agent,
+            _build_vision_preflight_prompt(
+                image_bgr=image_bgr,
+                config=config,
+            ),
+        )
     except Exception as exc:  # noqa: BLE001
+        if _should_retry_preflight_with_jpeg(exc, runtime_config=runtime_config):
+            try:
+                result = run_agent_sync_compatible(
+                    agent,
+                    _build_vision_preflight_prompt(
+                        image_bgr=image_bgr,
+                        config=config,
+                        preferred_format="jpeg",
+                        fallback_format="jpeg",
+                    ),
+                )
+            except Exception as retry_exc:  # noqa: BLE001
+                exc = retry_exc
+            else:
+                if not result.output.strip():
+                    raise RuntimeError(
+                        "configured model returned empty content during vision preflight; "
+                        "please use a vision-capable model"
+                    )
+                _record_cached_vision_support_success(resolved)
+                return
         if _is_definitive_vision_unsupported(exc):
             raise RuntimeError(
                 "configured model does not appear to support vision input; "
@@ -125,24 +155,50 @@ def _build_gemini_model(section: GeminiSection, *, config: MunkConfig | None = N
         headers=None,
         proxy=resolve_proxy_config(config),
     )
+    credentials = None
+    if section.credentials_path:
+        from google.oauth2 import service_account
+
+        credentials = service_account.Credentials.from_service_account_file(
+            section.credentials_path,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+
     provider_factory = cast(Any, GoogleProvider)
+    provider_kwargs: dict[str, object] = {
+        "api_key": section.api_key,
+        "project": section.project,
+        "location": section.location,
+        "vertexai": section.vertexai,
+        "http_client": http_client,
+        "base_url": section.base_url,
+    }
+    if credentials is not None:
+        provider_kwargs["credentials"] = credentials
     provider = provider_factory(
-        api_key=section.api_key,
-        project=section.project,
-        location=section.location,
-        vertexai=section.vertexai,
-        http_client=http_client,
-        base_url=section.base_url,
+        **provider_kwargs,
     )
     return GoogleModel(section.model, provider=provider)
 
 
-def _build_vision_preflight_prompt(*, image_bgr: BgrImage | None = None) -> list[UserContent]:
+def _build_vision_preflight_prompt(
+    *,
+    image_bgr: BgrImage | None = None,
+    config: MunkConfig | None = None,
+    preferred_format: str | None = None,
+    fallback_format: str | None = None,
+) -> list[UserContent]:
+    image_payload = _encode_preflight_image_payload(
+        image_bgr=image_bgr,
+        config=config,
+        preferred_format=preferred_format,
+        fallback_format=fallback_format,
+    )
     return [
         TextContent(content="Reply with OK."),
         BinaryImage(
-            _preflight_png_bytes(image_bgr=image_bgr),
-            media_type="image/png",
+            image_payload.data,
+            media_type=image_payload.media_type,
             identifier="vision_preflight",
         ),
     ]
@@ -214,9 +270,14 @@ def _is_inconclusive_provider_crash(exc: Exception) -> bool:
     return any(signal in text for signal in signals)
 
 
-def _preflight_png_bytes(*, image_bgr: BgrImage | None = None) -> bytes:
-    # Use the same OpenCV PNG encoding path as the real runner screenshot flow.
-    # This avoids provider quirks triggered by hand-crafted synthetic image payloads.
+def _encode_preflight_image_payload(
+    *,
+    image_bgr: BgrImage | None = None,
+    config: MunkConfig | None = None,
+    preferred_format: str | None = None,
+    fallback_format: str | None = None,
+) -> EncodedImagePayload:
+    runtime_config = resolve_runtime_config(config) if config is not None else MUNK_CODE_DEFAULTS.runtime
     if image_bgr is None:
         image = np.zeros((256, 256, 3), dtype=np.uint8)
         image[:, :] = (255, 160, 64)
@@ -224,10 +285,36 @@ def _preflight_png_bytes(*, image_bgr: BgrImage | None = None) -> bytes:
         cv2.putText(image, "OK", (72, 156), cv2.FONT_HERSHEY_SIMPLEX, 2.6, (0, 0, 0), 6, cv2.LINE_AA)
     else:
         image: BgrImage = image_bgr
-    ok, buf = cv2.imencode(".png", image)
-    if not ok:
+    payload = encode_image_for_max_side(
+        image,
+        getattr(runtime_config, "vl_max_side", MUNK_CODE_DEFAULTS.runtime.vl_max_side),
+        preferred_format=preferred_format or getattr(runtime_config, "vl_image_format", MUNK_CODE_DEFAULTS.runtime.vl_image_format),
+        fallback_format=fallback_format or getattr(
+            runtime_config,
+            "vl_fallback_image_format",
+            MUNK_CODE_DEFAULTS.runtime.vl_fallback_image_format,
+        ),
+        webp_quality=getattr(runtime_config, "vl_webp_quality", MUNK_CODE_DEFAULTS.runtime.vl_webp_quality),
+        jpeg_quality=getattr(runtime_config, "vl_jpeg_quality", MUNK_CODE_DEFAULTS.runtime.vl_jpeg_quality),
+    )
+    if payload is None:
         raise RuntimeError("failed to encode vision preflight image")
-    return bytes(buf)
+    return payload
+
+
+def _should_retry_preflight_with_jpeg(exc: Exception, *, runtime_config: object | None) -> bool:
+    preferred_format = getattr(runtime_config, "vl_image_format", MUNK_CODE_DEFAULTS.runtime.vl_image_format)
+    if preferred_format != "webp":
+        return False
+    text = str(exc).lower()
+    signals = (
+        "webp",
+        "image/webp",
+        "unsupported image",
+        "unsupported format",
+        "invalid image",
+    )
+    return any(signal in text for signal in signals)
 
 
 def _is_cached_vision_support_success(resolved: ResolvedModelConfig) -> bool:

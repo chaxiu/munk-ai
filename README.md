@@ -177,9 +177,9 @@ flowchart TD
     DP(📱 Device and Perception<br/>Execution and sensing layer):::infra
     L(🔗 Local Bridge<br/>Recording transport):::infra
 
-    AX(🤖 Android<br/>Runtime target):::platform
-    WX(🌐 Web<br/>Runtime target):::platform
-    IX(🍎 iOS<br/>Evolving runtime target):::platform
+    AX(🤖 Android<br/>device-runtime-android<br/>adb · uiautomator2):::platform
+    WX(🌐 Web<br/>device-runtime-web<br/>Playwright · Chromium):::platform
+    IX(🍎 iOS<br/>device-runtime-ios<br/>WDA · simctl · ios-device-bridge):::platform
 
     A --> E
     B --> E
@@ -232,7 +232,7 @@ Repository-level architecture follows a layered, package-oriented model:
 
 - `src/munk/` hosts the main entry surfaces, orchestration, adapters, and artifact handling
 - `packages/agents/*` contains agent-facing contract packages and local runtime implementations
-- `packages/devices/*` contains cross-platform device contracts and platform-specific runtimes
+- `packages/devices/*` contains cross-platform device contracts and platform-specific runtimes (`device-runtime-android`, `device-runtime-web`, `device-runtime-ios`)
 - `packages/shared/*` contains shared contracts, perception packages, and cross-agent foundations
 - `apps/web-ui/` and `sidecars/recording-bridge-local/` support the human-facing QA UI and local recording flow
 
@@ -241,9 +241,9 @@ independently owned or distributed units live under `packages/`, `apps/`, or `si
 
 Platform support should be read as workflow maturity rather than repository presence alone:
 
-- Android is the primary local execution path today
-- Web support is available and evolving
-- iOS support exists in the repository and continues to evolve
+- Android is the primary local execution path and the only recording target today (`adb` + `uiautomator2`)
+- Web supports local `run case` via `Playwright` + `Chromium` (MVP stage)
+- iOS supports local `run case` on Simulator and real devices via `WDA`, `simctl`, and `ios-device-bridge` (MVP stage)
 
 For a public overview, see [docs/public/architecture.md](./docs/public/architecture.md).
 For contributor setup and repository guidance, see [CONTRIBUTING.md](./CONTRIBUTING.md).
@@ -285,9 +285,9 @@ Munk AI is under active development.
 
 ### Device Execution
 
-- Android: `uiautomator2`
-- Web: `Playwright + Chromium`
-- iOS: dedicated runtime integration
+- Android: `adb` + `uiautomator2`
+- Web: `Playwright` + `Chromium`
+- iOS: `WebDriverAgent (WDA)` + `simctl` (Simulator) + `ios-device-bridge` (real device)
 
 ### Local UI And Tooling
 

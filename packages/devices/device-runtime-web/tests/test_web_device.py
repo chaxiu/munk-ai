@@ -22,7 +22,7 @@ from munk_device_web import WebDevice
 class FakeMouse:
     def __init__(self) -> None:
         self.click_calls: list[tuple[int, int]] = []
-        self.move_calls: list[tuple[int, int]] = []
+        self.move_calls: list[tuple[int, int, int | None]] = []
         self.wheel_calls: list[tuple[int, int]] = []
         self.down_calls = 0
         self.up_calls = 0
@@ -30,8 +30,8 @@ class FakeMouse:
     def click(self, x: int, y: int) -> None:
         self.click_calls.append((x, y))
 
-    def move(self, x: int, y: int) -> None:
-        self.move_calls.append((x, y))
+    def move(self, x: int, y: int, *, steps: int | None = None) -> None:
+        self.move_calls.append((x, y, steps))
 
     def wheel(self, delta_x: int, delta_y: int) -> None:
         self.wheel_calls.append((delta_x, delta_y))
@@ -233,8 +233,21 @@ def test_web_device_click_and_scroll_delegate_to_mouse(monkeypatch) -> None:
     device.scroll((100, 200), (90, 150), duration=0.3)
 
     assert page.mouse.click_calls == [(12, 34)]
-    assert page.mouse.move_calls == [(100, 200)]
+    assert page.mouse.move_calls == [(100, 200, None)]
     assert page.mouse.wheel_calls == [(10, 50)]
+
+
+def test_web_device_drag_uses_mouse_drag_path(monkeypatch) -> None:
+    device, page, _browser_type = build_device(monkeypatch)
+
+    device.drag((100, 200), (260, 320), duration=0.5)
+
+    assert page.mouse.move_calls == [
+        (100, 200, None),
+        (260, 320, 30),
+    ]
+    assert page.mouse.down_calls == 1
+    assert page.mouse.up_calls == 1
 
 
 def test_web_device_long_press_holds_mouse_button(monkeypatch) -> None:
@@ -251,7 +264,7 @@ def test_web_device_long_press_holds_mouse_button(monkeypatch) -> None:
     finally:
         monkeypatch.setattr("munk_device_web.device.time.sleep", original_sleep)
 
-    assert page.mouse.move_calls == [(12, 34)]
+    assert page.mouse.move_calls == [(12, 34, None)]
     assert page.mouse.down_calls == 1
     assert page.mouse.up_calls == 1
     assert sleep_calls == [1.1]

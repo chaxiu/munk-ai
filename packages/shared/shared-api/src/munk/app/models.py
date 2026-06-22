@@ -18,6 +18,7 @@ class AndroidAppIdentity(BaseModel):
 
 class IOSAppIdentity(BaseModel):
     bundle_id: str
+    wda_bundle_id: str | None = None
 
 
 class WebAppIdentity(BaseModel):
@@ -25,8 +26,11 @@ class WebAppIdentity(BaseModel):
     origin: str | None = None
 
 
+AppIdentity = AndroidAppIdentity | IOSAppIdentity | WebAppIdentity
+
+
 class AppTarget(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     platform: AppPlatform
@@ -38,7 +42,7 @@ class AppTarget(BaseModel):
 
     @model_validator(mode="after")
     def validate_platform_identity(self) -> "AppTarget":
-        platform_fields = {
+        platform_fields: dict[str, AppIdentity | None] = {
             "android": self.android,
             "ios": self.ios,
             "web": self.web,

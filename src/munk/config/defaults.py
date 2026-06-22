@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 from munk.execution.models import RuntimeOverrideValue
 
@@ -9,25 +9,29 @@ from munk.execution.models import RuntimeOverrideValue
 class RuntimeDefaultConfig:
     max_steps: int = 30
     max_seconds: float = 300.0
-    interval: float = 0.5
-    settle_timeout: float = 10.0
+    interval: float = 0.2
+    settle_timeout: float = 6.0
+    initial_ready_timeout_sec: float = 6.0
+    settle_mode: str = "ratio"
+    settle_ocr_only: bool = True
+    settle_ratio_threshold: float = 0.1
+    settle_delay_sec: float = 1.0
     max_side: int = 1024
     icon_conf: float = 0.12
-    max_tokens: int = 8192
+    max_tokens: int = 16384
     temperature: float = 0.2
-    vl_max_side: int = 1024
+    vl_max_side: int = 768
+    runner_max_elements: int = 80
+    vl_image_format: str = "webp"
+    vl_fallback_image_format: str = "jpeg"
+    vl_webp_quality: int = 80
+    vl_jpeg_quality: int = 82
+    runner_include_screenshot: bool = True
 
     def as_runtime_overrides(self) -> dict[str, RuntimeOverrideValue]:
         return {
-            "max_steps": self.max_steps,
-            "max_seconds": self.max_seconds,
-            "interval": self.interval,
-            "settle_timeout": self.settle_timeout,
-            "max_side": self.max_side,
-            "icon_conf": self.icon_conf,
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
-            "vl_max_side": self.vl_max_side,
+            field.name: getattr(self, field.name)
+            for field in fields(self)
         }
 
 
@@ -111,11 +115,22 @@ DEFAULT_MAX_STEPS = MUNK_CODE_DEFAULTS.runtime.max_steps
 DEFAULT_MAX_SECONDS = MUNK_CODE_DEFAULTS.runtime.max_seconds
 DEFAULT_INTERVAL = MUNK_CODE_DEFAULTS.runtime.interval
 DEFAULT_SETTLE_TIMEOUT = MUNK_CODE_DEFAULTS.runtime.settle_timeout
+DEFAULT_INITIAL_READY_TIMEOUT_SEC = MUNK_CODE_DEFAULTS.runtime.initial_ready_timeout_sec
+DEFAULT_SETTLE_MODE = MUNK_CODE_DEFAULTS.runtime.settle_mode
+DEFAULT_SETTLE_OCR_ONLY = MUNK_CODE_DEFAULTS.runtime.settle_ocr_only
+DEFAULT_SETTLE_RATIO_THRESHOLD = MUNK_CODE_DEFAULTS.runtime.settle_ratio_threshold
+DEFAULT_SETTLE_DELAY_SEC = MUNK_CODE_DEFAULTS.runtime.settle_delay_sec
 DEFAULT_MAX_SIDE = MUNK_CODE_DEFAULTS.runtime.max_side
 DEFAULT_ICON_CONF = MUNK_CODE_DEFAULTS.runtime.icon_conf
 DEFAULT_MAX_TOKENS = MUNK_CODE_DEFAULTS.runtime.max_tokens
 DEFAULT_TEMPERATURE = MUNK_CODE_DEFAULTS.runtime.temperature
 DEFAULT_VL_MAX_SIDE = MUNK_CODE_DEFAULTS.runtime.vl_max_side
+DEFAULT_RUNNER_MAX_ELEMENTS = MUNK_CODE_DEFAULTS.runtime.runner_max_elements
+DEFAULT_VL_IMAGE_FORMAT = MUNK_CODE_DEFAULTS.runtime.vl_image_format
+DEFAULT_VL_FALLBACK_IMAGE_FORMAT = MUNK_CODE_DEFAULTS.runtime.vl_fallback_image_format
+DEFAULT_VL_WEBP_QUALITY = MUNK_CODE_DEFAULTS.runtime.vl_webp_quality
+DEFAULT_VL_JPEG_QUALITY = MUNK_CODE_DEFAULTS.runtime.vl_jpeg_quality
+DEFAULT_RUNNER_INCLUDE_SCREENSHOT = MUNK_CODE_DEFAULTS.runtime.runner_include_screenshot
 DEFAULT_MAX_RETRY_ATTEMPTS = MUNK_CODE_DEFAULTS.orchestration.max_retry_attempts
 DEFAULT_ALLOW_RETRY_ON_FAILED = MUNK_CODE_DEFAULTS.orchestration.allow_retry_on_failed
 DEFAULT_ALLOW_RETRY_ON_INCONCLUSIVE = MUNK_CODE_DEFAULTS.orchestration.allow_retry_on_inconclusive
@@ -126,7 +141,6 @@ DEFAULT_VISION_PREFLIGHT_TEMPERATURE = MUNK_CODE_DEFAULTS.vision_preflight.tempe
 DEFAULT_RUNNER_MAX_TOKENS = MUNK_CODE_DEFAULTS.runner.max_tokens
 DEFAULT_RUNNER_TEMPERATURE = MUNK_CODE_DEFAULTS.runner.temperature
 DEFAULT_RUNNER_TOP_P = MUNK_CODE_DEFAULTS.runner.top_p
-DEFAULT_RUNNER_MAX_ELEMENTS = MUNK_CODE_DEFAULTS.runner.max_elements
 DEFAULT_RUNNER_PROMPT_MAX_ELEMENTS = MUNK_CODE_DEFAULTS.runner.prompt_max_elements
 DEFAULT_RUNNER_MAX_HISTORY = MUNK_CODE_DEFAULTS.runner.max_history
 DEFAULT_JUDGE_MAX_TOKENS = MUNK_CODE_DEFAULTS.judge.max_tokens

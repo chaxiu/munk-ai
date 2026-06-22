@@ -17,7 +17,9 @@ from munk.runtime_distribution.release_publish import (  # noqa: E402
     install_object_key,
     load_publish_config,
     load_release_version,
+    normalize_release_channel,
     upload_object,
+    validate_release_channel_version,
 )
 
 DEFAULT_ARTIFACT_DIR = ROOT_DIR / "dist" / "runtime-build" / "release-artifacts"
@@ -33,6 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--install-script", type=Path, default=DEFAULT_INSTALL_SCRIPT)
     parser.add_argument("--skip-install-script", action="store_true")
     parser.add_argument("--only-install-script", action="store_true")
+    parser.add_argument(
+        "--allow-channel-version-mismatch",
+        action="store_true",
+        help="Allow publishing a final version to beta or a pre-release version to stable.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -40,7 +47,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     config = load_publish_config(args.config_file.resolve())
-    channel = args.channel or config.channel
+    channel = normalize_release_channel(args.channel or config.channel)
     if not channel:
         raise RuntimeError("release channel must not be empty")
     config = config.__class__(
@@ -87,6 +94,11 @@ def main() -> int:
         return 0
 
     version = load_release_version(ROOT_DIR)
+    validate_release_channel_version(
+        channel=config.channel,
+        version=version,
+        allow_mismatch=args.allow_channel_version_mismatch,
+    )
     artifacts = discover_release_artifacts(artifact_dir=args.artifact_dir.resolve(), version=version)
     uploads = build_release_uploads(
         config=config,

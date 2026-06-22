@@ -7,7 +7,7 @@ from munk.testing import TestCase
 
 from munk.planning.models import RequirementPlan
 
-from .draft_models import GeneratedCaseAppendDraft, GeneratedPlanFinalizeDraft, GeneratedPlanSkeletonDraft
+from .draft_models import GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft, GeneratedPlanFinalizeDraft, GeneratedPlanSkeletonDraft
 
 
 class PlannerWorkflowService:
@@ -18,9 +18,12 @@ class PlannerWorkflowService:
         app_id: str,
         source: str,
         version: str,
-        build_test_case: Callable[[GeneratedCaseAppendDraft], TestCase],
+        build_test_case: Callable[[GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft], TestCase],
         create_plan_skeleton: Callable[[], GeneratedPlanSkeletonDraft],
-        append_case: Callable[[GeneratedPlanSkeletonDraft, int, list[TestCase]], GeneratedCaseAppendDraft],
+        append_case: Callable[
+            [GeneratedPlanSkeletonDraft, int, list[TestCase], GeneratedCaseOutlineDraft],
+            GeneratedCaseAppendDraft,
+        ],
         finalize_plan: Callable[[GeneratedPlanSkeletonDraft, list[TestCase]], GeneratedPlanFinalizeDraft],
         event_callback: Callable[[str, str | None, dict[str, Any]], None] | None = None,
     ) -> RequirementPlan:
@@ -40,10 +43,11 @@ class PlannerWorkflowService:
                 "app_id": app_id,
                 "plan_name": skeleton.name,
                 "target_case_count": skeleton.target_case_count,
+                "case_outline_count": len(skeleton.case_outlines),
             },
         )
         appended_cases: list[TestCase] = []
-        for case_index in range(skeleton.target_case_count):
+        for case_index, outline in enumerate(skeleton.case_outlines):
             self._emit(
                 event_callback,
                 "plan_case_generation_started",
@@ -54,10 +58,11 @@ class PlannerWorkflowService:
                     "case_index": case_index + 1,
                     "target_case_count": skeleton.target_case_count,
                     "completed_case_count": len(appended_cases),
+                    "case_title": outline.title,
                 },
             )
-            append_draft = append_case(skeleton, case_index, list(appended_cases))
-            case = build_test_case(append_draft)
+            append_draft = append_case(skeleton, case_index, list(appended_cases), outline)
+            case = build_test_case(append_draft, outline)
             appended_cases.append(case)
             self._emit(
                 event_callback,

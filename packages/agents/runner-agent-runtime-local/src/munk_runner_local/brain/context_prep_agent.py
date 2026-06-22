@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+import logging
+import time
 from typing import Any, cast
 
 from munk.agent_base.llm import run_agent_sync_compatible
@@ -8,18 +11,23 @@ from munk.shared_tools import KnowledgeToolProvider
 from pydantic_ai import Agent
 
 from munk.config.schema import OutputStrategy
+from munk.services.knowledge import ContextPrepRecallResult, build_context_prep_recall
 from munk_runner_local.brain.context_prep_models import ContextPrepFallbackSelectionOutput, ContextPrepOutput
 from munk_runner_local.brain.context_prep_tools import ContextPrepDeps, register_context_prep_tools
+
+logger = logging.getLogger(__name__)
 
 CONTEXT_PREP_SYSTEM_PROMPT = "\n".join(
     [
         "You prepare app knowledge context for a runner agent.",
-        "Read the app introduction, case brief, and seeded knowledge card catalog.",
+        "Read the app introduction, case brief, and pre-recalled knowledge candidates.",
+        "Candidates are ranked by hybrid retrieval (keyword + semantic); prefer higher-relevance cards.",
         "Select only the 1-3 most relevant knowledge cards for the case.",
         "Visible card titles do not prove the business page or flow is already active.",
         "Use the get_knowledge_card_bundle tool exactly once after you decide the relevant card_ids.",
         "Build a concise prep summary that tells the runner what page, flow, assertion, or issue context matters most and what false positives to avoid.",
         "Do not invent card_id or summary details that are absent from knowledge.",
+        "Do not invent card_ids that are absent from the provided candidate list.",
         "If app knowledge is unavailable or not relevant, return a fallback output with empty selections and a non-empty fallback_reason.",
     ]
 )
@@ -28,13 +36,19 @@ FALLBACK_PREP_SUMMARY = "No prepared app knowledge bundle is available; rely on 
 CONTEXT_PREP_FALLBACK_SYSTEM_PROMPT = "\n".join(
     [
         "You are the fallback selector for runner app knowledge context.",
-        "The primary context prep path failed, so you must work only from the app introduction, case brief, failure reason, and the full knowledge card catalog.",
+        "The primary context prep path failed, so you must work only from the app introduction, case brief, failure reason, and the pre-recalled knowledge candidates.",
         "Select only the 1-3 most relevant existing knowledge cards for the case.",
-        "Do not invent card_ids that are absent from the provided catalog.",
+        "Do not invent card_ids that are absent from the provided candidate list.",
         "Build a concise prep summary that helps the runner understand what page it should try to reach and how to avoid obvious false positives.",
-        "If the catalog is insufficient or you cannot determine relevant cards, return a fallback output with empty selections and a non-empty fallback_reason.",
+        "If the candidate list is insufficient or you cannot determine relevant cards, return a fallback output with empty selections and a non-empty fallback_reason.",
     ]
 )
+
+
+@dataclass(frozen=True)
+class ContextPrepPrepareResult:
+    output: ContextPrepOutput
+    recall: ContextPrepRecallResult | None = None
 
 
 class ContextPrepAgent:
@@ -85,20 +99,31 @@ class ContextPrepAgent:
         app_introduction: str | None,
         case_brief: str,
         knowledge_tools: KnowledgeToolProvider,
-    ) -> ContextPrepOutput:
-        if not knowledge_tools.list(limit=1):
-            return build_context_prep_fallback("app knowledge unavailable")
+    ) -> ContextPrepPrepareResult:
+        recall = build_context_prep_recall(
+            knowledge_tools,
+            case_brief=case_brief,
+            app_introduction=app_introduction,
+        )
+        if recall.candidate_count == 0:
+            return ContextPrepPrepareResult(
+                output=build_context_prep_fallback("app knowledge unavailable"),
+                recall=recall,
+            )
         prompt = build_context_prep_prompt(
             app_introduction=app_introduction,
             case_brief=case_brief,
-            knowledge_card_catalog_text=build_knowledge_card_catalog_text(knowledge_tools),
+            knowledge_recall_candidates_text=recall.candidates_text,
         )
         result = run_agent_sync_compatible(
             self._agent,
             prompt,
-            deps=ContextPrepDeps(knowledge_tools=knowledge_tools),
+            deps=ContextPrepDeps(
+                knowledge_tools=knowledge_tools,
+                recall_candidate_card_ids=recall.candidate_card_ids,
+            ),
         )
-        return result.output
+        return ContextPrepPrepareResult(output=result.output, recall=recall)
 
     def prepare_with_fallback(
         self,
@@ -106,26 +131,88 @@ class ContextPrepAgent:
         app_introduction: str | None,
         case_brief: str,
         knowledge_tools: KnowledgeToolProvider,
-    ) -> ContextPrepOutput:
-        if not knowledge_tools.list(limit=1):
-            return build_context_prep_fallback("app knowledge unavailable")
+    ) -> ContextPrepPrepareResult:
+        total_started = time.monotonic()
+        recall_started = time.monotonic()
+        recall = build_context_prep_recall(
+            knowledge_tools,
+            case_brief=case_brief,
+            app_introduction=app_introduction,
+        )
+        recall_ms = int(round((time.monotonic() - recall_started) * 1000.0))
+        logger.info(
+            "context_prep_recall_done elapsed_ms=%s candidate_count=%s mode=%s",
+            recall_ms,
+            recall.candidate_count,
+            recall.mode,
+        )
+        if recall.candidate_count == 0:
+            total_ms = int(round((time.monotonic() - total_started) * 1000.0))
+            logger.info(
+                "context_prep_prepare_done elapsed_ms=%s candidate_count=0 selection_source=fallback_default",
+                total_ms,
+            )
+            return ContextPrepPrepareResult(
+                output=build_context_prep_fallback("app knowledge unavailable"),
+                recall=recall,
+            )
         try:
-            return self.prepare(
+            prompt = build_context_prep_prompt(
                 app_introduction=app_introduction,
                 case_brief=case_brief,
-                knowledge_tools=knowledge_tools,
+                knowledge_recall_candidates_text=recall.candidates_text,
             )
+            llm_started = time.monotonic()
+            result = run_agent_sync_compatible(
+                self._agent,
+                prompt,
+                deps=ContextPrepDeps(
+                    knowledge_tools=knowledge_tools,
+                    recall_candidate_card_ids=recall.candidate_card_ids,
+                ),
+            )
+            llm_ms = int(round((time.monotonic() - llm_started) * 1000.0))
+            total_ms = int(round((time.monotonic() - total_started) * 1000.0))
+            logger.info(
+                "context_prep_primary_done elapsed_ms=%s llm_ms=%s selected_entries=%s candidate_count=%s",
+                total_ms,
+                llm_ms,
+                len(result.output.selected_entries),
+                recall.candidate_count,
+            )
+            return ContextPrepPrepareResult(output=result.output, recall=recall)
         except Exception as exc:  # noqa: BLE001
+            primary_ms = int(round((time.monotonic() - total_started) * 1000.0))
+            logger.warning(
+                "context_prep_primary_failed elapsed_ms=%s candidate_count=%s error=%s",
+                primary_ms,
+                recall.candidate_count,
+                exc,
+            )
+            fallback_started = time.monotonic()
             fallback_selection = self.prepare_fallback_selection(
                 app_introduction=app_introduction,
                 case_brief=case_brief,
                 knowledge_tools=knowledge_tools,
+                recall=recall,
                 failure_reason=f"context prep primary failed: {exc}",
             )
-            return ContextPrepOutput(
-                selected_entries=fallback_selection.selected_entries,
-                prep_summary=fallback_selection.prep_summary,
-                fallback_reason=fallback_selection.fallback_reason,
+            fallback_ms = int(round((time.monotonic() - fallback_started) * 1000.0))
+            total_ms = int(round((time.monotonic() - total_started) * 1000.0))
+            logger.info(
+                "context_prep_fallback_done elapsed_ms=%s fallback_ms=%s selected_entries=%s candidate_count=%s",
+                total_ms,
+                fallback_ms,
+                len(fallback_selection.selected_entries),
+                recall.candidate_count,
+            )
+            return ContextPrepPrepareResult(
+                output=ContextPrepOutput(
+                    selected_entries=fallback_selection.selected_entries,
+                    prep_summary=fallback_selection.prep_summary,
+                    fallback_reason=fallback_selection.fallback_reason,
+                ),
+                recall=recall,
             )
 
     def prepare_fallback_selection(
@@ -135,11 +222,17 @@ class ContextPrepAgent:
         case_brief: str,
         knowledge_tools: KnowledgeToolProvider,
         failure_reason: str,
+        recall: ContextPrepRecallResult | None = None,
     ) -> ContextPrepFallbackSelectionOutput:
+        resolved_recall = recall or build_context_prep_recall(
+            knowledge_tools,
+            case_brief=case_brief,
+            app_introduction=app_introduction,
+        )
         prompt = build_context_prep_fallback_prompt(
             app_introduction=app_introduction,
             case_brief=case_brief,
-            knowledge_card_catalog_text=build_knowledge_card_catalog_text(knowledge_tools),
+            knowledge_recall_candidates_text=resolved_recall.candidates_text,
             failure_reason=failure_reason,
         )
         result = run_agent_sync_compatible(self._fallback_agent, prompt)
@@ -150,7 +243,7 @@ def build_context_prep_prompt(
     *,
     app_introduction: str | None,
     case_brief: str,
-    knowledge_card_catalog_text: str,
+    knowledge_recall_candidates_text: str,
 ) -> str:
     introduction = app_introduction.strip() if app_introduction and app_introduction.strip() else "none"
     return "\n\n".join(
@@ -161,8 +254,8 @@ def build_context_prep_prompt(
             "[CASE_BRIEF]",
             case_brief.strip(),
             "",
-            "[KNOWLEDGE_CARD_CATALOG]",
-            knowledge_card_catalog_text.strip() or "none",
+            "[KNOWLEDGE_RECALL_CANDIDATES]",
+            knowledge_recall_candidates_text.strip() or "none",
         ]
     )
 
@@ -180,7 +273,7 @@ def build_context_prep_fallback_prompt(
     *,
     app_introduction: str | None,
     case_brief: str,
-    knowledge_card_catalog_text: str,
+    knowledge_recall_candidates_text: str,
     failure_reason: str,
 ) -> str:
     introduction = app_introduction.strip() if app_introduction and app_introduction.strip() else "none"
@@ -195,14 +288,7 @@ def build_context_prep_fallback_prompt(
             "[CASE_BRIEF]",
             case_brief.strip(),
             "",
-            "[KNOWLEDGE_CARD_CATALOG]",
-            knowledge_card_catalog_text.strip() or "none",
+            "[KNOWLEDGE_RECALL_CANDIDATES]",
+            knowledge_recall_candidates_text.strip() or "none",
         ]
     )
-
-
-def build_knowledge_card_catalog_text(knowledge_tools: KnowledgeToolProvider) -> str:
-    cards = knowledge_tools.list(limit=20)
-    if not cards:
-        return "none"
-    return "\n".join(f"- {card.card_id} | {card.card_type} | {card.title}" for card in cards)

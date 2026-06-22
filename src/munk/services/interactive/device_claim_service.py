@@ -2,43 +2,42 @@ from __future__ import annotations
 
 import os
 
-from munk.services.operations.models import DeviceClaimConflict, DeviceClaimRequest, OperationRecord
+from munk.services.operations.models import DeviceClaimConflict, DeviceClaimRequest
+from munk.services.operations.service import OperationService
 from munk.services.operations.registry import OperationRegistry
+from .operation_payloads import (
+    build_interactive_session_operation_request_payload,
+    build_interactive_session_progress_payload,
+)
 
 from .models import InteractiveSession
 
 
+
 class InteractiveDeviceClaimService:
     def __init__(self, operation_registry: OperationRegistry | None = None) -> None:
-        self._operation_registry = operation_registry or OperationRegistry()
+        self._operation_service = OperationService(operation_registry or OperationRegistry())
+        self._operation_registry = self._operation_service.registry
 
     def claim_for_session(self, session: InteractiveSession) -> None:
-        claim_request = self._claim_request(session.device_ref)
-        record = OperationRecord(
+        self._operation_service.create_operation(
             operation_id=session.claim_owner_id,
             kind="interactive_session",
             status="running",
+            request_json=build_interactive_session_operation_request_payload(session),
             app_id=session.app_target.app_id,
-            request_json={
-                "interactive_session_id": session.session_id,
-                "platform": session.platform,
-                "device_ref": session.device_ref,
-            },
-            progress_json=self._progress_payload(session),
-            pid=os.getpid(),
+            progress_json=build_interactive_session_progress_payload(session),
+            requires_device=True,
             device_ref=session.device_ref,
-            resource_scope=claim_request.resource_scope,
+            pid=os.getpid(),
             created_at=session.started_at,
             started_at=session.started_at,
         )
-        self._operation_registry.create_operation_with_claim(record, claim_request=claim_request)
 
     def refresh_session(self, session: InteractiveSession) -> None:
-        self._operation_registry.update_operation(
-            session.claim_owner_id,
-            progress_json=self._progress_payload(session),
-            pid=os.getpid(),
-        )
+        tracker = self._operation_service.get_tracker(session.claim_owner_id)
+        tracker.update_progress(**build_interactive_session_progress_payload(session))
+        self._operation_registry.update_operation(session.claim_owner_id, pid=os.getpid())
 
     def release_for_session(
         self,
@@ -48,6 +47,8 @@ class InteractiveDeviceClaimService:
         error_code: str | None = None,
         error_message: str | None = None,
     ) -> None:
+        tracker = self._operation_service.get_tracker(session.claim_owner_id)
+        tracker.update_progress(**build_interactive_session_progress_payload(session))
         self._operation_registry.release_claims(session.claim_owner_id, released_at=session.updated_at)
         self._operation_registry.update_operation(
             session.claim_owner_id,
@@ -55,7 +56,6 @@ class InteractiveDeviceClaimService:
             error_code=error_code,
             error_message=error_message,
             finished_at=session.updated_at,
-            progress_json=self._progress_payload(session),
         )
 
     def cleanup_for_request(self, device_ref: str | None) -> None:
@@ -71,15 +71,3 @@ class InteractiveDeviceClaimService:
             device_ref=device_ref,
             resource_scope="device_ref" if device_ref else "device_unspecified",
         )
-
-    @staticmethod
-    def _progress_payload(session: InteractiveSession) -> dict[str, object]:
-        return {
-            "interactive_session": {
-                "session_id": session.session_id,
-                "status": session.status,
-                "last_active_at": session.last_active_at,
-                "expires_at": session.expires_at,
-                "idle_expires_at": session.idle_expires_at,
-            }
-        }

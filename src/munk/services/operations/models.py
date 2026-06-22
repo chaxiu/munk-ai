@@ -34,6 +34,13 @@ class OperationArtifactSnapshot(BaseModel):
     values: dict[str, str] = Field(default_factory=dict)
 
 
+class OperationProjection(BaseModel):
+    run_type: str | None = None
+    platform: str | None = None
+    title: str | None = None
+    source_recording_id: str | None = None
+
+
 class OperationRecord(BaseModel):
     operation_id: str
     kind: OperationKind
@@ -50,6 +57,10 @@ class OperationRecord(BaseModel):
     result_json: dict[str, Any] | None = None
     artifacts_json: dict[str, str] = Field(default_factory=dict)
     progress_json: dict[str, Any] = Field(default_factory=dict)
+    projected_run_type: str | None = None
+    projected_platform: str | None = None
+    projected_title: str | None = None
+    projected_source_recording_id: str | None = None
     pid: int | None = None
     cancel_requested: bool = False
     device_ref: str | None = None

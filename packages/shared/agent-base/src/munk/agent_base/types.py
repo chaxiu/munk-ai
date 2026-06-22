@@ -3,22 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from .locator import ElementLocator
-
 
 class ActionType(str, Enum):
     CLICK = "click"
     LONG_PRESS = "long_press"
     INPUT = "input"
+    EDIT_TEXT = "edit_text"
     SCROLL = "scroll"
     SWIPE = "swipe"
-    CLEAR_AND_INPUT = "clear_and_input"
+    DRAG = "drag"
+    PULL_TO_REFRESH = "pull_to_refresh"
     DISMISS_SOFT_KEYBOARD = "dismiss_soft_keyboard"
-    WAIT_FOR_ELEMENT = "wait_for_element"
-    WAIT_UNTIL_GONE = "wait_until_gone"
-    SCROLL_UNTIL_VISIBLE = "scroll_until_visible"
+    WAIT_FOR_TEXT = "wait_for_text"
+    SCROLL_UNTIL_TEXT = "scroll_until_text"
     BACK = "back"
     HOME = "home"
+    RESTART_APP = "restart_app"
     WAIT = "wait"
     REDETECT = "redetect"
     STOP = "stop"
@@ -30,12 +30,17 @@ class Action:
     box: tuple[int, int, int, int] | None = None
     point: tuple[int, int] | None = None
     text: str | None = None
+    text_mode: str | None = None
     start: tuple[int, int] | None = None
     end: tuple[int, int] | None = None
     duration: float | None = None
-    locator: ElementLocator | None = None
+    match_type: str | None = None
+    match_texts: tuple[str, ...] | None = None
     max_attempts: int | None = None
     direction: str | None = None
+    start_x_ratio: float | None = None
+    start_y_ratio: float | None = None
+    distance_ratio: float | None = None
     distance_px: int | None = None
     dismiss_keyboard: bool | None = None
     summary: str | None = None
@@ -76,16 +81,38 @@ class Action:
         return Action(type=ActionType.INPUT, text=text, dismiss_keyboard=dismiss_keyboard, summary=summary)
 
     @staticmethod
+    def edit_text(
+        *,
+        text: str,
+        mode: str,
+        target_box: tuple[int, int, int, int] | None = None,
+        dismiss_keyboard: bool | None = None,
+        summary: str | None = None,
+    ) -> "Action":
+        return Action(
+            type=ActionType.EDIT_TEXT,
+            box=target_box,
+            text=text,
+            text_mode=mode,
+            dismiss_keyboard=dismiss_keyboard,
+            summary=summary,
+        )
+
+    @staticmethod
     def scroll(
         *,
         direction: str,
-        distance_px: int,
+        start_x_ratio: float,
+        start_y_ratio: float,
+        distance_ratio: float,
         summary: str | None = None,
     ) -> "Action":
         return Action(
             type=ActionType.SCROLL,
             direction=direction,
-            distance_px=distance_px,
+            start_x_ratio=start_x_ratio,
+            start_y_ratio=start_y_ratio,
+            distance_ratio=distance_ratio,
             summary=summary,
         )
 
@@ -93,29 +120,49 @@ class Action:
     def swipe(
         *,
         direction: str,
-        distance_px: int,
+        start_x_ratio: float,
+        start_y_ratio: float,
+        distance_ratio: float,
         summary: str | None = None,
     ) -> "Action":
         return Action(
             type=ActionType.SWIPE,
             direction=direction,
-            distance_px=distance_px,
+            start_x_ratio=start_x_ratio,
+            start_y_ratio=start_y_ratio,
+            distance_ratio=distance_ratio,
             summary=summary,
         )
 
     @staticmethod
-    def clear_and_input(
-        box: tuple[int, int, int, int],
-        text: str,
+    def drag(
         *,
-        dismiss_keyboard: bool = True,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None = None,
         summary: str | None = None,
     ) -> "Action":
         return Action(
-            type=ActionType.CLEAR_AND_INPUT,
-            box=box,
-            text=text,
-            dismiss_keyboard=dismiss_keyboard,
+            type=ActionType.DRAG,
+            start=start,
+            end=end,
+            duration=duration,
+            summary=summary,
+        )
+
+    @staticmethod
+    def pull_to_refresh(
+        *,
+        start_x_ratio: float | None = None,
+        start_y_ratio: float | None = None,
+        distance_ratio: float | None = None,
+        summary: str | None = None,
+    ) -> "Action":
+        return Action(
+            type=ActionType.PULL_TO_REFRESH,
+            start_x_ratio=start_x_ratio,
+            start_y_ratio=start_y_ratio,
+            distance_ratio=distance_ratio,
             summary=summary,
         )
 
@@ -124,42 +171,34 @@ class Action:
         return Action(type=ActionType.DISMISS_SOFT_KEYBOARD, summary=summary)
 
     @staticmethod
-    def wait_for_element(
-        locator: ElementLocator,
-        timeout_sec: float,
-        summary: str | None = None,
-    ) -> "Action":
-        return Action(
-            type=ActionType.WAIT_FOR_ELEMENT,
-            locator=locator,
-            duration=timeout_sec,
-            summary=summary,
-        )
-
-    @staticmethod
-    def wait_until_gone(
-        locator: ElementLocator,
-        timeout_sec: float,
-        summary: str | None = None,
-    ) -> "Action":
-        return Action(
-            type=ActionType.WAIT_UNTIL_GONE,
-            locator=locator,
-            duration=timeout_sec,
-            summary=summary,
-        )
-
-    @staticmethod
-    def scroll_until_visible(
-        locator: ElementLocator,
+    def wait_for_text(
         *,
+        match_type: str,
+        texts: list[str] | tuple[str, ...],
+        timeout_sec: float,
+        summary: str | None = None,
+    ) -> "Action":
+        return Action(
+            type=ActionType.WAIT_FOR_TEXT,
+            match_type=match_type,
+            match_texts=tuple(texts),
+            duration=timeout_sec,
+            summary=summary,
+        )
+
+    @staticmethod
+    def scroll_until_text(
+        *,
+        match_type: str,
+        texts: list[str] | tuple[str, ...],
         direction: str,
         max_attempts: int,
         summary: str | None = None,
     ) -> "Action":
         return Action(
-            type=ActionType.SCROLL_UNTIL_VISIBLE,
-            locator=locator,
+            type=ActionType.SCROLL_UNTIL_TEXT,
+            match_type=match_type,
+            match_texts=tuple(texts),
             direction=direction,
             max_attempts=max_attempts,
             summary=summary,
@@ -172,6 +211,10 @@ class Action:
     @staticmethod
     def home(summary: str | None = None) -> "Action":
         return Action(type=ActionType.HOME, summary=summary)
+
+    @staticmethod
+    def restart_app(summary: str | None = None) -> "Action":
+        return Action(type=ActionType.RESTART_APP, summary=summary)
 
     @staticmethod
     def wait(duration: float, summary: str | None = None) -> "Action":

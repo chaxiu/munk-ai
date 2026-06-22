@@ -43,7 +43,7 @@ def build_targets_text(
     vision_truncated = max(parts.vision_total - len(parts.vision_targets), 0)
     if vision_truncated > 0:
         summary_lines.append(f"vision_truncated={vision_truncated}")
-    vision_lines = [_format_target_line(target) for target in parts.vision_targets] or ["none"]
+    vision_lines = [_format_seed_target_line(target) for target in parts.vision_targets] or ["none"]
     return "\n".join(
         [
             *summary_lines,
@@ -90,29 +90,42 @@ def build_targets_list_text(
         summary_lines.append(f"tree_truncated={tree_truncated}")
     sections: list[str] = [*summary_lines]
     if include_vision:
-        vision_lines = [_format_target_line(target) for target in parts.vision_targets] or ["none"]
+        vision_lines = [_format_full_target_line(target) for target in parts.vision_targets] or ["none"]
         sections.extend(["", "[VISION_TARGETS]", *vision_lines])
     if include_tree:
-        tree_lines = [_format_target_line(target) for target in parts.tree_targets] or ["none"]
+        tree_lines = [_format_full_target_line(target) for target in parts.tree_targets] or ["none"]
         sections.extend(["", "[TREE_TARGETS]", *tree_lines])
     return "\n".join(sections)
 
 
 def build_target_detail_text(screen: ScreenState, *, target_id: int, max_elements: int) -> str:
     target = resolve_action_target(screen, target_id=target_id, max_elements=max_elements)
-    return "\n".join([_format_target_line(target), *_format_target_detail_lines(target)])
+    return "\n".join([_format_full_target_line(target), *_format_target_detail_lines(target)])
 
 
 def count_targets_in_text(text: str) -> int:
     return sum(1 for line in text.splitlines() if line.startswith("#"))
 
 
-def _format_target_line(target: ActionTarget) -> str:
+def _format_seed_target_line(target: ActionTarget) -> str:
+    parts = [f"#{target.target_id}", _display_kind(target)]
+    label = _seed_display_label(target)
+    resource_id = _display_resource_id(target)
+    if label is not None and label != resource_id:
+        parts.append(f'"{label}"')
+    if resource_id is not None:
+        parts.append(f"resource_id={resource_id}")
+    parts.extend(_format_inline_state_parts(target, include_value=False, include_ocr=False))
+    parts.append(_format_box(target.box))
+    return " ".join(parts)
+
+
+def _format_full_target_line(target: ActionTarget) -> str:
     parts = [f"#{target.target_id}", _display_kind(target)]
     label = _display_label(target)
     if label is not None:
         parts.append(f'"{label}"')
-    parts.extend(_format_inline_state_parts(target))
+    parts.extend(_format_inline_state_parts(target, include_value=True, include_ocr=True))
     parts.append(_format_box(target.box))
     return " ".join(parts)
 
@@ -142,10 +155,34 @@ def _display_kind(target: ActionTarget) -> str:
 
 def _display_label(target: ActionTarget) -> str | None:
     return _target_profile(target).display_label(target)
-def _format_inline_state_parts(target: ActionTarget) -> list[str]:
+
+
+def _seed_display_label(target: ActionTarget) -> str | None:
+    label = _display_label(target)
+    if label is None:
+        return None
+    class_name = str(target.class_name or "").strip()
+    if class_name and label == class_name and _is_generic_container_class(class_name):
+        return None
+    return label
+
+
+def _display_resource_id(target: ActionTarget) -> str | None:
+    resource_id = str(target.resource_id or "").strip()
+    if not resource_id:
+        return None
+    return _target_profile(target)._android_resource_id_label(resource_id) if target.platform == "android" else resource_id
+
+
+def _format_inline_state_parts(
+    target: ActionTarget,
+    *,
+    include_value: bool,
+    include_ocr: bool,
+) -> list[str]:
     parts: list[str] = []
     display_kind = _display_kind(target)
-    if display_kind == "input" and _has_text(target.text):
+    if include_value and display_kind == "input" and _has_text(target.text):
         parts.append(f'value="{str(target.text).strip()}"')
     if target.focused:
         parts.append("focused")
@@ -157,7 +194,7 @@ def _format_inline_state_parts(target: ActionTarget) -> list[str]:
         parts.append("disabled")
     if target.clickable is True and display_kind in {"text", "icon", "container", "visual", "label", "node"}:
         parts.append("clickable")
-    if target.ocr_texts:
+    if include_ocr and target.ocr_texts:
         parts.append(f"ocr={_format_ocr_list(target.ocr_texts)}")
     return parts
 
@@ -173,6 +210,18 @@ def _target_profile(target: ActionTarget):
 def _format_ocr_list(values: tuple[str, ...]) -> str:
     quoted = ", ".join(f'"{value}"' for value in values)
     return f"[{quoted}]"
+
+
+def _is_generic_container_class(value: str) -> bool:
+    normalized = value.strip()
+    return normalized in {
+        "android.widget.FrameLayout",
+        "android.widget.LinearLayout",
+        "android.widget.RelativeLayout",
+        "android.widget.ConstraintLayout",
+        "android.view.View",
+        "android.view.ViewGroup",
+    }
 
 
 def _has_text(value: object) -> bool:

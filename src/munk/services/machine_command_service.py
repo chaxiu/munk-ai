@@ -19,6 +19,11 @@ from munk.services.operations.service import OperationService
 from munk.services.operations.submission_service import OperationSubmissionService
 from munk.services.plan_operation_service import PlanOperationService
 from munk.services.review_operation_service import ReviewOperationService
+from munk.services.running.operation_payloads import (
+    build_run_case_operation_request_payload,
+    build_run_plan_operation_request_payload,
+    build_run_plans_operation_request_payload,
+)
 from munk.services.running.batch_operation_service import RunBatchOperationService
 from munk.services.running.operation_service import RunOperationService
 from munk.services.verify_change_operation_service import VerifyChangeOperationService
@@ -104,15 +109,15 @@ class MachineCommandService:
         background_submitter: Callable[[str, Callable[[], None]], None] | None = None,
     ) -> MachineCommandResponse:
         resolved_config = self._require_resolved_config("run case")
-        request_payload = cast(dict[str, Any], request.model_dump(mode="json"))
-        request_json: dict[str, Any] = {**request_payload, "case_id": case_id}
         case_title = self._load_case_title(app_id=request.app_id, plan_id=request.plan_id, case_id=case_id)
-        if case_title is not None:
-            request_json["case_title"] = case_title
         return self._submission_service.submit(
             kind="run_case",
             command="run_case",
-            request_json=request_json,
+            request_json=build_run_case_operation_request_payload(
+                request,
+                case_id=case_id,
+                case_title=case_title,
+            ),
             app_id=request.app_id,
             plan_id=request.plan_id,
             case_id=case_id,
@@ -154,11 +159,10 @@ class MachineCommandService:
         background_submitter: Callable[[str, Callable[[], None]], None] | None = None,
     ) -> MachineCommandResponse:
         resolved_config = self._require_resolved_config("run plan")
-        request_json = cast(dict[str, Any], request.model_dump(mode="json"))
         return self._submission_service.submit(
             kind="run_plan",
             command="run_plan",
-            request_json=request_json,
+            request_json=build_run_plan_operation_request_payload(request),
             app_id=request.app_id,
             plan_id=request.plan_id,
             case_id=None,
@@ -186,11 +190,10 @@ class MachineCommandService:
         background_submitter: Callable[[str, Callable[[], None]], None] | None = None,
     ) -> MachineCommandResponse:
         resolved_config = self._require_resolved_config("run plans")
-        request_json = cast(dict[str, Any], request.model_dump(mode="json"))
         return self._submission_service.submit(
             kind="run_plans",
             command="run_plans",
-            request_json=request_json,
+            request_json=build_run_plans_operation_request_payload(request),
             app_id=request.app_id,
             plan_id=None,
             case_id=None,
@@ -273,6 +276,43 @@ class MachineCommandService:
             ),
         )
 
+    def submit_knowledge_post_action(
+        self,
+        *,
+        request: Any,
+        wait: bool,
+        detach: bool,
+        detached_argv: list[str] | None = None,
+        parent_operation_id: str | None = None,
+    ) -> MachineCommandResponse:
+        request_json = cast(dict[str, Any], request.model_dump(mode="json"))
+        knowledge_service_class = cast(
+            Any,
+            import_module("munk.services.knowledge.operation_service").KnowledgePostActionOperationService,
+        )
+        knowledge_operation_service = knowledge_service_class(
+            resolved_config=self._require_resolved_config("knowledge post action")
+        )
+        return self._submission_service.submit(
+            kind="knowledge_post_action",
+            command="knowledge_post_action",
+            request_json=request_json,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            requires_device=False,
+            device_ref=None,
+            wait=wait,
+            detach=detach,
+            detached_argv=detached_argv,
+            parent_operation_id=parent_operation_id,
+            reuse_current_tracker=True,
+            execute=lambda tracker: knowledge_operation_service.execute_command(
+                tracker=tracker,
+                request=request,
+            ),
+        )
+
     def submit_optimize_case(
         self,
         *,
@@ -300,7 +340,7 @@ class MachineCommandService:
             detach=detach,
             detached_argv=detached_argv,
             parent_operation_id=parent_operation_id,
-            reuse_current_tracker=False,
+            reuse_current_tracker=True,
             execute=lambda tracker: optimize_operation_service.execute_command(
                 tracker=tracker,
                 request=request,

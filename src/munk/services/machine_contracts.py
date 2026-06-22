@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Mapping
 
 from munk.services.errors import (
     BatchPlanExecutionError,
     ConfigValidationError,
     DeviceConflictError,
+    InvalidCaseDefinitionError,
     OperationCancelledError,
+    OperationPayloadValidationError,
     OperationNotFoundError,
     ScheduleDeletionConflictError,
     ScheduleNotFoundError,
@@ -39,7 +41,7 @@ class InvalidMachineRequestError(ValueError):
 
 @dataclass(frozen=True)
 class MachineCommandResponse:
-    payload: dict[str, Any]
+    payload: dict[str, object]
     exit_code: int
     http_status: int
 
@@ -47,16 +49,16 @@ class MachineCommandResponse:
 def build_success_response(
     *,
     command: str,
-    data: dict[str, Any],
-    artifacts: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+    data: Mapping[str, object],
+    artifacts: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "ok": True,
         "command": command,
-        "data": data,
+        "data": dict(data),
     }
     if artifacts:
-        payload["artifacts"] = artifacts
+        payload["artifacts"] = dict(artifacts)
     return payload
 
 
@@ -65,11 +67,11 @@ def build_error_response(
     command: str,
     code: str,
     message: str,
-    details: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    error: dict[str, Any] = {"code": code, "message": message}
+    details: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    error: dict[str, object] = {"code": code, "message": message}
     if details:
-        error["details"] = details
+        error["details"] = dict(details)
     return {
         "ok": False,
         "command": command,
@@ -83,6 +85,10 @@ def classify_exception(exc: Exception) -> tuple[int, str]:
     if isinstance(exc, ConfigValidationError):
         return EXIT_CONFIG_ERROR, ERROR_CONFIG_ERROR
     if isinstance(exc, BatchPlanExecutionError):
+        return EXIT_INVALID_REQUEST, ERROR_INVALID_REQUEST
+    if isinstance(exc, InvalidCaseDefinitionError):
+        return EXIT_INVALID_REQUEST, ERROR_INVALID_REQUEST
+    if isinstance(exc, OperationPayloadValidationError) and exc.payload_role == "request":
         return EXIT_INVALID_REQUEST, ERROR_INVALID_REQUEST
     if isinstance(exc, OperationNotFoundError):
         return EXIT_OPERATION_NOT_FOUND, ERROR_OPERATION_NOT_FOUND
@@ -120,8 +126,8 @@ def http_status_for_result(*, exit_code: int, error_code: str | None = None) -> 
 def build_success_result(
     *,
     command: str,
-    data: dict[str, Any],
-    artifacts: dict[str, Any] | None = None,
+    data: Mapping[str, object],
+    artifacts: Mapping[str, object] | None = None,
     exit_code: int = EXIT_OK,
     http_status: int | None = None,
 ) -> MachineCommandResponse:
@@ -136,7 +142,7 @@ def build_error_result(
     *,
     command: str,
     exc: Exception,
-    details: dict[str, Any] | None = None,
+    details: Mapping[str, object] | None = None,
 ) -> MachineCommandResponse:
     exit_code, error_code = classify_exception(exc)
     if details is None and isinstance(exc, DeviceConflictError):

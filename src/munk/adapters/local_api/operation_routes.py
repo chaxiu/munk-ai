@@ -286,6 +286,7 @@ def build_operation_router(context: LocalApiAppContext) -> APIRouter:
     @router.get(
         "/v1/runs/{operation_id}/events",
         response_model=SuccessResponse[OperationEventsData],
+        response_model_exclude_none=True,
         responses=_RUN_QUERY_ERROR_RESPONSES,
     )
     def runs_events(

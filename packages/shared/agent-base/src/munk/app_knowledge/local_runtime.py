@@ -197,8 +197,12 @@ def _resolve_assets_root(resolved_config: Any) -> Path:
     if isinstance(resolved_config, dict):
         candidate = resolved_config.get("app_registry_root") or resolved_config.get("assets_root")
         if isinstance(candidate, (str, Path)):
-            return Path(candidate)
-    return Path.cwd()
+            normalized = Path(candidate)
+            if str(normalized).strip():
+                return normalized
+    raise ValueError(
+        "app knowledge local runtime requires a non-empty app_registry_root or assets_root in resolved_config"
+    )
 
 
 def _resolve_embedding_service(resolved_config: Any) -> Any:

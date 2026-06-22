@@ -46,6 +46,7 @@ def build_runtime_manifest(
     installed_distributions: list[InstalledDistributionDescriptor],
     adb_relpath: str,
     launcher_relpath: str,
+    ios_bridge_relpath: str | None = None,
     recording_ui_relpath: str | None = None,
     recording_bridge_relpath: str | None = None,
     node_relpath: str | None = None,
@@ -54,6 +55,12 @@ def build_runtime_manifest(
     for distribution in installed_distributions:
         packages_by_layer.setdefault(distribution.layer, []).append(distribution.name)
     sidecars = {"adb": SidecarDescriptor(path=adb_relpath, owner="core", kind="adb")}
+    if ios_bridge_relpath is not None:
+        sidecars["ios_bridge"] = SidecarDescriptor(
+            path=ios_bridge_relpath,
+            owner="core",
+            kind="ios_bridge",
+        )
     if recording_bridge_relpath is not None:
         sidecars["recording_bridge"] = SidecarDescriptor(
             path=recording_bridge_relpath,

@@ -71,6 +71,9 @@ def filter_android_uixml_nodes(
         area = _box_area(node.bounds)
         if area <= 4:
             continue
+        x1, y1, x2, y2 = node.bounds
+        if x2 <= 0 or y2 <= 0 or x1 >= screen_width or y1 >= screen_height:
+            continue
         if area >= int(screen_area * 0.98) and not _has_semantics(node):
             continue
         if not (_has_semantics(node) or _has_action_value(node) or _has_interesting_class(node.class_name)):

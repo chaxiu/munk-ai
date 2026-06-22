@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai import RunContext as PydanticRunContext
 from pydantic_ai.messages import ToolReturn
+
+from munk.judging.models import is_screen_diff_evidence, is_screen_frame_evidence
 
 from .image_payloads import load_screenshot_binary_image
 from .step_projection import (
@@ -57,22 +59,25 @@ def register_judge_tools(agent: Agent[JudgeRunDeps, object]) -> None:
         return _read_runner_memory(ctx.deps, key=key)
 
     @agent.tool
-    def read_step_screen_raw_image(ctx: PydanticRunContext[JudgeRunDeps], step_index: int) -> str | ToolReturn:
-        """Read the compressed raw screenshot image for a single step when visual confirmation is still needed."""
-        return _read_step_screen_raw_image(ctx.deps, step_index=step_index)
+    def read_step_screenshot(
+        ctx: PydanticRunContext[JudgeRunDeps],
+        step_index: int | None = None,
+        annotated: bool = True,
+    ) -> str | ToolReturn:
+        """Read the compressed screenshot image for a single step when visual confirmation is still needed."""
+        return _read_step_screenshot(ctx.deps, step_index=step_index, annotated=annotated)
 
 
 def _read_step_screen(deps: JudgeRunDeps, *, step_index: int) -> str:
     if not _consume_budget(deps, "read_step_screen"):
         return "tool budget exhausted; make the best judgment from the current evidence"
     evidence = find_screen_evidence_by_step(deps, step_index)
-    if evidence is None:
+    if evidence is None or not is_screen_frame_evidence(evidence):
         return f"unknown step index: {step_index}"
-    excerpt = evidence.payload.get("excerpt")
     detail: dict[str, Any] = {
         "summary": evidence.summary,
-        "compact_tree": _trim_compact_tree(excerpt),
-        "focus_hits": _trim_focus_hits(excerpt),
+        "compact_tree": evidence.payload.compact_tree.model_dump(mode="json"),
+        "focus_hits": [entry.model_dump(mode="json") for entry in evidence.payload.focus_hits[:6]],
     }
     return json.dumps(detail, ensure_ascii=False, sort_keys=True)
 
@@ -81,34 +86,56 @@ def _read_step_transition(deps: JudgeRunDeps, *, step_index: int) -> str:
     if not _consume_budget(deps, "read_step_transition"):
         return "tool budget exhausted; make the best judgment from the current evidence"
     evidence = find_transition_evidence_by_step(deps, step_index)
-    if evidence is None:
+    if evidence is None or not is_screen_diff_evidence(evidence):
         return f"unknown step index: {step_index}"
     detail: dict[str, Any] = {
         "summary": evidence.summary,
-        "excerpt": evidence.payload.get("excerpt"),
-        "changes": _trim_change_lists(evidence.payload.get("data")),
+        "excerpt": {
+            "summary": evidence.payload.summary,
+            "appeared_labels": list(evidence.payload.appeared_labels),
+            "updated_labels": list(evidence.payload.updated_labels),
+            "disappeared_labels": list(evidence.payload.disappeared_labels),
+            "linked_visual_changes": list(evidence.payload.linked_visual_changes),
+        },
+        "changes": {
+            "appeared_nodes": [item.model_dump(mode="json") for item in evidence.payload.appeared_nodes[:4]],
+            "updated_nodes": [item.model_dump(mode="json") for item in evidence.payload.updated_nodes[:4]],
+            "disappeared_nodes": [item.model_dump(mode="json") for item in evidence.payload.disappeared_nodes[:4]],
+            "linked_visual_changes": list(evidence.payload.linked_visual_changes[:4]),
+        },
     }
     return json.dumps(detail, ensure_ascii=False, sort_keys=True)
 
 
-def _read_step_screen_raw_image(deps: JudgeRunDeps, *, step_index: int) -> str | ToolReturn:
-    if not _consume_budget(deps, "read_step_screen_raw_image"):
+def _read_step_screenshot(
+    deps: JudgeRunDeps,
+    *,
+    step_index: int | None,
+    annotated: bool,
+) -> str | ToolReturn:
+    if not _consume_budget(deps, "read_step_screenshot"):
         return "tool budget exhausted; make the best judgment from the current evidence"
-    screenshot_ref = deps.raw_screenshot_refs_by_step().get(step_index)
+    refs = deps.annotated_screenshot_refs_by_step() if annotated else deps.raw_screenshot_refs_by_step()
+    if step_index is None:
+        step_index = max(refs.keys()) if refs else None
+    if step_index is None:
+        return "no screenshots available"
+    screenshot_ref = refs.get(step_index)
     if screenshot_ref is None:
         return f"unknown step index: {step_index}"
+    kind = "annotated" if annotated else "raw"
     image = load_screenshot_binary_image(
         screenshot_ref.path,
-        identifier=f"judge_tool_step_{step_index:04d}_raw",
+        identifier=f"judge_tool_step_{step_index:04d}_{kind}",
         vl_max_side=deps.vl_max_side,
     )
     if image is None:
-        return f"raw screenshot unavailable for step index: {step_index}"
+        return f"{kind} screenshot unavailable for step index: {step_index}"
     return ToolReturn(
-        return_value=f"raw screenshot loaded for step {step_index}",
+        return_value=f"{kind} screenshot loaded for step {step_index}",
         content=[
             (
-                f"Raw screenshot for step={step_index}; "
+                f"{kind.title()} screenshot for step={step_index}; "
                 f"action={screenshot_ref.action_summary or 'none'}; "
                 f"observation={screenshot_ref.observation_summary or 'none'}"
             ),
@@ -137,47 +164,6 @@ def _read_runner_memory(deps: JudgeRunDeps, *, key: str | None) -> str:
         "timestamp": entry.get("timestamp"),
     }
     return json.dumps(detail, ensure_ascii=False, sort_keys=True)
-
-
-def _trim_change_lists(raw_data: object) -> dict[str, object]:
-    if not isinstance(raw_data, dict):
-        return {}
-    data = cast(dict[str, object], raw_data)
-    trimmed: dict[str, object] = {}
-    for key in ("appeared_nodes", "updated_nodes", "disappeared_nodes", "linked_visual_changes"):
-        value = data.get(key)
-        if isinstance(value, list):
-            trimmed[key] = value[:4]
-    return trimmed
-
-
-def _trim_compact_tree(excerpt: object) -> dict[str, object]:
-    if not isinstance(excerpt, dict):
-        return {}
-    excerpt_dict = cast(dict[str, object], excerpt)
-    compact_tree = excerpt_dict.get("compact_tree")
-    if not isinstance(compact_tree, dict):
-        return {}
-    compact_tree_dict = cast(dict[str, object], compact_tree)
-    nodes = compact_tree_dict.get("nodes")
-    if not isinstance(nodes, list):
-        return dict(compact_tree_dict)
-    return {
-        **compact_tree_dict,
-        "nodes": nodes,
-    }
-
-
-def _trim_focus_hits(excerpt: object) -> list[object]:
-    if not isinstance(excerpt, dict):
-        return []
-    excerpt_dict = cast(dict[str, object], excerpt)
-    focus_hits = excerpt_dict.get("focus_hits")
-    if not isinstance(focus_hits, list):
-        return []
-    return cast(list[object], focus_hits[:6])
-
-
 def _consume_budget(deps: JudgeRunDeps, tool_name: str) -> bool:
     if deps.tool_budget <= 0:
         return False

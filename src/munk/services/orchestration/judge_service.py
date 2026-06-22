@@ -28,6 +28,7 @@ class JudgeOrchestrationService:
             artifacts=dict(runner_step.stage.artifacts),
             resolved_config=self._resolved_config,
             tracker=self._tracker,
+            attempt_index=runner_step.stage.attempt_index,
             judge_runtime=self._judge_runtime,
         )
         decision, state_delta, retry_guidance = self._decide(
@@ -38,6 +39,24 @@ class JudgeOrchestrationService:
             missing_evidence=list(materialized.result.missing_evidence),
             failure_hypothesis=materialized.result.failure_hypothesis,
         )
+        if self._tracker is not None:
+            self._tracker.append_timeline_event(
+                event_type="judge_decision",
+                message=materialized.result.summary,
+                agent_role="orchestration",
+                timeline_scope="parent_run",
+                timeline_phase="decision_ready",
+                summary=materialized.result.summary,
+                attempt_index=runner_step.stage.attempt_index,
+                app_id=runner_step.case_request.app_id,
+                plan_id=runner_step.case_request.plan_id,
+                case_id=runner_step.case_request.case.case_id,
+                data={
+                    "verdict": materialized.result.verdict,
+                    "reason": materialized.result.reason,
+                    "decision_type": decision.decision_type,
+                },
+            )
         return JudgeOrchestrationResult(
             judge_result=materialized.result,
             decision=decision,

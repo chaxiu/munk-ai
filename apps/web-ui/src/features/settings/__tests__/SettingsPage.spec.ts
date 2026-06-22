@@ -9,7 +9,8 @@ import { i18n, setLocale } from '@/shared/i18n'
 const refetchMock = typedViFn(async () => undefined)
 const updateSettingsConfigMock = typedViFn()
 
-const settingsData = ref({
+function createSettingsData() {
+  return {
   config_path: '/Users/demo/project/.munk/config.yaml',
   file_exists: true,
   provider: 'openai_compatible' as const,
@@ -47,6 +48,10 @@ const settingsData = ref({
     url: 'http://127.0.0.1:7890',
     no_proxy: ['internal.example.com'],
   },
+  ios_bridge: {
+    sudo_enabled: true,
+    sudo_password: 'secret-pass',
+  },
   runtime: {
     max_tokens: 8192,
     temperature: 0.2,
@@ -54,6 +59,9 @@ const settingsData = ref({
     max_seconds: 300,
     interval: 0.5,
     settle_timeout: null,
+    settle_mode: 'ratio' as const,
+    settle_ratio_threshold: 0.3,
+    settle_delay_sec: 0.8,
     max_side: 1024,
     vl_max_side: 768,
     icon_conf: 0.12,
@@ -64,7 +72,10 @@ const settingsData = ref({
     allow_retry_on_inconclusive: true,
     escalate_after_max_attempts: true,
   },
-})
+  }
+}
+
+const settingsData = ref(createSettingsData())
 
 vi.mock('@/features/settings/queries/useSettingsConfigQuery', () => ({
   useSettingsConfigQuery: () => ({
@@ -85,12 +96,13 @@ vi.mock('@/features/settings/queries/useSettingsConfigMutation', () => ({
 describe('SettingsPage', () => {
   beforeEach(() => {
     setLocale('en-US')
+    settingsData.value = createSettingsData()
     refetchMock.mockReset()
     updateSettingsConfigMock.mockReset()
     updateSettingsConfigMock.mockResolvedValue(settingsData.value)
   })
 
-  it('renders the active config path and keeps Gemini advanced fields hidden by default', async () => {
+  it('renders the active config path and reveals provider descriptions on demand', async () => {
     const wrapper = mount(SettingsPage, {
       global: {
         plugins: [i18n],
@@ -101,15 +113,26 @@ describe('SettingsPage', () => {
 
     expect(wrapper.text()).toContain('Settings')
     expect(wrapper.text()).toContain('/Users/demo/project/.munk/config.yaml')
-    expect(wrapper.text()).toContain('Show details')
-    const detailButtons = wrapper.findAll('button').filter((node) => node.text().includes('Show details'))
-    await detailButtons[1]?.trigger('click')
+
+    const providerDetailButtons = () => wrapper.findAll('button').filter((node) => node.text().includes('Show details'))
+
+    await providerDetailButtons()[0]?.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('Already configured. Leave blank to keep the current value.')
-    expect(wrapper.text()).toContain('gemini-3-flash-preview')
+
+    expect(wrapper.text()).toContain('Base URL')
+    expect(wrapper.text()).toContain('google/gemma-4-26b-a4b-it')
     expect(wrapper.text()).toContain('API key saved')
     expect(wrapper.text()).toContain('structured output: prompted')
     expect(wrapper.text()).toContain('thinking: disabled')
+    expect(wrapper.text()).not.toContain('If a value is already configured, leaving this blank keeps the current value.')
+
+    await wrapper.findAll('button').find((node) => node.attributes('title') === 'API Key')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('If a value is already configured, leaving this blank keeps the current value.')
+
+    await providerDetailButtons()[0]?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('gemini-3-flash-preview')
     expect(wrapper.text()).toContain('Show advanced')
     expect(wrapper.text()).not.toContain('Vertex AI')
     expect(wrapper.text()).not.toContain('legacy-project')
@@ -123,15 +146,99 @@ describe('SettingsPage', () => {
       wrapper.findAll('input').some((node) => (node.element as HTMLInputElement).value === 'https://legacy-gateway.example.com'),
     ).toBe(true)
     expect(wrapper.text()).toContain('Proxy')
-    expect(wrapper.text()).toContain('Use proxy for external requests')
+    expect(wrapper.text()).toContain('Role override')
+    expect(wrapper.text()).toContain('iOS Bridge')
+    expect(wrapper.text()).toContain('Enable sudo startup')
     expect(wrapper.text()).toContain('Orchestration')
     expect(wrapper.text()).toContain('max_retry_attempts')
     expect(wrapper.text()).toContain('allow_retry_on_failed')
     expect(wrapper.text()).toContain('allow_retry_on_inconclusive')
     expect(wrapper.text()).toContain('escalate_after_max_attempts')
+    expect(wrapper.text()).toContain('settle_mode')
+    expect(wrapper.text()).toContain('settle_ratio_threshold')
+    expect(wrapper.text()).toContain('settle_delay_sec')
+  })
+
+  it('disables save until proxy and iOS bridge required fields are filled', async () => {
+    settingsData.value = {
+      ...createSettingsData(),
+      proxy: {
+        enabled: true,
+        url: '',
+        no_proxy: [],
+      },
+      ios_bridge: {
+        sudo_enabled: true,
+        sudo_password: '',
+      },
+    }
+
+    const wrapper = mount(SettingsPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    const saveButton = wrapper.find('.primary-button')
+    expect(saveButton.attributes('disabled')).toBeDefined()
+
+    await wrapper.find('input[placeholder="http://127.0.0.1:7890"]').setValue('http://127.0.0.1:7890')
+    await wrapper.find('input[placeholder="Enter the local sudo password"]').setValue('secret-pass')
+    await flushPromises()
+
+    expect(saveButton.attributes('disabled')).toBeUndefined()
+  })
+
+  it('uses the shared provider-required rules for enabled agent overrides', async () => {
+    settingsData.value = {
+      ...createSettingsData(),
+      agents: {
+        ...createSettingsData().agents,
+        judge: {
+          ...createSettingsData().agents.judge,
+          enabled: true,
+          provider: 'gemini',
+          gemini: {
+            ...createSettingsData().agents.judge.gemini,
+            model: '',
+          },
+        },
+      },
+    }
+
+    const wrapper = mount(SettingsPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('.primary-button').attributes('disabled')).toBeDefined()
   })
 
   it('submits the current config shape when saving', async () => {
+    settingsData.value = {
+      ...settingsData.value,
+      openai_compatible: {
+        ...settingsData.value.openai_compatible,
+        configured: false,
+      },
+      agents: {
+        ...settingsData.value.agents,
+        judge: {
+          ...settingsData.value.agents.judge,
+          gemini: {
+            ...settingsData.value.agents.judge.gemini,
+            configured: false,
+          },
+        },
+      },
+    }
+    updateSettingsConfigMock.mockResolvedValue(settingsData.value)
+
     const wrapper = mount(SettingsPage, {
       global: {
         plugins: [i18n],
@@ -181,12 +288,21 @@ describe('SettingsPage', () => {
         url: 'http://127.0.0.1:7890',
         no_proxy: ['internal.example.com'],
       },
+      ios_bridge: {
+        sudo_enabled: true,
+        sudo_password: 'secret-pass',
+      },
       orchestration: {
         max_retry_attempts: 2,
         allow_retry_on_failed: false,
         allow_retry_on_inconclusive: true,
         escalate_after_max_attempts: true,
       },
+      runtime: expect.objectContaining({
+        settle_mode: 'ratio',
+        settle_ratio_threshold: 0.3,
+        settle_delay_sec: 0.8,
+      }),
     }))
     expect(wrapper.text()).toContain('Settings saved to the active config.')
   })

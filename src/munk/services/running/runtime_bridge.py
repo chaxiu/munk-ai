@@ -28,26 +28,13 @@ def build_runner_request_from_case_execution_request(request: CaseExecutionReque
 
 
 def build_runner_managed_paths(paths: RunPaths) -> RunnerManagedPaths:
-    return RunnerManagedPaths(
-        root_dir=paths.run_dir,
-        request_dump_path=paths.case_path or (paths.run_dir / "runner_request.json"),
-        raw_dir=paths.raw_dir,
-        annotated_dir=paths.annotated_dir,
-        runtime_logs_dir=paths.runtime_logs_dir,
-        observation_frames_dir=paths.observation_frames_dir,
-        observation_diffs_dir=paths.observation_diffs_dir,
-        observation_tree_dir=paths.observation_tree_dir,
-        decision_trace_path=paths.decision_trace_path,
-        runner_history_path=paths.runner_history_path,
-        runner_memory_path=paths.runner_memory_path,
-        llm_transcript_path=paths.llm_transcript_path,
-        context_prep_path=paths.context_prep_path,
-    )
+    return paths.to_runner_managed_paths()
 
 
 def build_runner_runtime_context(
     *,
     operation_id: str | None,
+    attempt_index: int,
     paths: RunPaths,
     device: DeviceDriver,
     perception: PerceptionProvider,
@@ -55,6 +42,7 @@ def build_runner_runtime_context(
 ) -> RunnerRuntimeContext:
     return RunnerRuntimeContext(
         operation_id=operation_id,
+        attempt_index=attempt_index,
         managed_paths=build_runner_managed_paths(paths),
         device=device,
         perception=perception,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import cv2
 import numpy as np
@@ -11,8 +11,12 @@ from munk.perception import ObservationTree
 from munk.perception.image import BgrImage
 
 from .http_wda_provider import HttpWDAProvider
-from .runtime_logs import IOSLogStream, IOSRuntimeLogStream
+from .runtime_logs import IOSLogDeviceKind, IOSLogStream, IOSRuntimeLogStream
 from .wda_provider import WDAProvider
+
+
+class IOSDeviceTransport(Protocol):
+    def close(self) -> None: ...
 
 
 class IOSDevice:
@@ -20,9 +24,11 @@ class IOSDevice:
         self,
         *,
         device_ref: str | None = None,
+        device_kind: IOSLogDeviceKind | None = None,
         app_target: AppTarget,
         provider: WDAProvider | None = None,
         log_stream: IOSLogStream | None = None,
+        transport: IOSDeviceTransport | None = None,
     ) -> None:
         if app_target.platform != "ios" or app_target.ios is None:
             raise ValueError("ios runtime requires an ios app_target")
@@ -31,8 +37,10 @@ class IOSDevice:
         self._provider = provider or HttpWDAProvider(base_url=self._resolve_wda_url(app_target))
         self._log_stream = log_stream or IOSRuntimeLogStream(
             device_ref=device_ref,
+            device_kind=device_kind,
             bundle_id=app_target.ios.bundle_id,
         )
+        self._transport = transport
 
     def screenshot_bgr(self) -> BgrImage:
         payload = self._provider.screenshot_png()
@@ -45,6 +53,20 @@ class IOSDevice:
         self._provider.long_press(x, y, duration_sec=duration)
 
     def scroll(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None = None,
+    ) -> None:
+        self._provider.swipe(
+            start_x=start[0],
+            start_y=start[1],
+            end_x=end[0],
+            end_y=end[1],
+            duration_sec=duration,
+        )
+
+    def drag(
         self,
         start: tuple[int, int],
         end: tuple[int, int],
@@ -127,7 +149,11 @@ class IOSDevice:
 
     def close(self) -> None:
         self.stop_log_session()
-        self._provider.close()
+        try:
+            self._provider.close()
+        finally:
+            if self._transport is not None:
+                self._transport.close()
 
     def start_log_session(self) -> None:
         self._log_stream.start()

@@ -14,7 +14,12 @@ import install_simulator_wda  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Thin dispatcher for simulator / real-device WDA installers.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Legacy/manual dispatcher for simulator and real-device WDA installers. "
+            "Current iOS runtime execution uses ios-device-bridge for real-device discovery/session."
+        )
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--simulator-udid", help="Booted iOS Simulator UDID.")
     group.add_argument("--device-udid", help="Connected iOS real-device UDID.")

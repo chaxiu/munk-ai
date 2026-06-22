@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from munk.app import AndroidAppIdentity, AppTarget
 from munk.recording import (
+    ForwardingAck,
+    ForwardingStep,
     LiveViewFrame,
     ObservedTapCommand,
+    PointerForwardingPayload,
+    PointerStepPayload,
     RecordingAnalysisResult,
     RecordingAnalysisScreenshotRef,
     RecordingAnalysisStep,
@@ -13,7 +18,10 @@ from munk.recording import (
     RecordingAnalysisTreeFocusHit,
     RecordingAnalysisTreeNode,
     RecordingAssetManifest,
+    RecordingInteractionContractError,
     RecordingSession,
+    RecordInteractionCommand,
+    validate_record_interaction_contract,
 )
 from munk.testing import TestCase
 
@@ -144,3 +152,70 @@ def test_recording_analysis_result_holds_canonical_test_case() -> None:
     assert dumped["steps"][0]["before_screenshot"]["role"] == "before"
     assert dumped["steps"][0]["before_screenshot"]["compact_tree_excerpt"]["compact_nodes"][0]["text"] == "Settings"
     assert dumped["steps"][0]["intent"] == "打开设置页"
+
+
+def test_forwarding_ack_uses_typed_payload_models() -> None:
+    ack = ForwardingAck(
+        kind="pointer",
+        payload=PointerForwardingPayload(
+            pointer_id=0,
+            start_x=10,
+            start_y=20,
+            end_x=10,
+            end_y=20,
+            width=100,
+            height=200,
+        ),
+        steps=[
+            ForwardingStep(
+                seq=1,
+                step_kind="pointer_down",
+                payload=PointerStepPayload(pointer_id=0, x=10, y=20),
+            ),
+            ForwardingStep(
+                seq=2,
+                step_kind="pointer_up",
+                payload=PointerStepPayload(pointer_id=0, x=10, y=20),
+            ),
+        ],
+    )
+
+    dumped = ack.model_dump(mode="json")
+
+    assert dumped["payload"]["pointer_id"] == 0
+    assert dumped["steps"][0]["payload"]["x"] == 10
+
+
+def test_validate_record_interaction_contract_rejects_non_contiguous_step_seq() -> None:
+    command = RecordInteractionCommand(
+        client_command_id="cmd-1",
+        kind="click",
+        forwarding_ack=ForwardingAck(
+            kind="pointer",
+            payload=PointerForwardingPayload(
+                pointer_id=0,
+                start_x=10,
+                start_y=20,
+                end_x=10,
+                end_y=20,
+                width=100,
+                height=200,
+            ),
+            steps=[
+                ForwardingStep(
+                    seq=1,
+                    step_kind="pointer_down",
+                    payload=PointerStepPayload(pointer_id=0, x=10, y=20),
+                ),
+                ForwardingStep(
+                    seq=3,
+                    step_kind="pointer_up",
+                    payload=PointerStepPayload(pointer_id=0, x=10, y=20),
+                ),
+            ],
+        ),
+        payload={"x": 10, "y": 20, "width": 100, "height": 200},
+    )
+
+    with pytest.raises(RecordingInteractionContractError, match="contiguous seq values"):
+        validate_record_interaction_contract(command)

@@ -15,6 +15,7 @@ from munk.services.operations.command_helpers import (
 )
 from munk.services.operations.service import OperationCommandResult, OperationTracker
 from munk.services.plan_execution_service import PlanExecutionService, SupportsPlanOperationRecord
+from munk.services.planning.event_payloads import build_plan_operation_progress_payload
 from munk.services.plan_runtime import resolve_plan_runtime
 from munk.services.planning.orchestration import (
     build_plan_saved_payload,
@@ -80,7 +81,7 @@ class PlanOperationService:
             data=saved_payload,
         )
         tracker.update_progress(
-            **self._plan_progress_payload(
+            **build_plan_operation_progress_payload(
                 "plan_saved",
                 saved_payload,
             )
@@ -165,42 +166,6 @@ class PlanOperationService:
             ),
             operation_tracker=_PlanExecutionTrackerAdapter(tracker),
         )
-
-    @staticmethod
-    def _plan_progress_payload(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
-        progress: dict[str, Any] = {
-            "plan_event_type": event_type,
-        }
-        stage_map = {
-            "plan_context_loaded": "context_loaded",
-            "plan_agent_ready": "agent_ready",
-            "plan_skeleton_generation_started": "skeleton_generation_started",
-            "plan_skeleton_generated": "skeleton_generated",
-            "plan_case_generation_started": "case_generation_started",
-            "plan_case_generated": "case_generated",
-            "plan_finalize_started": "finalize_started",
-            "plan_finalize_completed": "finalize_completed",
-            "plan_saved": "saved",
-        }
-        if event_type in stage_map:
-            progress["stage"] = stage_map[event_type]
-        for key in (
-            "app_id",
-            "plan_id",
-            "plan_name",
-            "target_case_count",
-            "completed_case_count",
-            "case_index",
-            "case_id",
-            "case_title",
-            "case_count",
-            "plan_path",
-            "snapshot_path",
-        ):
-            if key in data and data[key] is not None:
-                progress[key] = data[key]
-        return progress
-
 
 class _PlanExecutionTrackerAdapter:
     def __init__(self, tracker: OperationTracker) -> None:

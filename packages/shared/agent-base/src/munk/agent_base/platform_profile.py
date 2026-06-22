@@ -9,6 +9,20 @@ from munk.app import AppPlatform
 STATUS_BAR_TOP_RATIO = 0.06
 STATUS_BAR_MAX_HEIGHT_RATIO = 0.04
 
+SHARED_RUNNER_MISSION_LINES = (
+    "Decide exactly one next action for the current test step, not the whole case.",
+    "Use the objective, procedure, history, current screen, and seeded numbered targets to choose the highest-confidence action that advances the test.",
+)
+SHARED_RUNNER_COMPLETION_CONTRACT_LINES = ("Return exactly one structured action and no extra text.",)
+SHARED_RUNNER_RULE_LINES = (
+    "Prefer a direct action on a visible numbered target.",
+    "If the expected result is already satisfied, use stop.",
+    "If a procedure exists, advance the next incomplete procedure step instead of stopping early.",
+    "Do not guess or click semantically similar controls when the intended target is not visible.",
+    "Use read tools only when seeded evidence is insufficient.",
+    "If a recoverable blocker such as keyboard or popup is present, clear it first and then continue.",
+)
+
 
 @dataclass(frozen=True)
 class PlatformRunnerProfile:
@@ -128,30 +142,11 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
         return PlatformRunnerProfile(
             platform="web",
             role_identity="You are the web runner decision agent for the current step.",
-            mission_lines=(
-                "Decide exactly one next action for this step only, not the whole case.",
-                "Use the current objective, history, screen evidence, targets, and image to choose the highest-confidence next action.",
-            ),
-            completion_contract_lines=(
-                "When you have enough information, call exactly one final structured action output.",
-                "Do not answer with plain text or explanations outside the final output.",
-                "If the objective is already satisfied, or further action would be redundant or blocked, use stop.",
-            ),
-            tool_policy_lines=(
-                "Read-only tools are optional and only for missing evidence.",
-                "Do not call read tools when the seeded screen and targets already identify the next action.",
-                "Do not repeat the same read tool just to restate the same evidence.",
-            ),
-            action_bias_lines=(
-                "Prefer stop when the objective is already satisfied.",
-                "Prefer a high-confidence direct action on a seeded target before exploratory actions.",
-                "Prefer high-level actions before raw click, scroll, input_text, or wait.",
-                "Use redetect or wait only when the target is genuinely uncertain; do not guess.",
-            ),
-            platform_capability_notes=(
-                "Use page metadata, DOM summary, and focused-element reads only when the seeded visual context is insufficient.",
-                "Reason about page state and browser focus explicitly; do not treat the web page like an Android screen.",
-            ),
+            mission_lines=SHARED_RUNNER_MISSION_LINES,
+            completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
+            tool_policy_lines=SHARED_RUNNER_RULE_LINES,
+            action_bias_lines=(),
+            platform_capability_notes=(),
             status_bar_filter_enabled=False,
             enabled_read_tools=("read_page_meta", "read_dom_summary", "read_focused_element"),
         )
@@ -159,68 +154,21 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
         return PlatformRunnerProfile(
             platform="ios",
             role_identity="You are the iOS runner decision agent for the current step.",
-            mission_lines=(
-                "Decide exactly one next action for this step only, not the whole case.",
-                "Use the current objective, history, screen evidence, targets, and image to choose the highest-confidence next action.",
-            ),
-            completion_contract_lines=(
-                "When you have enough information, call exactly one final structured action output.",
-                "Do not answer with plain text or explanations outside the final output.",
-                "If the objective is already satisfied, or further action would be redundant or blocked, use stop.",
-            ),
-            tool_policy_lines=(
-                "Read-only tools are optional and only for missing evidence.",
-                "Do not call read tools when the seeded screen and targets already identify the next action.",
-                "Do not repeat the same read tool just to restate the same evidence.",
-            ),
-            action_bias_lines=(
-                "Prefer stop when the objective is already satisfied.",
-                "Prefer a high-confidence direct action on a seeded target before exploratory actions.",
-                "Prefer high-level actions before raw click, scroll, input_text, or wait.",
-                "Use redetect or wait only when the target is genuinely uncertain; do not guess.",
-            ),
-            platform_capability_notes=(
-                "Use only the actions and visible evidence that are actually available in this step.",
-                "Do not invent Android-only widget semantics or browser-only tools when reasoning about iOS screens.",
-            ),
+            mission_lines=SHARED_RUNNER_MISSION_LINES,
+            completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
+            tool_policy_lines=SHARED_RUNNER_RULE_LINES,
+            action_bias_lines=(),
+            platform_capability_notes=(),
             status_bar_filter_enabled=False,
         )
     return PlatformRunnerProfile(
         platform="android",
-        role_identity="You are the Android runner decision agent for the current step.",
-        mission_lines=(
-            "Decide exactly one next action for this step only, not the whole case.",
-            "Use the current objective, history, screen evidence, targets, and image to choose the highest-confidence next action.",
-        ),
-        completion_contract_lines=(
-            "When you have enough information, call exactly one final structured action output.",
-            "Do not answer with plain text or explanations outside the final output.",
-            "Use stop only when the objective is already satisfied, the device is in a hard-stop state such as lock screen or app crash, or concrete recovery attempts show the current step still cannot progress.",
-        ),
-        tool_policy_lines=(
-            "Read-only tools are optional and only for missing evidence.",
-            "Do not call read tools when the seeded screen and targets already identify the next action.",
-            "Do not repeat the same read tool just to restate the same evidence.",
-            "If the required target is not visible in the seeded targets, do not click a semantically similar nearby control as a substitute.",
-            "Use click only for a currently visible numbered target; never use click to stand in for back, home, or dismiss_soft_keyboard.",
-        ),
-        action_bias_lines=(
-            "Prefer stop when the objective is already satisfied.",
-            "Prefer a high-confidence direct action on a seeded target before exploratory actions or stop.",
-            "Prefer high-level actions before raw click, scroll, swipe, input_text, or wait.",
-            "When using scroll or swipe, output direction plus distance_px only; let the host derive concrete coordinates and duration.",
-            "Use redetect or wait only when the target is genuinely uncertain; do not guess.",
-            "When blockers such as a soft keyboard, popup, dropdown, picker, or modal are present and a clear removal action is available, clear the blocker first, then re-observe before choosing the next action; treat these blockers as recoverable and do not stop only because they exist.",
-            "Use input_text only when the intended input already has focus; use clear_and_input when a specific visible input target must be chosen and reset.",
-        ),
-        platform_capability_notes=(
-            "Treat numbered targets as the primary interaction surface for Android UI decisions.",
-            "If the keyboard is the only blocker, prefer dismiss_soft_keyboard over navigation-oriented fallbacks.",
-            "Use back only for the Android system back event, never by clicking a guessed back-like region.",
-            "Use scroll for content navigation: direction names the content you want to reveal, such as scroll down for lower content and scroll up toward the top.",
-            "Use swipe for gesture-driven interaction: direction names the finger motion, such as swipe down for pull-to-refresh or swipe left for card dismissal.",
-            "Do not treat generic containers such as popup lists or dropdown overlays as proof that the business objective is complete.",
-        ),
+        role_identity="You are the Android runner decision agent for one step of a mobile automated test case.",
+        mission_lines=SHARED_RUNNER_MISSION_LINES,
+        completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
+        tool_policy_lines=SHARED_RUNNER_RULE_LINES,
+        action_bias_lines=(),
+        platform_capability_notes=(),
         status_bar_filter_enabled=True,
     )
 

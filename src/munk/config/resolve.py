@@ -1,32 +1,63 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Callable, Mapping, cast
 
 from munk.config.defaults import (
     DEFAULT_ALLOW_RETRY_ON_FAILED,
     DEFAULT_ALLOW_RETRY_ON_INCONCLUSIVE,
     DEFAULT_ESCALATE_AFTER_MAX_ATTEMPTS,
-    DEFAULT_ICON_CONF,
-    DEFAULT_INTERVAL,
+    MUNK_CODE_DEFAULTS,
     DEFAULT_MAX_RETRY_ATTEMPTS,
-    DEFAULT_MAX_SECONDS,
-    DEFAULT_MAX_SIDE,
-    DEFAULT_MAX_STEPS,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_SETTLE_TIMEOUT,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_VL_MAX_SIDE,
 )
+from munk.execution.models import RuntimeOverrideValue
 from munk.config.schema import (
     AgentRole,
     GeminiSection,
     LLMProviderKind,
     MunkConfig,
     OpenAICompatibleSection,
+    RuntimeConfig,
 )
 from munk.orchestration import OrchestrationPolicy
+from munk.running import runtime_override_specs
 
 ModelConfigSection = OpenAICompatibleSection | GeminiSection
+
+
+def _optional_int(payload: Mapping[str, object], key: str) -> int | None:
+    value = payload.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _optional_float(payload: Mapping[str, object], key: str) -> float | None:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def _optional_str(payload: Mapping[str, object], key: str) -> str | None:
+    value = payload.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _optional_bool(payload: Mapping[str, object], key: str) -> bool | None:
+    value = payload.get(key)
+    return value if isinstance(value, bool) else None
+
+
+_RuntimeOverrideParser = Callable[[Mapping[str, object], str], RuntimeOverrideValue | None]
+_RUNTIME_OVERRIDE_VALUE_PARSERS: dict[str, _RuntimeOverrideParser] = {
+    "int": _optional_int,
+    "float": _optional_float,
+    "bool": _optional_bool,
+    "str": _optional_str,
+}
+_RUNTIME_OVERRIDE_PARSERS_BY_KEY: dict[str, _RuntimeOverrideParser] = {
+    spec.key: _RUNTIME_OVERRIDE_VALUE_PARSERS[spec.value_kind]
+    for spec in runtime_override_specs()
+}
 
 
 @dataclass(frozen=True)
@@ -38,6 +69,51 @@ class ResolvedModelConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeOverridePatch:
+    max_tokens: int | None = None
+    temperature: float | None = None
+    max_steps: int | None = None
+    max_seconds: float | None = None
+    interval: float | None = None
+    settle_timeout: float | None = None
+    initial_ready_timeout_sec: float | None = None
+    settle_mode: str | None = None
+    settle_ocr_only: bool | None = None
+    settle_ratio_threshold: float | None = None
+    settle_delay_sec: float | None = None
+    max_side: int | None = None
+    vl_max_side: int | None = None
+    runner_max_elements: int | None = None
+    vl_image_format: str | None = None
+    vl_fallback_image_format: str | None = None
+    vl_webp_quality: int | None = None
+    vl_jpeg_quality: int | None = None
+    icon_conf: float | None = None
+    runner_include_screenshot: bool | None = None
+
+    def to_override_dict(self) -> dict[str, RuntimeOverrideValue]:
+        return {
+            field.name: value
+            for field in fields(self)
+            if (value := getattr(self, field.name)) is not None
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> "RuntimeOverridePatch":
+        values: dict[str, object] = {
+            field.name: _RUNTIME_OVERRIDE_PARSERS_BY_KEY[field.name](payload, field.name)
+            for field in fields(cls)
+        }
+        return cast("RuntimeOverridePatch", cls(**cast(Any, values)))
+
+    @classmethod
+    def from_runtime_config(cls, runtime: RuntimeConfig | None) -> "RuntimeOverridePatch":
+        if runtime is None:
+            return cls()
+        return cls.from_mapping(runtime.model_dump(exclude_none=True))
+
+
+@dataclass(frozen=True)
 class ResolvedRuntimeConfig:
     max_tokens: int
     temperature: float
@@ -45,9 +121,23 @@ class ResolvedRuntimeConfig:
     max_seconds: float
     interval: float
     settle_timeout: float
+    initial_ready_timeout_sec: float
+    settle_mode: str
+    settle_ocr_only: bool
+    settle_ratio_threshold: float
+    settle_delay_sec: float
     max_side: int
     vl_max_side: int
+    runner_max_elements: int
+    vl_image_format: str
+    vl_fallback_image_format: str
+    vl_webp_quality: int
+    vl_jpeg_quality: int
     icon_conf: float
+    runner_include_screenshot: bool
+
+    def to_patch(self) -> RuntimeOverridePatch:
+        return RuntimeOverridePatch(**asdict(self))
 
 
 @dataclass(frozen=True)
@@ -97,26 +187,9 @@ def resolve_openai_compatible_section(
 
 
 def resolve_runtime_config(config: MunkConfig) -> ResolvedRuntimeConfig:
-    runtime = config.runtime
-    return ResolvedRuntimeConfig(
-        max_tokens=runtime.max_tokens if runtime is not None and runtime.max_tokens is not None else DEFAULT_MAX_TOKENS,
-        temperature=runtime.temperature
-        if runtime is not None and runtime.temperature is not None
-        else DEFAULT_TEMPERATURE,
-        max_steps=runtime.max_steps if runtime is not None and runtime.max_steps is not None else DEFAULT_MAX_STEPS,
-        max_seconds=runtime.max_seconds
-        if runtime is not None and runtime.max_seconds is not None
-        else DEFAULT_MAX_SECONDS,
-        interval=runtime.interval if runtime is not None and runtime.interval is not None else DEFAULT_INTERVAL,
-        settle_timeout=runtime.settle_timeout
-        if runtime is not None and runtime.settle_timeout is not None
-        else DEFAULT_SETTLE_TIMEOUT,
-        max_side=runtime.max_side if runtime is not None and runtime.max_side is not None else DEFAULT_MAX_SIDE,
-        vl_max_side=runtime.vl_max_side
-        if runtime is not None and runtime.vl_max_side is not None
-        else DEFAULT_VL_MAX_SIDE,
-        icon_conf=runtime.icon_conf if runtime is not None and runtime.icon_conf is not None else DEFAULT_ICON_CONF,
-    )
+    resolved_values = asdict(MUNK_CODE_DEFAULTS.runtime)
+    resolved_values.update(RuntimeOverridePatch.from_runtime_config(config.runtime).to_override_dict())
+    return ResolvedRuntimeConfig(**resolved_values)
 
 
 def resolve_orchestration_config(config: MunkConfig) -> ResolvedOrchestrationConfig:

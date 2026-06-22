@@ -17,18 +17,35 @@ const proxy = toRef(props, 'proxy')
 
 <template>
   <div class="grid gap-4">
-    <UiField :label="t('settings.fields.proxyEnabled')" :hint="t('settings.proxy.enabledHint')">
+    <UiField
+      :label="t('settings.fields.proxyEnabled')"
+      optional
+      :description="t('settings.fieldDescriptions.proxyEnabled')"
+    >
       <label class="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-muted/35 px-3.5 text-sm text-text-secondary">
         <input v-model="proxy.enabled" type="checkbox" class="h-4 w-4 rounded border-border">
         {{ t('settings.proxy.enableToggle') }}
       </label>
     </UiField>
 
-    <UiField :label="t('settings.fields.proxyUrl')" :hint="t('settings.proxy.urlHint')">
+    <UiField
+      :label="t('settings.fields.proxyUrl')"
+      :required="proxy.enabled"
+      :optional="!proxy.enabled"
+      :description="t('settings.fieldDescriptions.proxyUrl', {
+        requirement: proxy.enabled
+          ? t('settings.fieldDescriptions.common.enabledRequired')
+          : t('settings.fieldDescriptions.common.disabledOptional'),
+      })"
+    >
       <UiInput v-model="proxy.url" :placeholder="t('settings.placeholders.proxyUrl')" />
     </UiField>
 
-    <UiField :label="t('settings.fields.noProxy')" :hint="t('settings.proxy.noProxyHint')">
+    <UiField
+      :label="t('settings.fields.noProxy')"
+      optional
+      :description="t('settings.fieldDescriptions.noProxy')"
+    >
       <UiTextarea
         v-model="proxy.no_proxy_text"
         :rows="5"

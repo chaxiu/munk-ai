@@ -21,7 +21,7 @@ const {
   form,
   actionError,
   actionMessage,
-  payloadError,
+  formErrors,
   isSaving,
   isDeleting,
   selectedCardId,
@@ -40,6 +40,7 @@ const {
   handleSelectCard,
   handleResetEditor,
   handleCardTypeChange,
+  handleEditorModeChange,
   handleSaveCard,
   handleDeleteCard,
 } = useAppKnowledgePage()
@@ -96,7 +97,7 @@ const {
           :is-deleting="isDeleting"
           :action-error="actionError"
           :action-message="actionMessage"
-          :payload-error="payloadError"
+          :form-errors="formErrors"
           :card-type-options="cardTypeOptions"
           :source-kind-options="sourceKindOptions"
           :status-options="statusOptions"
@@ -105,6 +106,7 @@ const {
           @delete="handleDeleteCard"
           @new-card="handleStartCreate"
           @card-type-change="handleCardTypeChange"
+          @editor-mode-change="handleEditorModeChange"
         />
       </section>
     </template>

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol, cast
 
-from munk.config import ResolvedConfig
+from munk.artifacts import ARTIFACT_ID_ARTIFACT_MANIFEST, ARTIFACT_ID_RESULT
+from munk.config import ResolvedConfig, RuntimeOverridePatch, resolve_runtime_config
 from munk.execution.models import (
     CaseExecutionRequest,
     CaseExecutionResult,
@@ -14,21 +15,14 @@ from munk.execution.models import (
     PlanCaseExecutionItem,
     PlanExecutionRequest,
     PlanExecutionResult,
+    RuntimeOverrideValue,
 )
 from munk.planning.models import RequirementPlan
 from munk.planning.storage import CoreCaseRegistry, PlanStore
 from munk.reporting.service import PlanReportService
+from munk.running import normalize_runtime_overrides
 from munk.runtime import build_case_request
-from munk.runtime_defaults import (
-    DEFAULT_ICON_CONF,
-    DEFAULT_INTERVAL,
-    DEFAULT_MAX_SECONDS,
-    DEFAULT_MAX_SIDE,
-    DEFAULT_MAX_STEPS,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_VL_MAX_SIDE,
-)
+from munk.services.case_validation import validate_case_definition
 from munk.services.artifact_manifest_models import ReproductionTargetKind
 from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.errors import CaseNotFoundError, PlanNotFoundError
@@ -77,6 +71,7 @@ class PlanExecutionService:
         operation_tracker: SupportsPlanOperationTracker | None = None,
     ) -> None:
         self._resolved_config = resolved_config
+        self._runtime_defaults = resolve_runtime_config(resolved_config.config)
         self._plan_store = plan_store or PlanStore()
         self._core_case_registry = core_case_registry or CoreCaseRegistry(self._plan_store.root_dir)
         self._run_service_factory = run_service_factory or (lambda: RunService(resolved_config=self._resolved_config))
@@ -144,7 +139,7 @@ class PlanExecutionService:
                 len(plan.cases),
             )
             result = outcome.result
-            if "artifact_manifest" not in result.artifacts:
+            if ARTIFACT_ID_ARTIFACT_MANIFEST not in result.artifacts:
                 raise RuntimeError(
                     f"case run did not produce artifact_manifest: case_id={case.case_id} run_dir={result.run_dir}"
                 )
@@ -162,9 +157,9 @@ class PlanExecutionService:
             self._update_operation_artifacts(
                 {
                     f"case_{case.case_id}_run_dir": str(result.run_dir),
-                    f"case_{case.case_id}_result": result.artifacts.get("result", ""),
+                    f"case_{case.case_id}_result": result.artifacts.get(ARTIFACT_ID_RESULT, ""),
                     f"case_{case.case_id}_artifact_manifest": result.artifacts.get(
-                        "artifact_manifest", ""
+                        ARTIFACT_ID_ARTIFACT_MANIFEST, ""
                     ),
                     f"case_{case.case_id}_operation_id": outcome.operation_id or "",
                 }
@@ -219,22 +214,35 @@ class PlanExecutionService:
         request: PlanExecutionRequest,
         case: TestCase,
     ):
+        validated_case = validate_case_definition(
+            case,
+            context=f"plan execution for plan '{request.plan_id}'",
+        )
+        defaults = self._runtime_defaults
+        normalized_overrides = normalize_runtime_overrides(request.runtime_overrides)
+        runtime_patch = replace(
+            defaults.to_patch(),
+            **RuntimeOverridePatch.from_mapping(normalized_overrides).to_override_dict(),
+        )
+        runtime_patch = replace(
+            runtime_patch,
+            max_steps=self._resolve_budget_int(validated_case, normalized_overrides, "max_steps", defaults.max_steps),
+            max_seconds=self._resolve_budget_float(
+                validated_case,
+                normalized_overrides,
+                "max_seconds",
+                defaults.max_seconds,
+            ),
+        )
         return build_case_request(
             plan_id=request.plan_id,
             app_id=request.app_id,
-            case=case,
+            case=validated_case,
             app_target=request.app_target,
             device_ref=request.device_ref,
             artifact_path=request.artifact_path,
             assets_root=request.assets_root,
-            max_steps=self._resolve_budget_int(case, request, "max_steps", DEFAULT_MAX_STEPS),
-            max_seconds=self._resolve_budget_float(case, request, "max_seconds", DEFAULT_MAX_SECONDS),
-            interval=self._require_float_override(request, "interval", DEFAULT_INTERVAL),
-            max_side=self._require_int_override(request, "max_side", DEFAULT_MAX_SIDE),
-            icon_conf=self._require_float_override(request, "icon_conf", DEFAULT_ICON_CONF),
-            max_tokens=self._require_int_override(request, "max_tokens", DEFAULT_MAX_TOKENS),
-            temperature=self._require_float_override(request, "temperature", DEFAULT_TEMPERATURE),
-            vl_max_side=self._require_int_override(request, "vl_max_side", DEFAULT_VL_MAX_SIDE),
+            runtime_patch=runtime_patch,
         )
 
     def _load_plan(self, request: PlanExecutionRequest) -> RequirementPlan:
@@ -344,25 +352,14 @@ class PlanExecutionService:
             json.dump(result.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
 
     @staticmethod
-    def _require_int_override(
-        request: PlanExecutionRequest,
-        key: str,
-        default: int,
-    ) -> int:
-        value = request.runtime_overrides.get(key, default)
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError(f"runtime override '{key}' must be an integer")
-        return value
-
-    @staticmethod
     def _resolve_budget_int(
         case: TestCase,
-        request: PlanExecutionRequest,
+        runtime_overrides: dict[str, RuntimeOverrideValue],
         key: str,
         default: int,
     ) -> int:
-        if key in request.runtime_overrides:
-            return PlanExecutionService._require_int_override(request, key, default)
+        if key in runtime_overrides:
+            return cast(int, runtime_overrides[key])
         budget = case.budget
         if budget is None:
             return default
@@ -372,28 +369,17 @@ class PlanExecutionService:
     @staticmethod
     def _resolve_budget_float(
         case: TestCase,
-        request: PlanExecutionRequest,
+        runtime_overrides: dict[str, RuntimeOverrideValue],
         key: str,
         default: float,
     ) -> float:
-        if key in request.runtime_overrides:
-            return PlanExecutionService._require_float_override(request, key, default)
+        if key in runtime_overrides:
+            return cast(float, runtime_overrides[key])
         budget = case.budget
         if budget is None:
             return default
         value = getattr(budget, key)
         return default if value is None else float(value)
-
-    @staticmethod
-    def _require_float_override(
-        request: PlanExecutionRequest,
-        key: str,
-        default: float,
-    ) -> float:
-        value = request.runtime_overrides.get(key, default)
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            raise ValueError(f"runtime override '{key}' must be a number")
-        return float(value)
 
     def _should_cancel(self) -> bool:
         tracker = self._operation_tracker

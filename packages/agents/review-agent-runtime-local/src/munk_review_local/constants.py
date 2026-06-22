@@ -46,13 +46,16 @@ def default_review_runtime_data_root() -> Path:
     configured = os.environ.get(_REVIEW_RUNTIME_DATA_ROOT_ENV)
     if configured:
         return Path(configured).expanduser()
+    runtime_data_root = os.environ.get("MUNK_RUNTIME_DATA_ROOT")
+    if runtime_data_root:
+        return Path(runtime_data_root).expanduser() / "review-runtime-local"
     munk_home = os.environ.get(_MUNK_HOME_ENV)
     if munk_home:
         return Path(munk_home).expanduser() / "cache" / "review-runtime-local"
     runtime_root = os.environ.get(_RUNTIME_ROOT_ENV)
     if runtime_root:
-        return Path(runtime_root).expanduser() / ".review-runtime-local"
-    return default_runtime_root() / ".review-runtime-local"
+        return Path(runtime_root).expanduser() / "data" / "review-runtime-local"
+    return default_runtime_root() / "data" / "review-runtime-local"
 
 
 def default_review_build_root(*, source_root: Path | None = None, build_root: Path | None = None) -> Path:
@@ -64,7 +67,7 @@ def default_review_build_root(*, source_root: Path | None = None, build_root: Pa
 
 
 def resolve_runtime_review_build_root() -> Path:
-    return default_review_source_root() / DEFAULT_REVIEW_KNOWLEDGE_BUILD_DIRNAME
+    return default_review_runtime_data_root()
 
 
 DEFAULT_REVIEW_MODEL_DIR = default_review_model_dir()

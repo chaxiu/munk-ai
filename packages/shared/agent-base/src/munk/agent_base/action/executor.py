@@ -18,6 +18,9 @@ DEFAULT_SCROLL_DURATION_SEC = 0.5
 MAX_WAIT_DURATION_SEC = 10.0
 GESTURE_HORIZONTAL_EDGE_MARGIN_RATIO = 0.1
 GESTURE_VERTICAL_EDGE_MARGIN_RATIO = 0.15
+DEFAULT_PULL_TO_REFRESH_START_X_RATIO = 0.5
+DEFAULT_PULL_TO_REFRESH_START_Y_RATIO = 0.25
+DEFAULT_PULL_TO_REFRESH_DISTANCE_RATIO = 0.5
 
 
 class ActionExecutionError(RuntimeError):
@@ -94,6 +97,10 @@ class ActionExecutor:
             return self._normalize_scroll(action)
         if action.type == ActionType.SWIPE:
             return self._normalize_swipe(action)
+        if action.type == ActionType.DRAG:
+            return self._normalize_drag(action)
+        if action.type == ActionType.PULL_TO_REFRESH:
+            return self._normalize_pull_to_refresh(action)
         if action.type == ActionType.INPUT:
             return self._normalize_input(action)
         if action.type == ActionType.WAIT:
@@ -132,18 +139,30 @@ class ActionExecutor:
         return Action.long_press_point((x, y), duration=duration, summary=action.summary)
 
     def _normalize_scroll(self, action: Action) -> Action:
-        if action.direction is None or action.distance_px is None:
-            raise ActionExecutionError("scroll action requires direction and distance_px")
+        if (
+            action.direction is None
+            or action.start_x_ratio is None
+            or action.start_y_ratio is None
+            or action.distance_ratio is None
+        ):
+            raise ActionExecutionError(
+                "scroll action requires direction, start_x_ratio, start_y_ratio, and distance_ratio"
+            )
         width, height = self.device.window_size()
         start, end, distance_px = self._resolve_scroll_points(
             action.direction,
-            action.distance_px,
+            action.start_x_ratio,
+            action.start_y_ratio,
+            action.distance_ratio,
             width,
             height,
         )
         return Action(
             type=ActionType.SCROLL,
             direction=action.direction,
+            start_x_ratio=action.start_x_ratio,
+            start_y_ratio=action.start_y_ratio,
+            distance_ratio=action.distance_ratio,
             distance_px=distance_px,
             start=start,
             end=end,
@@ -152,18 +171,86 @@ class ActionExecutor:
         )
 
     def _normalize_swipe(self, action: Action) -> Action:
-        if action.direction is None or action.distance_px is None:
-            raise ActionExecutionError("swipe action requires direction and distance_px")
+        if (
+            action.direction is None
+            or action.start_x_ratio is None
+            or action.start_y_ratio is None
+            or action.distance_ratio is None
+        ):
+            raise ActionExecutionError(
+                "swipe action requires direction, start_x_ratio, start_y_ratio, and distance_ratio"
+            )
         width, height = self.device.window_size()
         start, end, distance_px = self._resolve_swipe_points(
             action.direction,
-            action.distance_px,
+            action.start_x_ratio,
+            action.start_y_ratio,
+            action.distance_ratio,
             width,
             height,
         )
         return Action(
             type=ActionType.SWIPE,
             direction=action.direction,
+            start_x_ratio=action.start_x_ratio,
+            start_y_ratio=action.start_y_ratio,
+            distance_ratio=action.distance_ratio,
+            distance_px=distance_px,
+            start=start,
+            end=end,
+            duration=DEFAULT_SCROLL_DURATION_SEC,
+            summary=action.summary,
+        )
+
+    def _normalize_drag(self, action: Action) -> Action:
+        if action.start is None or action.end is None:
+            raise ActionExecutionError("drag action requires start and end")
+        duration = action.duration if action.duration is not None else DEFAULT_SCROLL_DURATION_SEC
+        if not math.isfinite(duration):
+            raise ActionExecutionError("drag duration must be finite")
+        if duration < 0:
+            raise ActionExecutionError("drag duration must be non-negative")
+        width, height = self.device.window_size()
+        start = self._clamp_point(cast(tuple[int, int], action.start), width, height)
+        end = self._clamp_point(cast(tuple[int, int], action.end), width, height)
+        return Action.drag(
+            start=start,
+            end=end,
+            duration=duration,
+            summary=action.summary,
+        )
+
+    def _normalize_pull_to_refresh(self, action: Action) -> Action:
+        start_x_ratio = (
+            action.start_x_ratio
+            if action.start_x_ratio is not None
+            else DEFAULT_PULL_TO_REFRESH_START_X_RATIO
+        )
+        start_y_ratio = (
+            action.start_y_ratio
+            if action.start_y_ratio is not None
+            else DEFAULT_PULL_TO_REFRESH_START_Y_RATIO
+        )
+        distance_ratio = (
+            action.distance_ratio
+            if action.distance_ratio is not None
+            else DEFAULT_PULL_TO_REFRESH_DISTANCE_RATIO
+        )
+        width, height = self.device.window_size()
+        start, end, distance_px = self._resolve_swipe_points(
+            "down",
+            start_x_ratio,
+            start_y_ratio,
+            distance_ratio,
+            width,
+            height,
+        )
+        return Action(
+            type=ActionType.PULL_TO_REFRESH,
+            direction="down",
+            start_x_ratio=start_x_ratio,
+            start_y_ratio=start_y_ratio,
+            distance_ratio=distance_ratio,
             distance_px=distance_px,
             start=start,
             end=end,
@@ -195,13 +282,17 @@ class ActionExecutor:
     def _resolve_scroll_points(
         self,
         direction: str,
-        distance_px: int,
+        start_x_ratio: float,
+        start_y_ratio: float,
+        distance_ratio: float,
         width: int,
         height: int,
     ) -> tuple[tuple[int, int], tuple[int, int], int]:
         return self._resolve_gesture_points(
             direction,
-            distance_px,
+            start_x_ratio,
+            start_y_ratio,
+            distance_ratio,
             width,
             height,
             invert_vertical=True,
@@ -211,13 +302,17 @@ class ActionExecutor:
     def _resolve_swipe_points(
         self,
         direction: str,
-        distance_px: int,
+        start_x_ratio: float,
+        start_y_ratio: float,
+        distance_ratio: float,
         width: int,
         height: int,
     ) -> tuple[tuple[int, int], tuple[int, int], int]:
         return self._resolve_gesture_points(
             direction,
-            distance_px,
+            start_x_ratio,
+            start_y_ratio,
+            distance_ratio,
             width,
             height,
             invert_vertical=False,
@@ -227,61 +322,67 @@ class ActionExecutor:
     def _resolve_gesture_points(
         self,
         direction: str,
-        distance_px: int,
+        start_x_ratio: float,
+        start_y_ratio: float,
+        distance_ratio: float,
         width: int,
         height: int,
         *,
         invert_vertical: bool,
         invert_horizontal: bool,
     ) -> tuple[tuple[int, int], tuple[int, int], int]:
-        if not math.isfinite(float(distance_px)):
-            raise ActionExecutionError("gesture distance_px must be finite")
-        if distance_px <= 0:
-            raise ActionExecutionError("gesture distance_px must be positive")
         if width <= 0 or height <= 0:
             raise ActionExecutionError("gesture action requires positive window size")
+        if not math.isfinite(start_x_ratio) or not math.isfinite(start_y_ratio):
+            raise ActionExecutionError("gesture start_x_ratio and start_y_ratio must be finite")
+        if not 0.0 <= start_x_ratio <= 1.0 or not 0.0 <= start_y_ratio <= 1.0:
+            raise ActionExecutionError("gesture start_x_ratio and start_y_ratio must be between 0.0 and 1.0")
+        if not math.isfinite(distance_ratio):
+            raise ActionExecutionError("gesture distance_ratio must be finite")
+        if distance_ratio <= 0.0 or distance_ratio > 1.0:
+            raise ActionExecutionError("gesture distance_ratio must be between 0.0 and 1.0")
 
         min_x = int(round(width * GESTURE_HORIZONTAL_EDGE_MARGIN_RATIO))
         max_x = int(round(width * (1.0 - GESTURE_HORIZONTAL_EDGE_MARGIN_RATIO)))
         min_y = int(round(height * GESTURE_VERTICAL_EDGE_MARGIN_RATIO))
         max_y = int(round(height * (1.0 - GESTURE_VERTICAL_EDGE_MARGIN_RATIO)))
+        usable_width = max(max_x - min_x, 1)
+        usable_height = max(max_y - min_y, 1)
+        start_x = int(round(min_x + (usable_width * start_x_ratio)))
+        start_y = int(round(min_y + (usable_height * start_y_ratio)))
         resolved_direction = direction.lower()
         if resolved_direction == "down":
+            distance_px = max(1, int(round(distance_ratio * usable_height)))
             if invert_vertical:
-                start = (int(round(width * 0.5)), max_y)
-                end_limit = min(start[1], min_y)
-                end = (start[0], max(start[1] - distance_px, end_limit))
+                start = (start_x, start_y)
+                end = (start[0], max(start[1] - distance_px, min_y))
             else:
-                start = (int(round(width * 0.5)), min_y)
-                end_limit = max(start[1], max_y)
-                end = (start[0], min(start[1] + distance_px, end_limit))
+                start = (start_x, start_y)
+                end = (start[0], min(start[1] + distance_px, max_y))
         elif resolved_direction == "up":
+            distance_px = max(1, int(round(distance_ratio * usable_height)))
             if invert_vertical:
-                start = (int(round(width * 0.5)), min_y)
-                end_limit = max(start[1], max_y)
-                end = (start[0], min(start[1] + distance_px, end_limit))
+                start = (start_x, start_y)
+                end = (start[0], min(start[1] + distance_px, max_y))
             else:
-                start = (int(round(width * 0.5)), max_y)
-                end_limit = min(start[1], min_y)
-                end = (start[0], max(start[1] - distance_px, end_limit))
+                start = (start_x, start_y)
+                end = (start[0], max(start[1] - distance_px, min_y))
         elif resolved_direction == "right":
+            distance_px = max(1, int(round(distance_ratio * usable_width)))
             if invert_horizontal:
-                start = (max_x, int(round(height * 0.5)))
-                end_limit = min(start[0], min_x)
-                end = (max(start[0] - distance_px, end_limit), start[1])
+                start = (start_x, start_y)
+                end = (max(start[0] - distance_px, min_x), start[1])
             else:
-                start = (min_x, int(round(height * 0.5)))
-                end_limit = max(start[0], max_x)
-                end = (min(start[0] + distance_px, end_limit), start[1])
+                start = (start_x, start_y)
+                end = (min(start[0] + distance_px, max_x), start[1])
         elif resolved_direction == "left":
+            distance_px = max(1, int(round(distance_ratio * usable_width)))
             if invert_horizontal:
-                start = (min_x, int(round(height * 0.5)))
-                end_limit = max(start[0], max_x)
-                end = (min(start[0] + distance_px, end_limit), start[1])
+                start = (start_x, start_y)
+                end = (min(start[0] + distance_px, max_x), start[1])
             else:
-                start = (max_x, int(round(height * 0.5)))
-                end_limit = min(start[0], min_x)
-                end = (max(start[0] - distance_px, end_limit), start[1])
+                start = (start_x, start_y)
+                end = (max(start[0] - distance_px, min_x), start[1])
         else:
             raise ActionExecutionError("gesture direction must be one of: up, down, left, right")
 
@@ -310,13 +411,16 @@ class ActionExecutor:
             else:
                 self._run_device_call(self._long_press, action, point_x, point_y, action.duration)
             return
-        if action.type in {ActionType.SCROLL, ActionType.SWIPE}:
+        if action.type in {ActionType.SCROLL, ActionType.SWIPE, ActionType.PULL_TO_REFRESH, ActionType.DRAG}:
             if action.start is None or action.end is None:
                 raise ActionExecutionError(f"{action.type.value} action requires start and end")
             start = cast(tuple[int, int], action.start)
             end = cast(tuple[int, int], action.end)
             duration = action.duration
-            self._run_device_call(self._scroll, action, start, end, duration)
+            if action.type == ActionType.DRAG:
+                self._run_device_call(self._drag, action, start, end, duration)
+            else:
+                self._run_device_call(self._scroll, action, start, end, duration)
             return
         if action.type == ActionType.INPUT:
             if not action.text:
@@ -376,6 +480,14 @@ class ActionExecutor:
         duration: float | None,
     ) -> None:
         self.device.scroll(start, end, duration)
+
+    def _drag(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None,
+    ) -> None:
+        self.device.drag(start, end, duration)
 
     def _input_text(self, text: str) -> None:
         self.device.input_text(text)

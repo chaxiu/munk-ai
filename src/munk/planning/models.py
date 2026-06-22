@@ -3,8 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from munk.execution.verify_change_validation import (
+    validate_acceptance_criteria,
+    validate_change_planning_intake,
+)
 from munk.testing import TestCase
 
 
@@ -37,15 +41,37 @@ class RequirementInput(BaseModel):
 
 class ChangePlanInput(BaseModel):
     app_id: str
+    acceptance_criteria: list[str] = Field(default_factory=empty_strings)
     change_summary: str | None = None
     changed_files: list[str] = Field(default_factory=empty_strings)
     diff_text: str | None = None
     review_orchestration_path: Path | None = None
     requirement_doc_path: Path | None = None
     technical_doc_path: Path | None = None
-    previous_report_path: Path | None = None
-    previous_result_paths: list[Path] = Field(default_factory=empty_paths)
     assets_root: Path | None = None
+
+    @field_validator("acceptance_criteria", mode="before")
+    @classmethod
+    def normalize_acceptance_criteria(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise TypeError("acceptance_criteria must be a list of strings")
+        return validate_acceptance_criteria([item for item in value if isinstance(item, str)])
+
+    @model_validator(mode="after")
+    def validate_change_plan_input(self) -> "ChangePlanInput":
+        validate_change_planning_intake(
+            enable_plan_agent=True,
+            provided_case_count=0,
+            acceptance_criteria=self.acceptance_criteria,
+            change_summary=self.change_summary,
+            changed_files=list(self.changed_files),
+            diff_text=self.diff_text,
+            requirement_doc_path=self.requirement_doc_path,
+        )
+        return self
+
 
 class RequirementPlan(BaseModel):
     plan_id: str
@@ -53,6 +79,7 @@ class RequirementPlan(BaseModel):
     app_id: str
     source: str
     version: str
+    acceptance_criteria: list[str] = Field(default_factory=empty_strings)
     cases: list[TestCase] = Field(default_factory=empty_test_cases)
     source_metadata: dict[str, str] = Field(default_factory=empty_string_map)
 

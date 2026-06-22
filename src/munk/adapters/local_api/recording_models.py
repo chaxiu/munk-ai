@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from munk.app import AppTarget
 from munk.recording import (
     ForwardingAck,
-    ForwardingKind,
     ForwardingStep,
     ObservedTapCommand,
     RecordingInteractionKind,
@@ -43,26 +42,18 @@ class ObserveTapRequest(BaseModel):
         )
 
 
-class ForwardingStepRequest(BaseModel):
-    seq: int
-    step_kind: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-    dispatched_at: str | None = None
+class ForwardingStepRequest(ForwardingStep):
+    pass
 
     def to_model(self) -> ForwardingStep:
-        return ForwardingStep.model_validate_json(self.model_dump_json(exclude_none=True))
+        return ForwardingStep.model_validate(self.model_dump(exclude_none=True))
 
 
-class ForwardingAckRequest(BaseModel):
-    kind: ForwardingKind
-    dispatched_at: str | None = None
-    ack_at: str | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
+class ForwardingAckRequest(ForwardingAck):
     steps: list[ForwardingStepRequest] = Field(default_factory=list)
-    device_result: dict[str, Any] = Field(default_factory=dict)
 
     def to_model(self) -> ForwardingAck:
-        return ForwardingAck.model_validate_json(self.model_dump_json(exclude_none=True))
+        return ForwardingAck.model_validate(self.model_dump(exclude_none=True))
 
 
 class RecordInteractionRequest(BaseModel):

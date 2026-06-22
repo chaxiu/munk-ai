@@ -10,7 +10,7 @@ from munk.running.orchestration_models import (
     RunnerOrchestrationRequest,
     RunnerOrchestrationResult,
 )
-from munk.services.events import RunEvent
+from munk.services.events import RunEvent, serialize_run_event_payload
 from munk.testing import TestCase
 
 if TYPE_CHECKING:
@@ -39,7 +39,10 @@ class RunnerOrchestrationService:
             assets_root=request.assets_root,
             runtime_overrides=dict(request.runtime_overrides),
         )
-        stage = self._run_service.execute_case_runtime_stage(case_request)
+        stage = self._run_service.execute_case_runtime_stage(
+            case_request,
+            attempt_index=request.execution_context.attempt_index,
+        )
         result = RunnerOrchestrationResult(
             status=stage.execution.status,
             stop_reason=stage.execution.stop_reason,
@@ -85,5 +88,5 @@ class RunnerOrchestrationService:
             timestamp=event.timestamp,
             step="runner",
             message=event.message,
-            payload=dict(event.data),
+            payload=serialize_run_event_payload(event),
         )

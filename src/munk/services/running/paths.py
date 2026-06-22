@@ -49,6 +49,8 @@ def prepare_run_paths() -> RunPaths:
     runner_history_path.write_text("[]\n", encoding="utf-8")
     runner_memory_path = run_dir / "runner_memory.json"
     runner_memory_path.write_text('{\n  "entries": []\n}\n', encoding="utf-8")
+    runner_issues_path = run_dir / "runner_issues.json"
+    runner_issues_path.write_text('{\n  "issues": []\n}\n', encoding="utf-8")
     llm_transcript_path = prepare_llm_transcript_path(run_dir)
     context_prep_path = run_dir / "runner_context_prep.json"
     return RunPaths(
@@ -66,6 +68,7 @@ def prepare_run_paths() -> RunPaths:
         decision_trace_path=decision_trace_path,
         runner_history_path=runner_history_path,
         runner_memory_path=runner_memory_path,
+        runner_issues_path=runner_issues_path,
         llm_transcript_path=llm_transcript_path,
         context_prep_path=context_prep_path,
     )

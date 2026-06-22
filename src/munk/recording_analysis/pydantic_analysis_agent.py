@@ -7,7 +7,7 @@ import cv2
 from pydantic_ai import Agent
 from pydantic_ai.messages import BinaryImage, TextContent, UserContent
 
-from munk.agent_base.image_payload import encode_png_for_max_side
+from munk.agent_base.image_payload import encode_image_for_max_side
 from munk.agent_base.output_strategy import append_system_prompt_suffix, build_structured_output_spec
 from munk.config.schema import OutputStrategy
 from munk.perception.image import BgrImage
@@ -52,7 +52,7 @@ _FINALIZE_SYSTEM_PROMPT = "\n".join(
         "Return one structured case draft.",
         "Use read_* tools sparingly. If a tool returns a budget-exhausted message, stop reading and return the structured case draft immediately.",
         "Keep title and intent concise and human-readable.",
-        "expected must contain only natural-language, user-observable weak assertions.",
+        "expected is a required field; it must contain at least one natural-language, user-observable weak assertion.",
         "runner_goal must describe a single runnable execution objective.",
         "Use step intents to infer the case-level goal.",
         "Use step state changes to strengthen expected outcomes.",
@@ -73,8 +73,16 @@ class PydanticAiRecordingAnalysisAgent:
         max_tokens: int = 2048,
         temperature: float = 0.0,
         vl_max_side: int = DEFAULT_VL_MAX_SIDE,
+        vl_image_format: str = "webp",
+        vl_fallback_image_format: str = "jpeg",
+        vl_webp_quality: int = 80,
+        vl_jpeg_quality: int = 82,
     ) -> None:
         self._vl_max_side = vl_max_side
+        self._vl_image_format = vl_image_format
+        self._vl_fallback_image_format = vl_fallback_image_format
+        self._vl_webp_quality = vl_webp_quality
+        self._vl_jpeg_quality = vl_jpeg_quality
         settings = cast(Any, {"temperature": temperature, "max_tokens": max_tokens})
         step_output_spec = build_structured_output_spec(
             AppendProcedureStepSubmission,
@@ -289,6 +297,8 @@ class PydanticAiRecordingAnalysisAgent:
             *step_lines,
             "",
             "[EXPECTATIONS]",
+            "- expected is a required field; the tool-call schema will reject submissions without it.",
+            "- expected must include at least one non-empty, user-observable, natural-language item.",
             "- expected should stay natural-language and user-observable.",
             "- do not include page_id or page navigation metadata.",
             "- use step intents to infer the case-level purpose.",
@@ -383,10 +393,17 @@ class PydanticAiRecordingAnalysisAgent:
         image = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if image is None:
             return BinaryImage(path.read_bytes(), media_type="image/png", identifier=identifier)
-        png_bytes = encode_png_for_max_side(cast(BgrImage, image), getattr(self, "_vl_max_side", DEFAULT_VL_MAX_SIDE))
-        if not png_bytes:
+        payload = encode_image_for_max_side(
+            cast(BgrImage, image),
+            getattr(self, "_vl_max_side", DEFAULT_VL_MAX_SIDE),
+            preferred_format=getattr(self, "_vl_image_format", "webp"),
+            fallback_format=getattr(self, "_vl_fallback_image_format", "jpeg"),
+            webp_quality=getattr(self, "_vl_webp_quality", 80),
+            jpeg_quality=getattr(self, "_vl_jpeg_quality", 82),
+        )
+        if payload is None:
             return None
-        return BinaryImage(png_bytes, media_type="image/png", identifier=identifier)
+        return BinaryImage(payload.data, media_type=payload.media_type, identifier=identifier)
 
 
 def _build_output_excerpt(output: AppendProcedureStepSubmission | FinalizeCaseSubmission) -> str:

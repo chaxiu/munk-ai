@@ -20,6 +20,11 @@ Options:
   --bin-dir <path>          Symlink directory for munk launcher (default: ~/.local/bin)
   --base-url <url>          Download manifest base URL (default: https://downloads.munk.sh)
   -h, --help                Show this help text
+
+Examples:
+  install.sh
+  install.sh --channel beta
+  install.sh --channel stable
 EOF
 }
 
@@ -300,6 +305,17 @@ parse_args() {
   done
 }
 
+validate_channel() {
+  case "$CHANNEL" in
+    stable|beta)
+      ;;
+    *)
+      echo "unsupported release channel: ${CHANNEL} (expected stable or beta)" >&2
+      exit 1
+      ;;
+  esac
+}
+
 detect_target() {
   local os_name arch_name
   os_name="$(uname -s)"
@@ -348,6 +364,8 @@ with open(manifest_path, "r", encoding="utf-8") as handle:
 
 if expression == "version":
     value = payload.get("version", "")
+elif expression == "channel":
+    value = payload.get("channel", "")
 else:
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, dict):
@@ -372,6 +390,31 @@ else:
 if not isinstance(value, str) or not value:
     raise SystemExit(4)
 print(value)
+PY
+}
+
+write_install_state() {
+  local state_path="$1"
+  local channel="$2"
+  local version="$3"
+  local variant="$4"
+  local manifest_url="$5"
+  python3 - "$state_path" "$channel" "$version" "$variant" "$manifest_url" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+state_path = sys.argv[1]
+payload = {
+    "channel": sys.argv[2],
+    "version": sys.argv[3],
+    "variant": sys.argv[4],
+    "manifest_url": sys.argv[5],
+    "installed_at": datetime.now(tz=timezone.utc).isoformat(),
+}
+with open(state_path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2)
+    handle.write("\n")
 PY
 }
 
@@ -401,6 +444,7 @@ verify_checksum() {
 
 main() {
   parse_args "$@"
+  validate_channel
   require_command curl
   require_command python3
   require_command shasum
@@ -420,6 +464,10 @@ main() {
   if ! RESOLVED_VERSION="$(manifest_value version "$TARGET_KEY" "$VARIANT" 2>/dev/null)"; then
     echo "installer could not read version from manifest" >&2
     exit 1
+  fi
+  RESOLVED_CHANNEL="$(manifest_value channel "$TARGET_KEY" "$VARIANT" 2>/dev/null || true)"
+  if [[ -z "$RESOLVED_CHANNEL" ]]; then
+    RESOLVED_CHANNEL="$CHANNEL"
   fi
   if ! ARCHIVE_URL="$(manifest_value archive_url "$TARGET_KEY" "$VARIANT" 2>/dev/null)"; then
     echo "no artifact found for target=${TARGET_KEY} variant=${VARIANT}" >&2
@@ -473,8 +521,9 @@ main() {
   rm -rf "$BACKUP_VERSION_DIR"
   ln -sfn "$VERSION_DIR" "${INSTALL_DIR}/current"
   ln -sfn "${INSTALL_DIR}/current/bin/munk" "${BIN_DIR}/munk"
+  write_install_state "${INSTALL_DIR}/install-state.json" "$RESOLVED_CHANNEL" "$RESOLVED_VERSION" "$VARIANT" "$MANIFEST_URL"
 
-  echo "installed munk ${RESOLVED_VERSION} (${VARIANT})"
+  echo "installed munk ${RESOLVED_VERSION} (${VARIANT}, ${RESOLVED_CHANNEL})"
   echo "runtime root: ${VERSION_DIR}"
   echo "launcher: ${BIN_DIR}/munk"
   VERIFY_COMMAND_PREFIX="${BIN_DIR}/munk"

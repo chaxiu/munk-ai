@@ -77,6 +77,17 @@ class PlanStore:
         self._resolve_index_store().upsert_plan(plan, plan_path=plan_path)
         return plan_path
 
+    def replace(self, plan: RequirementPlan) -> Path:
+        app_dir = self.plans_dir / plan.app_id
+        app_dir.mkdir(parents=True, exist_ok=True)
+        plan_path = app_dir / f"{plan.plan_id}.json"
+        if not plan_path.exists():
+            raise FileNotFoundError(f"RequirementPlan not found: {plan_path}")
+        with plan_path.open("w", encoding="utf-8") as f:
+            json.dump(plan.model_dump(), f, ensure_ascii=False, indent=2)
+        self._resolve_index_store().upsert_plan(plan, plan_path=plan_path)
+        return plan_path
+
     def load(self, app_id: str, plan_id: str) -> RequirementPlan:
         plan_path = self.plans_dir / app_id / f"{plan_id}.json"
         if not plan_path.exists():

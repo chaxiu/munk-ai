@@ -9,10 +9,10 @@ from .models import InteractiveActionRequest, InteractiveObservation, Interactiv
 TARGET_REQUIRED_ACTION_TYPES = {
     ActionType.CLICK,
     ActionType.LONG_PRESS,
-    ActionType.CLEAR_AND_INPUT,
 }
 TARGET_OPTIONAL_ACTION_TYPES = {
     ActionType.INPUT,
+    ActionType.EDIT_TEXT,
 }
 
 
@@ -76,13 +76,14 @@ def _resolve_action(action: Action, target: InteractiveTargetSummary) -> Action:
         return replace(action, box=target.box)
     if action.type == ActionType.LONG_PRESS:
         return replace(action, box=target.box)
-    if action.type == ActionType.CLEAR_AND_INPUT:
+    if action.type == ActionType.EDIT_TEXT:
         return replace(action, box=target.box)
     if action.type == ActionType.INPUT:
         # When an explicit target is provided, prefer targeting and resetting that field.
-        return Action.clear_and_input(
-            box=target.box,
+        return Action.edit_text(
             text=action.text or "",
+            mode="replace",
+            target_box=target.box,
             dismiss_keyboard=bool(action.dismiss_keyboard) if action.dismiss_keyboard is not None else True,
             summary=action.summary,
         )

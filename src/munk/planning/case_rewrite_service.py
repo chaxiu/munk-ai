@@ -281,5 +281,6 @@ class CaseRewriteService:
             runner_goal=draft.runner_goal,
             budget=budget,
             start_state=CaseStartState(mode=start_mode, page_id=start_page_id),
+            ai_guidance=current_case.ai_guidance,
             source_metadata=dict(current_case.source_metadata),
         )

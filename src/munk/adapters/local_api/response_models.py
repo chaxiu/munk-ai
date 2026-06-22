@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from munk.adapters.local_api.config_models import (
     GeminiSectionEditor,
+    IOSBridgeConfigEditor,
     OpenAICompatibleSectionEditor,
     OrchestrationConfigEditor,
     ProxyConfigEditor,
@@ -14,6 +15,7 @@ from munk.adapters.local_api.config_models import (
 )
 from munk.adapters.local_api.plan_models import TestCasePayload
 from munk.adapters.shared.payload_models import AttemptTokenUsageData, TokenUsageData
+from munk.execution.models import ExecutedPlanResult, GeneratedPlanResult
 from munk.recording import (
     ObservationSnapshot,
     RecordedInputEvent,
@@ -23,7 +25,7 @@ from munk.recording import (
     RecordingSession,
     TimelineEntry,
 )
-from munk.services.artifact_manifest_models import ReproductionEntry, UpstreamReviewArtifacts
+from munk.services.artifact_manifest_models import ArtifactSchemaVersions, ReproductionEntry, UpstreamReviewArtifacts
 
 PayloadT = TypeVar("PayloadT")
 
@@ -55,9 +57,8 @@ class OperationSubmissionData(BaseModel):
     plan_id: str | None = None
     plan_name: str | None = None
     phase: str | None = None
-    plan_result: dict[str, Any] | None = None
-    execution_result: dict[str, Any] | None = None
-    model_config = ConfigDict(extra="allow")
+    plan_result: GeneratedPlanResult | None = None
+    execution_result: ExecutedPlanResult | None = None
 
 
 class PlanImportData(BaseModel):
@@ -118,7 +119,7 @@ class OperationArtifactsData(BaseModel):
     repro_dir: str | None = None
     primary_artifact_ids: list[str] = Field(default_factory=list)
     artifact_manifest_version: int | None = None
-    schema_versions: dict[str, str] = Field(default_factory=dict)
+    schema_versions: ArtifactSchemaVersions = Field(default_factory=ArtifactSchemaVersions)
     diagnostics_path: str | None = None
     duration_ms: int | None = None
     failure_category: str | None = None
@@ -126,7 +127,6 @@ class OperationArtifactsData(BaseModel):
     case_runs: list[CaseRunArtifactSummaryData] = Field(default_factory=list)
     reproduction_entries: list[ReproductionEntry] = Field(default_factory=list)
     upstream_review: UpstreamReviewArtifacts | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
     primary_artifacts: list[RunArtifactItemData] = Field(default_factory=list)
     artifact_groups: list[RunArtifactGroupData] = Field(default_factory=list)
     token_usage: TokenUsageData | None = None
@@ -182,6 +182,7 @@ class SettingsConfigData(BaseModel):
     gemini: GeminiSectionEditor = Field(default_factory=GeminiSectionEditor)
     agents: SettingsAgentsEditor = Field(default_factory=SettingsAgentsEditor)
     proxy: ProxyConfigEditor = Field(default_factory=ProxyConfigEditor)
+    ios_bridge: IOSBridgeConfigEditor = Field(default_factory=IOSBridgeConfigEditor)
     runtime: RuntimeConfigEditor = Field(default_factory=RuntimeConfigEditor)
     orchestration: OrchestrationConfigEditor = Field(default_factory=OrchestrationConfigEditor)
 

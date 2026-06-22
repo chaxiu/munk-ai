@@ -67,7 +67,12 @@ class RunCaseCliRequest(BaseModel):
         return PlanExecutionRequest(
             app_id=self.app_id,
             plan_id=self.plan_id,
-            app_target=self.app_target or _build_android_app_target(app_id=self.app_id, package=self.package),
+            app_target=resolve_app_target_for_execution(
+                app_id=self.app_id,
+                assets_root=self.assets_root,
+                app_target=self.app_target,
+                package=self.package,
+            ),
             device_ref=self.device_ref,
             artifact_path=self.artifact_path,
             assets_root=self.assets_root,

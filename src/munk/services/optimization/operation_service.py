@@ -1,19 +1,32 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from munk.agent_base.llm import llm_transcript_observer_scope
 from munk.config import ResolvedConfig
 from munk.execution.models import CaseExecutionResult
-from munk.judging import JudgeResult
-from munk.optimizing import OptimizeExecutionSummary, OptimizeFieldPatch, OptimizeRequest, OptimizeTrigger
+from munk.optimizing import (
+    OptimizeExecutionSummary,
+    OptimizeFieldPatch,
+    OptimizeManagedPaths,
+    OptimizeRequest,
+    OptimizeRuntimeContext,
+    OptimizeTrigger,
+)
 from munk.planning.plan_mutation_service import PlanMutationService
 from munk.planning.storage import PlanStore
+from munk.services.operations.runtime_event_sinks import TrackerAgentRuntimeTimelineSink
+from munk.services.operations.llm_timeline import build_llm_timeline_observer
 from munk.services.operations.service import OperationCommandResult, OperationTracker
 from munk.services.optimize_runtime import resolve_optimize_runtime
+from munk.services.post_run_analysis import (
+    build_post_run_analysis_agent_input,
+    resolve_case_run_evidence,
+)
 from munk.testing import AiGuidance
 
 from .materializer import OptimizeArtifactMaterializer, OptimizeFieldDiffBundle, OptimizeFieldDiffItem
+from .operation_payloads import build_optimize_case_operation_result_payload
 from .policy import OptimizeCasePolicy
 from .request_models import OptimizeCaseOperationRequest, OptimizeCaseOperationResult
 
@@ -42,13 +55,34 @@ class OptimizeCaseOperationService:
         tracker: OperationTracker,
         request: OptimizeCaseOperationRequest,
     ) -> OptimizeCaseOperationResult:
+        tracker.append_timeline_event(
+            event_type="optimize_started",
+            message="optimize case started",
+            agent_role="optimize",
+            timeline_scope="child_operation",
+            timeline_phase="started",
+            summary="optimize case started",
+            attempt_index=request.trigger.source_attempt_index,
+            parent_operation_id=request.parent_operation_id,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+        )
         case_result = CaseExecutionResult.model_validate(
             json.loads(request.result_path.read_text(encoding="utf-8"))
         )
-        judge_result = self._load_judge_result(request.judge_result_path)
+        evidence = resolve_case_run_evidence(case_result, judge_result_path=request.judge_result_path)
         trigger = request.trigger.trigger
+        source_attempt_index = request.trigger.source_attempt_index
+        if source_attempt_index is None:
+            source_attempt_index = evidence.source_attempt_index
         plan = self._plan_store.load(request.app_id, request.plan_id)
         case = next(item for item in plan.cases if item.case_id == request.case_id)
+        agent_input = build_post_run_analysis_agent_input(
+            evidence,
+            app_id=request.app_id,
+            case_title=case.title,
+        )
         optimize_request = OptimizeRequest(
             app_id=request.app_id,
             plan_id=request.plan_id,
@@ -72,16 +106,66 @@ class OptimizeCaseOperationService:
                 optimization_confidence=trigger.optimization_confidence,
                 source=request.trigger.trigger_source,
                 signals=list(request.trigger.trigger_signals),
-                source_attempt_index=request.trigger.source_attempt_index,
+                source_attempt_index=source_attempt_index,
             ),
-            artifacts=dict(case_result.artifacts),
-            artifact_payloads=self._build_artifact_payloads(case_result=case_result, judge_result=judge_result),
+            artifacts=dict(evidence.artifacts),
+            structured_evidence=dict(agent_input.structured_evidence),
             run_dir=request.run_dir,
         )
         paths = self._materializer.paths(run_dir=request.run_dir)
         self._materializer.write_request(paths["request"], optimize_request)
+        tracker.append_timeline_event(
+            event_type="optimize_request_built",
+            message="optimize request built",
+            agent_role="optimize",
+            timeline_scope="child_operation",
+            timeline_phase="context_loaded",
+            summary="optimize request built",
+            attempt_index=source_attempt_index,
+            parent_operation_id=request.parent_operation_id,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            data={"request_path": str(paths["request"])},
+        )
         runtime = resolve_optimize_runtime(resolved_config=self._resolved_config)
-        result = runtime.optimize(optimize_request)
+        runtime_context = OptimizeRuntimeContext(
+            operation_id=tracker.operation_id,
+            managed_paths=OptimizeManagedPaths(
+                root_dir=paths["root"],
+                prompt_path=paths["prompt"],
+                tool_calls_path=paths["tool_calls"],
+                llm_transcript_path=paths["llm_transcript"],
+            ),
+            attempt_index=source_attempt_index,
+            progress=TrackerAgentRuntimeTimelineSink(tracker),
+        )
+        llm_observer = build_llm_timeline_observer(
+            tracker=tracker,
+            agent_role="optimize",
+            attempt_index=source_attempt_index,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            timeline_scope="child_operation",
+            parent_operation_id=request.parent_operation_id,
+        )
+        with llm_transcript_observer_scope(llm_observer):
+            result = runtime.optimize(optimize_request, context=runtime_context)
+        tracker.append_timeline_event(
+            event_type="optimize_runtime_completed",
+            message="optimize runtime completed",
+            agent_role="optimize",
+            timeline_scope="child_operation",
+            timeline_phase="result_ready",
+            summary=result.summary,
+            attempt_index=source_attempt_index,
+            parent_operation_id=request.parent_operation_id,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            data={"patched_field_count": len(result.patched_fields)},
+        )
         current_guidance = case.ai_guidance or AiGuidance()
         patches = self._filter_allowed_patches(
             result.patched_fields,
@@ -120,10 +204,19 @@ class OptimizeCaseOperationService:
                 request.case_id,
                 replace_fields=writeback_fields,
             )
-            tracker.append_event(
-                event_type="optimize_case_applied",
+            tracker.append_timeline_event(
+                event_type="optimize_applied",
                 message="ai_guidance fields updated",
-                data={"patched_fields": sorted(writeback_fields), "case_id": mutation.case.case_id},
+                agent_role="optimize",
+                timeline_scope="child_operation",
+                timeline_phase="applied",
+                summary="ai_guidance fields updated",
+                attempt_index=source_attempt_index,
+                parent_operation_id=request.parent_operation_id,
+                app_id=request.app_id,
+                plan_id=request.plan_id,
+                case_id=mutation.case.case_id,
+                data={"patched_fields": sorted(writeback_fields)},
             )
             applied = True
         self._materializer.write_result(paths["result"], result)
@@ -144,12 +237,62 @@ class OptimizeCaseOperationService:
             confidence=confidence,
             field_diff_count=len(field_diffs),
         )
+        if skip_reason is not None:
+            tracker.append_timeline_event(
+                event_type="optimize_skipped",
+                message="optimize case skipped",
+                agent_role="optimize",
+                timeline_scope="child_operation",
+                timeline_phase="skipped",
+                summary=f"optimize case skipped: {skip_reason}",
+                attempt_index=source_attempt_index,
+                parent_operation_id=request.parent_operation_id,
+                app_id=request.app_id,
+                plan_id=request.plan_id,
+                case_id=request.case_id,
+                data={"skip_reason": skip_reason},
+            )
         artifacts = {
             "optimization_request": str(paths["request"]),
+            "optimization_prompt": str(paths["prompt"]),
+            "optimization_tool_calls": str(paths["tool_calls"]),
+            "optimization_llm_transcript": str(paths["llm_transcript"]),
             "optimization_result": str(paths["result"]),
             "optimization_diagnostics": str(paths["diagnostics"]),
             "field_diffs": str(paths["field_diffs"]),
         }
+        tracker.append_timeline_event(
+            event_type="optimize_result_ready",
+            message="optimize result ready",
+            agent_role="optimize",
+            timeline_scope="child_operation",
+            timeline_phase="result_ready",
+            summary=result.summary,
+            attempt_index=source_attempt_index,
+            parent_operation_id=request.parent_operation_id,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            data={
+                "applied": applied,
+                "skip_reason": skip_reason,
+                "field_diff_count": len(field_diffs),
+            },
+        )
+        tracker.append_timeline_event(
+            event_type="optimize_completed",
+            message="optimize case completed",
+            agent_role="optimize",
+            timeline_scope="child_operation",
+            timeline_phase="completed",
+            summary=result.summary,
+            attempt_index=source_attempt_index,
+            parent_operation_id=request.parent_operation_id,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+            data={"applied": applied, "skip_reason": skip_reason},
+        )
         return OptimizeCaseOperationResult(
             summary=result.summary,
             patched_fields=sorted(writeback_fields) if applied else [],
@@ -171,66 +314,14 @@ class OptimizeCaseOperationService:
         request: OptimizeCaseOperationRequest,
     ) -> OperationCommandResult:
         result = self.execute(tracker=tracker, request=request)
-        data = {
-            "summary": result.summary,
-            "patched_fields": result.patched_fields,
-            "applied": result.applied,
-            "skip_reason": result.skip_reason,
-            "confidence": result.confidence,
-            "field_diffs": result.field_diffs,
-            "field_diff_artifact_path": str(result.field_diffs_path),
-            "optimization_result_path": str(result.result_path),
-            "optimization_request_path": str(result.request_path),
-            "optimization_diagnostics_path": str(result.diagnostics_path),
-        }
+        payload = build_optimize_case_operation_result_payload(result)
         return OperationCommandResult(
-            data=data,
+            data=payload.to_command_data(),
             artifacts=dict(result.artifacts),
             verification_verdict=None,
-            result_json={**data, "artifacts": result.artifacts},
+            result_json=payload.model_dump(mode="json"),
             status="succeeded",
         )
-
-    def _build_artifact_payloads(
-        self,
-        *,
-        case_result: CaseExecutionResult,
-        judge_result: JudgeResult | None,
-    ) -> dict[str, object]:
-        payloads: dict[str, object] = {}
-        if judge_result is not None:
-            payloads["judge_result"] = judge_result.model_dump(mode="json")
-        for artifact_id in ("attempts", "history", "retry_handoffs", "decision_trace"):
-            loaded = self._load_artifact_payload(case_result.artifacts.get(artifact_id))
-            if loaded is not None:
-                payloads[artifact_id] = loaded
-        return payloads
-
-    @staticmethod
-    def _load_artifact_payload(path_value: str | None) -> object | None:
-        if not path_value:
-            return None
-        path = Path(path_value)
-        if not path.exists() or not path.is_file():
-            return None
-        raw = path.read_text(encoding="utf-8").strip()
-        if not raw:
-            return None
-        if path.suffix == ".jsonl":
-            items: list[object] = []
-            for line in raw.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    items.append(json.loads(line))
-                except json.JSONDecodeError:
-                    return None
-            return items
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
 
     @staticmethod
     def _filter_allowed_patches(
@@ -245,12 +336,6 @@ class OptimizeCaseOperationService:
             if patch.field_name:
                 deduped[patch.field_name] = patch
         return list(deduped.values())
-
-    @staticmethod
-    def _load_judge_result(path: Path | None) -> JudgeResult | None:
-        if path is None or not path.exists() or not path.is_file():
-            return None
-        return JudgeResult.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
     @staticmethod
     def _guidance_field_items(guidance: AiGuidance, field_name: str) -> list[str]:

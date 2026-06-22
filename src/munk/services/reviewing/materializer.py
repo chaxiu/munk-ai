@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from munk.artifacts import (
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_DIAGNOSTICS,
+    ARTIFACT_ID_LLM_TRANSCRIPT,
+)
 from munk.config import ResolvedConfig
 from munk.reviewing.models import ReviewRequest, ReviewResult
-from munk.reviewing.orchestration_models import REVIEW_ORCHESTRATION_SCHEMA_VERSION
+from munk.reviewing.orchestration_models import REVIEW_ORCHESTRATION_SCHEMA_VERSION, ReviewOrchestrationContract
 from munk.reviewing.runtime import ReviewRuntimeContext, ReviewRuntimeOutput
+from munk.services.artifact_manifest_models import ArtifactManifest, ArtifactSchemaVersions
 from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.diagnostics_models import (
     OPERATION_DIAGNOSTICS_SCHEMA_VERSION,
@@ -30,12 +36,12 @@ class MaterializedReviewArtifacts:
             "retrieval": str(self.result.retrieval_path),
             "review_result": str(self.result.review_result_path),
             "review_orchestration": str(self.result.review_orchestration_path),
-            "artifact_manifest": str(self.result.artifact_manifest_path),
+            ARTIFACT_ID_ARTIFACT_MANIFEST: str(self.result.artifact_manifest_path),
         }
         if self.result.diagnostics_path is not None:
-            artifacts["diagnostics"] = str(self.result.diagnostics_path)
+            artifacts[ARTIFACT_ID_DIAGNOSTICS] = str(self.result.diagnostics_path)
         if self.result.llm_transcript_path is not None:
-            artifacts["llm_transcript"] = str(self.result.llm_transcript_path)
+            artifacts[ARTIFACT_ID_LLM_TRANSCRIPT] = str(self.result.llm_transcript_path)
         return artifacts
 
 
@@ -115,15 +121,15 @@ class ReviewArtifactMaterializer:
         self._diagnostics_service.write(host_paths.diagnostics_path, diagnostics)
         self._write_manifest(result=result)
         artifacts = {
-            "artifact_manifest": str(host_paths.artifact_manifest_path),
-            "diagnostics": str(host_paths.diagnostics_path),
+            ARTIFACT_ID_ARTIFACT_MANIFEST: str(host_paths.artifact_manifest_path),
+            ARTIFACT_ID_DIAGNOSTICS: str(host_paths.diagnostics_path),
         }
         if context.managed_paths.review_request_path.exists():
             artifacts["review_request"] = str(context.managed_paths.review_request_path)
         if context.managed_paths.retrieval_path.exists():
             artifacts["retrieval"] = str(context.managed_paths.retrieval_path)
         if context.managed_paths.llm_transcript_path is not None and context.managed_paths.llm_transcript_path.exists():
-            artifacts["llm_transcript"] = str(context.managed_paths.llm_transcript_path)
+            artifacts[ARTIFACT_ID_LLM_TRANSCRIPT] = str(context.managed_paths.llm_transcript_path)
         return artifacts
 
     def _build_review_result(
@@ -162,15 +168,11 @@ class ReviewArtifactMaterializer:
             operation_id=result.operation_id,
             operation_kind="review",
             verification_verdict=None,
-            metadata={},
-        ).model_copy(
-            update={
-                "schema_versions": {
-                    "review_result": result.schema_version,
-                    "review_orchestration": REVIEW_ORCHESTRATION_SCHEMA_VERSION,
-                    "operation_diagnostics": OPERATION_DIAGNOSTICS_SCHEMA_VERSION,
-                }
-            }
+            schema_versions=ArtifactSchemaVersions(
+                review_result=result.schema_version,
+                review_orchestration=REVIEW_ORCHESTRATION_SCHEMA_VERSION,
+                operation_diagnostics=OPERATION_DIAGNOSTICS_SCHEMA_VERSION,
+            ),
         )
         self._manifest_service.write_manifest(result.artifact_manifest_path, manifest)
 
@@ -201,6 +203,7 @@ class ReviewArtifactMaterializer:
                 artifact_id="review_request",
                 path=result.review_request_path,
                 required_fields=("changed_files",),
+                model_type=ReviewRequest,
             ),
             self._diagnostics_service.build_json_artifact_check(
                 artifact_id="retrieval",
@@ -212,23 +215,26 @@ class ReviewArtifactMaterializer:
                 path=result.review_result_path,
                 required_fields=("risk_summary", "findings"),
                 expected_schema_version=result.schema_version,
+                model_type=ReviewResult,
             ),
             self._diagnostics_service.build_json_artifact_check(
                 artifact_id="review_orchestration",
                 path=result.review_orchestration_path,
                 required_fields=("review_hints", "required_cases"),
                 expected_schema_version=REVIEW_ORCHESTRATION_SCHEMA_VERSION,
+                model_type=ReviewOrchestrationContract,
             ),
             self._diagnostics_service.build_json_artifact_check(
-                artifact_id="artifact_manifest",
+                artifact_id=ARTIFACT_ID_ARTIFACT_MANIFEST,
                 path=result.artifact_manifest_path,
                 required_fields=("manifest_version", "primary_artifacts"),
+                model_type=ArtifactManifest,
             ),
         ]
         if result.llm_transcript_path is not None:
             artifact_checks.append(
                 self._diagnostics_service.build_path_artifact_check(
-                    artifact_id="llm_transcript",
+                    artifact_id=ARTIFACT_ID_LLM_TRANSCRIPT,
                     path=result.llm_transcript_path,
                     required=False,
                 )
@@ -268,10 +274,10 @@ class ReviewArtifactMaterializer:
             "retrieval": str(result.retrieval_path),
             "review_result": str(result.review_result_path),
             "review_orchestration": str(result.review_orchestration_path),
-            "artifact_manifest": str(result.artifact_manifest_path),
+            ARTIFACT_ID_ARTIFACT_MANIFEST: str(result.artifact_manifest_path),
         }
         if result.diagnostics_path is not None:
-            artifacts["diagnostics"] = str(result.diagnostics_path)
+            artifacts[ARTIFACT_ID_DIAGNOSTICS] = str(result.diagnostics_path)
         if result.llm_transcript_path is not None:
-            artifacts["llm_transcript"] = str(result.llm_transcript_path)
+            artifacts[ARTIFACT_ID_LLM_TRANSCRIPT] = str(result.llm_transcript_path)
         return artifacts

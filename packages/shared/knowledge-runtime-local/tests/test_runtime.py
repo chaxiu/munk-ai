@@ -17,9 +17,9 @@ from munk_knowledge_local import default_app_knowledge_model_dir
 from munk.app_assets.storage import AppRegistry
 
 
-def test_build_knowledge_runtime_factory_creates_runtime() -> None:
+def test_build_knowledge_runtime_factory_creates_runtime(tmp_path: Path) -> None:
     factory = build_knowledge_runtime_factory()
-    runtime = factory.create_runtime(resolved_config={"model": "dummy"})
+    runtime = factory.create_runtime(resolved_config={"model": "dummy", "app_registry_root": tmp_path})
 
     assert factory.runtime_id == "local"
     assert runtime.runtime_id == "local"

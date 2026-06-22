@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -8,6 +9,7 @@ import yaml
 from munk.adapters.local_api.config_models import (
     AgentConfigEditor,
     GeminiSectionEditor,
+    IOSBridgeConfigEditor,
     OpenAICompatibleSectionEditor,
     OrchestrationConfigEditor,
     ProxyConfigEditor,
@@ -15,8 +17,10 @@ from munk.adapters.local_api.config_models import (
     SettingsAgentsEditor,
     SettingsConfigUpsertRequest,
 )
+from munk.config.defaults import MUNK_CODE_DEFAULTS
 from munk.config.load import profile_config_path, resolve_config_file
-from munk.config.schema import LLMProviderKind, MunkConfig, OutputStrategy
+from munk.config.resolve import RuntimeOverridePatch
+from munk.config.schema import LLMProviderKind, MunkConfig, OutputStrategy, SettleMode
 
 AgentRoleName = Literal["plan", "runner", "judge", "review", "analysis"]
 _AGENT_ROLES: tuple[AgentRoleName, ...] = ("plan", "runner", "judge", "review", "analysis")
@@ -77,6 +81,7 @@ class ProfileConfigService:
             "gemini": self._build_gemini_editor(raw_payload.get("gemini")),
             "agents": self._build_agents_editor(agents_payload),
             "proxy": self._build_proxy_editor(raw_payload.get("proxy")),
+            "ios_bridge": self._build_ios_bridge_editor(raw_payload.get("ios_bridge")),
             "runtime": self._build_runtime_editor(runtime_payload),
             "orchestration": self._build_orchestration_editor(raw_payload.get("orchestration")),
         }
@@ -129,23 +134,18 @@ class ProfileConfigService:
             vertexai=bool(payload.get("vertexai", False)),
             project=self._string_or_none(payload.get("project")),
             location=self._string_or_none(payload.get("location")),
+            credentials_path=self._string_or_none(payload.get("credentials_path")),
             base_url=self._string_or_none(payload.get("base_url")),
             timeout_sec=self._float_or_none(payload.get("timeout_sec")),
         )
 
     def _build_runtime_editor(self, value: Any) -> RuntimeConfigEditor:
         payload = cast(dict[str, Any], value) if isinstance(value, dict) else {}
-        return RuntimeConfigEditor(
-            max_tokens=self._int_or_none(payload.get("max_tokens")),
-            temperature=self._float_or_none(payload.get("temperature")),
-            max_steps=self._int_or_none(payload.get("max_steps")),
-            max_seconds=self._float_or_none(payload.get("max_seconds")),
-            interval=self._float_or_none(payload.get("interval")),
-            settle_timeout=self._float_or_none(payload.get("settle_timeout")),
-            max_side=self._int_or_none(payload.get("max_side")),
-            vl_max_side=self._int_or_none(payload.get("vl_max_side")),
-            icon_conf=self._float_or_none(payload.get("icon_conf")),
-        )
+        runtime_values = asdict(MUNK_CODE_DEFAULTS.runtime)
+        runtime_values.update(RuntimeOverridePatch.from_mapping(payload).to_override_dict())
+        editor_values = {key: runtime_values[key] for key in RuntimeConfigEditor.model_fields}
+        editor_values["settle_mode"] = cast(SettleMode, editor_values["settle_mode"])
+        return RuntimeConfigEditor.model_validate(editor_values)
 
     def _build_orchestration_editor(self, value: Any) -> OrchestrationConfigEditor:
         payload = cast(dict[str, Any], value) if isinstance(value, dict) else {}
@@ -170,6 +170,13 @@ class ProfileConfigService:
             enabled=bool(payload.get("enabled", False)),
             url=self._string_or_none(payload.get("url")),
             no_proxy=self._coerce_string_list(payload.get("no_proxy")),
+        )
+
+    def _build_ios_bridge_editor(self, value: Any) -> IOSBridgeConfigEditor:
+        payload = cast(dict[str, Any], value) if isinstance(value, dict) else {}
+        return IOSBridgeConfigEditor(
+            sudo_enabled=bool(payload.get("sudo_enabled", False)),
+            sudo_password=self._string_or_none(payload.get("sudo_password")),
         )
 
     def _build_yaml_payload(
@@ -222,6 +229,9 @@ class ProfileConfigService:
         proxy_payload = self._build_proxy_payload(request.proxy)
         if proxy_payload is not None:
             payload["proxy"] = proxy_payload
+        ios_bridge_payload = self._build_ios_bridge_payload(request.ios_bridge, previous_payload.get("ios_bridge"))
+        if ios_bridge_payload is not None:
+            payload["ios_bridge"] = ios_bridge_payload
         return payload
 
     def _build_agent_payload(
@@ -295,6 +305,8 @@ class ProfileConfigService:
             payload["project"] = editor.project.strip()
         if editor.location:
             payload["location"] = editor.location.strip()
+        if editor.credentials_path:
+            payload["credentials_path"] = editor.credentials_path.strip()
         if editor.base_url:
             payload["base_url"] = editor.base_url.strip()
         if editor.timeout_sec is not None:
@@ -306,26 +318,7 @@ class ProfileConfigService:
         return payload
 
     def _build_runtime_payload(self, editor: RuntimeConfigEditor) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if editor.max_tokens is not None:
-            payload["max_tokens"] = editor.max_tokens
-        if editor.temperature is not None:
-            payload["temperature"] = editor.temperature
-        if editor.max_steps is not None:
-            payload["max_steps"] = editor.max_steps
-        if editor.max_seconds is not None:
-            payload["max_seconds"] = editor.max_seconds
-        if editor.interval is not None:
-            payload["interval"] = editor.interval
-        if editor.settle_timeout is not None:
-            payload["settle_timeout"] = editor.settle_timeout
-        if editor.max_side is not None:
-            payload["max_side"] = editor.max_side
-        if editor.vl_max_side is not None:
-            payload["vl_max_side"] = editor.vl_max_side
-        if editor.icon_conf is not None:
-            payload["icon_conf"] = editor.icon_conf
-        return payload
+        return RuntimeOverridePatch.from_mapping(editor.model_dump(exclude_none=True)).to_override_dict()
 
     def _build_orchestration_payload(self, editor: OrchestrationConfigEditor) -> dict[str, Any]:
         return {
@@ -347,6 +340,20 @@ class ProfileConfigService:
             payload["url"] = url
         if no_proxy:
             payload["no_proxy"] = no_proxy
+        return payload
+
+    def _build_ios_bridge_payload(
+        self,
+        editor: IOSBridgeConfigEditor,
+        previous_section: Any,
+    ) -> dict[str, Any] | None:
+        previous_payload = cast(dict[str, Any], previous_section) if isinstance(previous_section, dict) else {}
+        sudo_password = self._merge_secret_value(editor.sudo_password, previous_payload.get("sudo_password"))
+        if not editor.sudo_enabled and sudo_password is None:
+            return None
+        payload: dict[str, Any] = {"sudo_enabled": bool(editor.sudo_enabled)}
+        if sudo_password is not None:
+            payload["sudo_password"] = sudo_password
         return payload
 
     def _dump_yaml(self, payload: dict[str, Any]) -> str:
@@ -436,3 +443,9 @@ class ProfileConfigService:
         if value == "prompted":
             return "prompted"
         return "auto"
+
+    @staticmethod
+    def _settle_mode_or_none(value: Any) -> SettleMode | None:
+        if value in {"strict", "ratio", "delay"}:
+            return value
+        return None

@@ -5,24 +5,20 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
-def empty_strings() -> list[str]:
-    return []
-
-
-def empty_paths() -> dict[str, Path]:
-    return {}
-
-
-class KnowledgePostActionRequest(BaseModel):
+class KnowledgePostActionOperationRequest(BaseModel):
     app_id: str
     plan_id: str
     case_id: str
     case_title: str | None = None
-    assets_root: Path
     run_dir: Path
+    result_path: Path
+    assets_root: Path
     judge_result_path: Path | None = None
-    artifact_paths: dict[str, Path] = Field(default_factory=empty_paths)
+    source_attempt_index: int | None = None
     parent_operation_id: str | None = None
+
+
+KnowledgePostActionRequest = KnowledgePostActionOperationRequest
 
 
 class KnowledgePostActionResult(BaseModel):

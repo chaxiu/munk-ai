@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
+from munk.artifacts import ARTIFACT_ID_ARTIFACT_MANIFEST, ARTIFACT_ID_RESULT
 from munk.config.load import ResolvedConfig
 from munk.recording import RecordingReplayResult, RecordingSession
 from munk.runtime import build_case_request
 from munk.services.operations.service import OperationService
+from munk.services.recording.operation_payloads import (
+    build_recording_replay_operation_request_payload,
+    build_recording_replay_operation_result_payload,
+    build_recording_replay_progress_payload,
+)
 from munk.services.running.service import RunService
 from munk.testing import TestCase
 
@@ -30,17 +35,14 @@ class RecordingReplayService:
         test_case: TestCase,
         test_case_path: Path,
     ) -> RecordingReplayResult:
-        request_json: dict[str, Any] = {
-            "recording_id": recording_id,
-            "app_id": session.app_id,
-            "case_id": test_case.case_id,
-            "device_ref": session.device_ref,
-            "entry_identity": session.app_target.entry_identity,
-            "test_case_path": str(test_case_path),
-        }
         tracker = self._operation_service.create_operation(
             kind="run_case",
-            request_json=request_json,
+            request_json=build_recording_replay_operation_request_payload(
+                recording_id=recording_id,
+                session=session,
+                case_id=test_case.case_id,
+                test_case_path=test_case_path,
+            ),
             app_id=session.app_id,
             plan_id=self._plan_id_for(recording_id),
             case_id=test_case.case_id,
@@ -49,12 +51,12 @@ class RecordingReplayService:
         )
         tracker.mark_running(
             pid=os.getpid(),
-            progress={
-                "recording_id": recording_id,
-                "status": "running",
-                "case_id": test_case.case_id,
-                "source_recording_case_path": str(test_case_path),
-            },
+            progress=build_recording_replay_progress_payload(
+                recording_id=recording_id,
+                status="running",
+                case_id=test_case.case_id,
+                source_recording_case_path=test_case_path,
+            ),
         )
         tracker.append_event(
             event_type="recording_replay_started",
@@ -81,11 +83,11 @@ class RecordingReplayService:
                 artifacts={
                     "source_recording_case_path": str(test_case_path),
                 },
-                progress={
-                    "recording_id": recording_id,
-                    "status": "failed",
-                    "case_id": test_case.case_id,
-                },
+                progress=build_recording_replay_progress_payload(
+                    recording_id=recording_id,
+                    status="failed",
+                    case_id=test_case.case_id,
+                ),
             )
             raise
 
@@ -94,8 +96,8 @@ class RecordingReplayService:
             case_id=test_case.case_id,
             operation_id=tracker.operation_id,
             run_dir=result.run_dir,
-            result_path=Path(result.artifacts["result"]),
-            artifact_manifest_path=Path(result.artifacts["artifact_manifest"]),
+            result_path=Path(result.artifacts[ARTIFACT_ID_RESULT]),
+            artifact_manifest_path=Path(result.artifacts[ARTIFACT_ID_ARTIFACT_MANIFEST]),
             verdict=result.verdict,
         )
         tracker.update_artifacts(
@@ -117,21 +119,21 @@ class RecordingReplayService:
         )
         tracker.mark_succeeded(
             verification_verdict=result.verdict,
-            result_json={
-                **result.model_dump(mode="json"),
-                "recording_id": recording_id,
-            },
+            result_json=build_recording_replay_operation_result_payload(
+                recording_id=recording_id,
+                result=result,
+            ),
             artifacts={
                 **result.artifacts,
                 "source_recording_id": recording_id,
                 "source_recording_case_path": str(test_case_path),
             },
-            progress={
-                "recording_id": recording_id,
-                "status": "completed",
-                "case_id": test_case.case_id,
-                "verification_verdict": result.verdict,
-            },
+            progress=build_recording_replay_progress_payload(
+                recording_id=recording_id,
+                status="completed",
+                case_id=test_case.case_id,
+                verification_verdict=result.verdict,
+            ),
         )
         return replay_result
 

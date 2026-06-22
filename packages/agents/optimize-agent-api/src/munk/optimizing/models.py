@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from munk.agent_runtime.events import AgentEventSink
 from munk.testing import AiGuidance
 from pydantic import BaseModel, Field
 
@@ -58,7 +60,7 @@ class OptimizeRequest(BaseModel):
     execution_summary: OptimizeExecutionSummary
     trigger: OptimizeTrigger
     artifacts: dict[str, str] = Field(default_factory=empty_paths)
-    artifact_payloads: dict[str, object] = Field(default_factory=dict)
+    structured_evidence: dict[str, object] = Field(default_factory=dict)
     run_dir: Path
 
 
@@ -73,3 +75,19 @@ class OptimizeResult(BaseModel):
     patched_fields: list[OptimizeFieldPatch] = Field(default_factory=list)
     skipped_fields: list[OptimizeFieldName] = Field(default_factory=empty_field_names)
     artifacts: dict[str, str] = Field(default_factory=empty_paths)
+
+
+@dataclass(frozen=True)
+class OptimizeManagedPaths:
+    root_dir: Path
+    prompt_path: Path
+    tool_calls_path: Path
+    llm_transcript_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class OptimizeRuntimeContext:
+    operation_id: str | None
+    managed_paths: OptimizeManagedPaths
+    attempt_index: int | None = None
+    progress: AgentEventSink | None = None

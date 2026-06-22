@@ -6,9 +6,11 @@ from .models import (
     OptimizeExecutionSummary,
     OptimizeFieldName,
     OptimizeFieldPatch,
+    OptimizeManagedPaths,
     OptimizeRequest,
     OptimizeResult,
     OptimizeTrigger,
+    OptimizeRuntimeContext,
 )
 from .runtime import (
     OptimizeRuntime,
@@ -23,9 +25,11 @@ __all__ = [
     "OptimizeExecutionSummary",
     "OptimizeFieldName",
     "OptimizeFieldPatch",
+    "OptimizeManagedPaths",
     "OptimizeRequest",
     "OptimizeResult",
     "OptimizeRuntime",
+    "OptimizeRuntimeContext",
     "OptimizeRuntimeConflictError",
     "OptimizeRuntimeError",
     "OptimizeRuntimeFactory",

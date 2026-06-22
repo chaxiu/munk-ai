@@ -25,6 +25,13 @@ class DeviceDriver(Protocol):
         duration: float | None = None,
     ) -> None: ...
 
+    def drag(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration: float | None = None,
+    ) -> None: ...
+
     def press(self, key: str) -> None: ...
 
     def input_text(self, text: str) -> None: ...
@@ -92,6 +99,13 @@ class SupportsDeviceLockState(Protocol):
     """Optional device lock-state probe used for diagnostics and idempotent unlocks."""
 
     def is_locked(self) -> bool | None: ...
+
+
+@runtime_checkable
+class SupportsDeviceScreenState(Protocol):
+    """Optional device screen-state probe used by device-state diagnostics."""
+
+    def is_screen_on(self) -> bool | None: ...
 
 
 @runtime_checkable

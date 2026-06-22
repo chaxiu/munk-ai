@@ -3,13 +3,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from munk.artifacts import ARTIFACT_ID_DECISION_TRACE, ARTIFACT_ID_LOG, ARTIFACT_ID_RESULT
 from munk.execution.models import CaseExecutionResult, PlanExecutionResult
 from munk.planning.models import RequirementPlan
 from munk.reporting.models import (
+    AcceptanceCriterionCoverage,
     CaseRepairReport,
     PlanRepairReport,
     PlanRepairTotals,
     ReportOverallVerdict,
+)
+from munk.planning.acceptance_criteria_mapping import (
+    build_acceptance_criteria_coverage,
+    resolve_acceptance_criteria_texts,
 )
 from munk.testing import TestCase
 
@@ -24,14 +30,35 @@ class PlanReportService:
         report_path: Path,
     ) -> PlanRepairReport:
         case_by_id = {case.case_id: case for case in plan.cases}
+        case_verdicts = {result.case_id: result.verdict for result in case_results}
         ordered_case_reports = [
-            self._build_case_report(case=case_by_id[result.case_id], result=result)
+            self._build_case_report(
+                case=case_by_id[result.case_id],
+                result=result,
+                acceptance_criteria=plan.acceptance_criteria,
+            )
             for result in case_results
             if result.case_id in case_by_id
         ]
         sorted_case_reports = self._sort_case_reports(ordered_case_reports)
         totals = self._build_totals(sorted_case_reports)
         overall_verdict = self._derive_overall_verdict(plan_result)
+        coverage_entries = build_acceptance_criteria_coverage(
+            acceptance_criteria=plan.acceptance_criteria,
+            cases=plan.cases,
+            case_verdicts=case_verdicts,
+        )
+        acceptance_criteria_coverage = [
+            AcceptanceCriterionCoverage(**entry) for entry in coverage_entries
+        ]
+        metadata: dict[str, object] = {}
+        uncovered_indices = [
+            item.index
+            for item in acceptance_criteria_coverage
+            if item.verdict == "uncovered"
+        ]
+        if uncovered_indices:
+            metadata["uncovered_acceptance_criteria_indices"] = uncovered_indices
         return PlanRepairReport(
             app_id=plan.app_id,
             plan_id=plan.plan_id,
@@ -40,6 +67,8 @@ class PlanReportService:
             summary=self._build_summary(totals, overall_verdict, plan_result.stopped_early),
             core_case_summary=self._build_core_case_summary(totals, plan_result.stopped_early),
             totals=totals,
+            acceptance_criteria=list(plan.acceptance_criteria),
+            acceptance_criteria_coverage=acceptance_criteria_coverage,
             key_failures=[item.case_id for item in sorted_case_reports if item.verdict == "failed"][:5],
             key_inconclusive=[
                 item.case_id for item in sorted_case_reports if item.verdict == "inconclusive"
@@ -49,6 +78,7 @@ class PlanReportService:
                 "plan_execution": str(plan_result.summary_path),
                 "report": str(report_path),
             },
+            metadata=metadata,
         )
 
     def write_report(self, path: Path, report: PlanRepairReport) -> None:
@@ -60,6 +90,7 @@ class PlanReportService:
         *,
         case: TestCase,
         result: CaseExecutionResult,
+        acceptance_criteria: list[str],
     ) -> CaseRepairReport:
         expected_summary = self._build_expected_summary(case)
         observed_summary = self._build_observed_summary(result)
@@ -76,6 +107,11 @@ class PlanReportService:
             judge_reason=result.judge_reason,
             failure_hypothesis=result.failure_hypothesis,
             missing_evidence=list(result.missing_evidence),
+            acceptance_criteria_indices=list(case.acceptance_criteria_indices),
+            acceptance_criteria_texts=resolve_acceptance_criteria_texts(
+                case.acceptance_criteria_indices,
+                acceptance_criteria,
+            ),
             recommended_artifacts=self._build_recommended_artifacts(result),
             recommended_evidence_ids=self._build_recommended_evidence_ids(result),
             run_dir=result.run_dir,
@@ -122,7 +158,7 @@ class PlanReportService:
 
     @staticmethod
     def _build_recommended_artifacts(result: CaseExecutionResult) -> dict[str, str]:
-        preferred_order = ["result", "decision_trace", "log"]
+        preferred_order = [ARTIFACT_ID_RESULT, ARTIFACT_ID_DECISION_TRACE, ARTIFACT_ID_LOG]
         artifacts: dict[str, str] = {}
         for key in preferred_order:
             value = result.artifacts.get(key)

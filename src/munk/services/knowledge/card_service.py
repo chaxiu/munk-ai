@@ -64,6 +64,13 @@ class KnowledgeCardService:
         offset: int = 0,
     ) -> KnowledgeCardListResult:
         profile = self._load_profile(app_id)
+        if not self._knowledge_exists(profile):
+            return KnowledgeCardListResult(
+                items=[],
+                total_count=0,
+                limit=limit,
+                offset=offset,
+            )
         retrieval = self._build_retrieval_service(profile)
         items = [
             _KNOWLEDGE_CARD_ADAPTER.validate_python(row_to_knowledge_card_payload(row))
@@ -94,6 +101,8 @@ class KnowledgeCardService:
         normalized_card_id = card_id.strip()
         if not normalized_card_id:
             raise ValueError("card_id must not be empty")
+        if not self._knowledge_exists(profile):
+            raise FileNotFoundError(f"card '{normalized_card_id}' not found for app '{profile.app_id}'")
         retrieval = self._build_retrieval_service(profile)
         row = retrieval.get_card(app_id=profile.app_id, card_id=normalized_card_id)
         if row is not None:
@@ -252,3 +261,6 @@ class KnowledgeCardService:
             ref=profile.app_knowledge_ref,
             embedding_service=self.index_sync_service.embedding_service,
         )
+
+    def _knowledge_exists(self, profile: AppProfile) -> bool:
+        return self.registry.knowledge_path(profile.app_id, ref=profile.app_knowledge_ref).exists()

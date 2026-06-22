@@ -45,6 +45,8 @@ class DeterministicOrchestrationEngine:
         self._emit_event(
             event_type="workflow_started",
             message="case orchestration started",
+            attempt_index=0,
+            summary="case orchestration started",
             data={"case_id": request.case.case_id},
         )
         attempts: list[CaseAttemptRecord] = []
@@ -53,6 +55,8 @@ class DeterministicOrchestrationEngine:
             self._emit_event(
                 event_type="workflow_attempt_started",
                 message="runner attempt started",
+                attempt_index=len(attempts),
+                summary="runner attempt started",
                 data={
                     "attempt_index": len(attempts),
                     "case_id": request.case.case_id,
@@ -101,6 +105,8 @@ class DeterministicOrchestrationEngine:
             self._emit_event(
                 event_type="workflow_attempt_finished",
                 message="runner and judge attempt finished",
+                attempt_index=len(attempts) - 1,
+                summary="runner and judge attempt finished",
                 data={
                     "attempt_index": len(attempts) - 1,
                     "verdict": judge_step.judge_result.verdict,
@@ -140,6 +146,8 @@ class DeterministicOrchestrationEngine:
                 self._emit_event(
                     event_type="workflow_finished",
                     message="case orchestration finished",
+                    attempt_index=len(attempts) - 1,
+                    summary="case orchestration finished",
                     data={
                         "decision_type": judge_step.decision.decision_type,
                         "verdict": judge_step.judge_result.verdict,
@@ -158,6 +166,8 @@ class DeterministicOrchestrationEngine:
             self._emit_event(
                 event_type="workflow_retry_scheduled",
                 message="judge requested another runner attempt",
+                attempt_index=len(attempts) - 1,
+                summary="judge requested another runner attempt",
                 data={
                     "attempt_index": len(attempts) - 1,
                     "retry_count": state.retry_count,
@@ -228,10 +238,28 @@ class DeterministicOrchestrationEngine:
             }
         )
 
-    def _emit_event(self, *, event_type: str, message: str, data: dict[str, object]) -> None:
+    def _emit_event(
+        self,
+        *,
+        event_type: str,
+        message: str,
+        data: dict[str, object],
+        attempt_index: int | None,
+        summary: str | None,
+    ) -> None:
         if self._tracker is None:
             return
-        self._tracker.append_event(event_type=event_type, message=message, data=data)
+        self._tracker.append_timeline_event(
+            event_type=event_type,
+            message=message,
+            agent_role="orchestration",
+            timeline_scope="parent_run",
+            timeline_phase=_orchestration_phase(event_type),
+            summary=summary,
+            attempt_index=attempt_index,
+            case_id=_string_or_none(data.get("case_id")),
+            data=data,
+        )
 
     def _update_progress(self, **progress: object) -> None:
         if self._tracker is None:
@@ -253,3 +281,17 @@ class DeterministicOrchestrationEngine:
             lines.extend(["", "Focus for this retry:"])
             lines.extend(f"- {item}" for item in focus_items)
         return "\n".join(lines)
+
+
+def _orchestration_phase(event_type: str) -> str:
+    return {
+        "workflow_started": "started",
+        "workflow_attempt_started": "started",
+        "workflow_attempt_finished": "completed",
+        "workflow_retry_scheduled": "decision_ready",
+        "workflow_finished": "completed",
+    }.get(event_type, "running")
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None

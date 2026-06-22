@@ -5,13 +5,21 @@ import { parseBridgeClientCommand, readBridgeClientFrame } from '../protocol.js'
 import { RecordingBridgeSessionError } from '../scrcpy_session.js'
 import type { RecordingBridgeSessionManager } from '../session_manager.js'
 
+const BRIDGE_STARTED_AT = new Date().toISOString()
+
 const bridgeRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   const sessionManager = fastify as typeof fastify & {
     recordingBridgeSessionManager: RecordingBridgeSessionManager
   }
 
   fastify.get('/healthz', async function () {
-    return { status: 'ok' }
+    return {
+      status: 'ok',
+      managerToken: process.env.MUNK_BRIDGE_MANAGER_TOKEN ?? null,
+      parentPid: process.env.MUNK_PARENT_PID ?? null,
+      pid: process.pid,
+      startedAt: BRIDGE_STARTED_AT
+    }
   })
 
   fastify.post<{ Body: CreateBridgeSessionRequest }>('/sessions', async function (request, reply) {

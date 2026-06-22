@@ -158,6 +158,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/device-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Device State */
+        get: operations["get_device_state_v1_device_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlock Device */
+        post: operations["unlock_device_v1_device_unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices": {
         parameters: {
             query?: never;
@@ -946,6 +980,21 @@ export interface components {
             /** Provider */
             provider?: ("openai_compatible" | "gemini") | null;
         };
+        /** AgentRuntimeLifecycleEventPayload */
+        AgentRuntimeLifecycleEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** AiGuidance */
         AiGuidance: {
             /** Disambiguation Rules */
@@ -1101,6 +1150,17 @@ export interface components {
             introduction_markdown: string;
             profile: components["schemas"]["AppUpsertProfile"];
         };
+        /** ArtifactSchemaVersions */
+        ArtifactSchemaVersions: {
+            /** Operation Diagnostics */
+            operation_diagnostics?: string | null;
+            /** Plan Repair Report */
+            plan_repair_report?: string | null;
+            /** Review Orchestration */
+            review_orchestration?: string | null;
+            /** Review Result */
+            review_result?: string | null;
+        };
         /** AssertionKnowledgeCandidateDraft */
         AssertionKnowledgeCandidateDraft: {
             /** App Id */
@@ -1187,6 +1247,73 @@ export interface components {
             runner_usage?: components["schemas"]["TokenUsageData"] | null;
             total_usage?: components["schemas"]["TokenUsageData"] | null;
         };
+        /** BackForwardingPayload */
+        BackForwardingPayload: Record<string, never>;
+        /** BatchChildFinishedEventPayload */
+        BatchChildFinishedEventPayload: {
+            /** Case Id */
+            case_id?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Position Index */
+            position_index?: number | null;
+            /** Position Label */
+            position_label?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Verification Verdict */
+            verification_verdict?: ("passed" | "failed" | "inconclusive") | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BatchChildStartedEventPayload */
+        BatchChildStartedEventPayload: {
+            /** Case Id */
+            case_id?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /** Parent Operation Id */
+            parent_operation_id?: string | null;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Position Label */
+            position_label?: string | null;
+            /** Title */
+            title: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BatchFinishedEventPayload */
+        BatchFinishedEventPayload: {
+            /** Completed Children */
+            completed_children: number;
+            /**
+             * Stopped Early
+             * @default false
+             */
+            stopped_early: boolean;
+            /** Total Children */
+            total_children: number;
+            /** Verification Verdict */
+            verification_verdict?: ("passed" | "failed" | "inconclusive") | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** BatchRunAggregateData */
         BatchRunAggregateData: {
             /**
@@ -1233,6 +1360,28 @@ export interface components {
              * @default 0
              */
             total_children: number;
+        };
+        /** BatchStartedEventPayload */
+        BatchStartedEventPayload: {
+            /** App Id */
+            app_id: string;
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Plan Ids */
+            plan_ids?: string[] | null;
+            /** Total Children */
+            total_children?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BatchStoppedEarlyEventPayload */
+        BatchStoppedEarlyEventPayload: {
+            /** Operation Id */
+            operation_id: string;
+            /** Plan Id */
+            plan_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /** CancelOperationData */
         CancelOperationData: {
@@ -1290,6 +1439,7 @@ export interface components {
         };
         /** CaseDetailData */
         CaseDetailData: {
+            ai_guidance?: components["schemas"]["AiGuidance"] | null;
             /** App Id */
             app_id: string;
             /** Case Id */
@@ -1341,7 +1491,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** Evidence */
-            evidence?: components["schemas"]["JudgeEvidence"][];
+            evidence?: (components["schemas"]["JudgeExecutionEvidence"] | components["schemas"]["JudgeEventEvidence"] | components["schemas"]["JudgeDecisionTraceEvidence"] | components["schemas"]["JudgeRunnerHistoryEvidence"] | components["schemas"]["JudgeRunnerMemoryEvidence"] | components["schemas"]["JudgeRunnerIssueEvidence"] | components["schemas"]["JudgeRuntimeErrorLogEvidence"] | components["schemas"]["JudgeScreenFrameEvidence"] | components["schemas"]["JudgeScreenDiffEvidence"] | components["schemas"]["JudgeScreenshotEvidence"])[];
             execution: components["schemas"]["ExecutionOutcome"];
             /** Failure Hypothesis */
             failure_hypothesis?: string | null;
@@ -1497,6 +1647,115 @@ export interface components {
         CaseUpsertRequest: {
             case: components["schemas"]["TestCasePayload"];
         };
+        /** ChangeVerificationCasesReadyPayload */
+        ChangeVerificationCasesReadyPayload: {
+            /** Manual Case Count */
+            manual_case_count: number;
+            /** Planner Case Count */
+            planner_case_count: number;
+            /** Review Hint Enabled */
+            review_hint_enabled: boolean;
+            /** Review Required Case Count */
+            review_required_case_count: number;
+        };
+        /** ChangeVerificationPlanSavedPayload */
+        ChangeVerificationPlanSavedPayload: {
+            /** App Id */
+            app_id: string;
+            /** Case Count */
+            case_count: number;
+            /** Plan Id */
+            plan_id: string;
+            /** Plan Path */
+            plan_path: string;
+            planning_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Snapshot Path */
+            snapshot_path: string;
+        };
+        /** ChangeVerificationReviewContractLoadedPayload */
+        ChangeVerificationReviewContractLoadedPayload: {
+            /** App Id */
+            app_id: string;
+            /** Review Hint Enabled */
+            review_hint_enabled: boolean;
+            /** Review Required Case Count */
+            review_required_case_count: number;
+        };
+        /** ContextPrepareDeviceReadyEventPayload */
+        ContextPrepareDeviceReadyEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Platform */
+            platform?: string | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareParamsResolvedEventPayload */
+        ContextPrepareParamsResolvedEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Initial Ready Timeout Sec */
+            initial_ready_timeout_sec?: number | null;
+            /** Interval */
+            interval?: number | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Max Seconds */
+            max_seconds?: number | null;
+            /** Max Side */
+            max_side?: number | null;
+            /** Max Steps */
+            max_steps?: number | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Settle Delay Sec */
+            settle_delay_sec?: number | null;
+            /** Settle Mode */
+            settle_mode?: string | null;
+            /** Settle Ocr Only */
+            settle_ocr_only?: boolean | null;
+            /** Settle Ratio Threshold */
+            settle_ratio_threshold?: number | null;
+            /** Settle Timeout */
+            settle_timeout?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPreparePerceptionReadyEventPayload */
+        ContextPreparePerceptionReadyEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Icon Conf */
+            icon_conf?: number | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Max Side */
+            max_side?: number | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** CreateRecordingRequest */
         CreateRecordingRequest: {
             app_target: components["schemas"]["AppTarget"];
@@ -1630,6 +1889,55 @@ export interface components {
             /** Items */
             items?: components["schemas"]["DeviceDescriptorData"][];
         };
+        /** DeviceStateData */
+        DeviceStateData: {
+            /**
+             * Automation Ready
+             * @default false
+             */
+            automation_ready: boolean;
+            /** Availability */
+            availability: string;
+            /** Blockers */
+            blockers?: string[];
+            /** Device Ref */
+            device_ref: string;
+            /** Display Name */
+            display_name: string;
+            /** Is Booted */
+            is_booted?: boolean | null;
+            /** Is Locked */
+            is_locked?: boolean | null;
+            /** Is Screen On */
+            is_screen_on?: boolean | null;
+            /** Kind */
+            kind: string;
+            /** Platform */
+            platform: string;
+            /** Raw */
+            raw?: {
+                [key: string]: unknown;
+            };
+            /** Unlock Strategies */
+            unlock_strategies?: string[];
+        };
+        /** DeviceUnlockData */
+        DeviceUnlockData: {
+            after: components["schemas"]["DeviceStateData"];
+            before: components["schemas"]["DeviceStateData"];
+            /** Changed */
+            changed: boolean;
+            /** Device Ref */
+            device_ref: string;
+            /** Message */
+            message: string;
+            /** Platform */
+            platform: string;
+            /** Strategy */
+            strategy: string;
+            /** Success */
+            success: boolean;
+        };
         /** DomainTermKnowledgeCandidateDraft */
         DomainTermKnowledgeCandidateDraft: {
             /** App Id */
@@ -1721,6 +2029,66 @@ export interface components {
              * @constant
              */
             ok: false;
+        };
+        /** ExecutedPlanResult */
+        ExecutedPlanResult: {
+            /** Artifact Manifest Version */
+            artifact_manifest_version?: number | null;
+            /** Contract Versions */
+            contract_versions?: {
+                [key: string]: string | null;
+            };
+            /** Diagnostics Path */
+            diagnostics_path?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Failed Cases */
+            failed_cases: number;
+            /** Failure Category */
+            failure_category?: string | null;
+            /**
+             * Inconclusive Cases
+             * @default 0
+             */
+            inconclusive_cases: number;
+            /** Items */
+            items?: components["schemas"]["PlanCaseExecutionItem"][];
+            /** Passed Cases */
+            passed_cases: number;
+            /**
+             * Report Path
+             * Format: path
+             */
+            report_path: string;
+            /**
+             * Stopped Early
+             * @default false
+             */
+            stopped_early: boolean;
+            /**
+             * Summary Path
+             * Format: path
+             */
+            summary_path: string;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Total Cases */
+            total_cases: number;
+            /**
+             * Upstream Review Enabled
+             * @default false
+             */
+            upstream_review_enabled: boolean;
+            /** Upstream Review Orchestration Path */
+            upstream_review_orchestration_path?: string | null;
+            /** Upstream Review Result Path */
+            upstream_review_result_path?: string | null;
+            /**
+             * Verification Status
+             * @enum {string}
+             */
+            verification_status: "passed" | "failed" | "inconclusive" | "stopped";
+            /** Warning Summary */
+            warning_summary?: string[];
         };
         /** ExecutionOutcome */
         ExecutionOutcome: {
@@ -1828,11 +2196,8 @@ export interface components {
         /** ForwardingAckRequest */
         ForwardingAckRequest: {
             /** Ack At */
-            ack_at?: string | null;
-            /** Device Result */
-            device_result?: {
-                [key: string]: unknown;
-            };
+            ack_at?: string;
+            device_result?: components["schemas"]["ForwardingDeviceResult"];
             /** Dispatched At */
             dispatched_at?: string | null;
             /**
@@ -1841,24 +2206,35 @@ export interface components {
              */
             kind: "pointer" | "input" | "back";
             /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
+            payload?: components["schemas"]["PointerForwardingPayload"] | components["schemas"]["InputForwardingPayload"] | components["schemas"]["BackForwardingPayload"];
             /** Steps */
             steps?: components["schemas"]["ForwardingStepRequest"][];
+        };
+        /** ForwardingDeviceResult */
+        ForwardingDeviceResult: {
+            /** Error Code */
+            error_code?: string | null;
+            /** Message */
+            message?: string | null;
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
         };
         /** ForwardingStepRequest */
         ForwardingStepRequest: {
             /** Dispatched At */
-            dispatched_at?: string | null;
+            dispatched_at?: string;
             /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
+            payload: components["schemas"]["PointerStepPayload"] | components["schemas"]["TextInjectStepPayload"] | components["schemas"]["KeyPressStepPayload"] | components["schemas"]["KeyTransitionStepPayload"];
             /** Seq */
             seq: number;
-            /** Step Kind */
-            step_kind: string;
+            /**
+             * Step Kind
+             * @enum {string}
+             */
+            step_kind: "pointer_down" | "pointer_move" | "pointer_up" | "key_press" | "key_down" | "key_up" | "text_inject";
         };
         /** GeminiSectionEditor */
         GeminiSectionEditor: {
@@ -1876,6 +2252,8 @@ export interface components {
              * @default false
              */
             configured: boolean;
+            /** Credentials Path */
+            credentials_path?: string | null;
             /** Location */
             location?: string | null;
             /** Model */
@@ -1890,6 +2268,28 @@ export interface components {
              */
             vertexai: boolean;
         };
+        /** GeneratedPlanResult */
+        GeneratedPlanResult: {
+            /** Case Count */
+            case_count: number;
+            /** Plan Name */
+            plan_name?: string | null;
+            /**
+             * Plan Path
+             * Format: path
+             */
+            plan_path: string;
+            planning_usage?: components["schemas"]["TokenUsage"] | null;
+            /**
+             * Snapshot Path
+             * Format: path
+             */
+            snapshot_path: string;
+        };
+        /** GenericOperationEventPayload */
+        GenericOperationEventPayload: {
+            [key: string]: unknown;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1899,6 +2299,41 @@ export interface components {
         IOSAppIdentity: {
             /** Bundle Id */
             bundle_id: string;
+            /** Wda Bundle Id */
+            wda_bundle_id?: string | null;
+        };
+        /** IOSBridgeConfigEditor */
+        IOSBridgeConfigEditor: {
+            /**
+             * Sudo Enabled
+             * @default false
+             */
+            sudo_enabled: boolean;
+            /** Sudo Password */
+            sudo_password?: string | null;
+        };
+        /** InputForwardingPayload */
+        InputForwardingPayload: {
+            /**
+             * Submit
+             * @default false
+             */
+            submit: boolean;
+            /** Text */
+            text: string;
+        };
+        /** InteractiveSessionStateData */
+        InteractiveSessionStateData: {
+            /** Expires At */
+            expires_at?: string | null;
+            /** Idle Expires At */
+            idle_expires_at?: string | null;
+            /** Last Active At */
+            last_active_at?: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Status */
+            status: string;
         };
         /** IssueKnowledgeCandidateDraft */
         IssueKnowledgeCandidateDraft: {
@@ -1978,23 +2413,541 @@ export interface components {
             /** Workaround */
             workaround?: string | null;
         };
-        /** JudgeEvidence */
-        JudgeEvidence: {
+        /** JudgeCompactUiNode */
+        JudgeCompactUiNode: {
+            /** Bounds */
+            bounds?: number[];
+            /** Class Name */
+            class_name?: string | null;
+            /** Content Desc */
+            content_desc?: string | null;
+            /** Node Id */
+            node_id?: string | null;
+            /** Parent Node Id */
+            parent_node_id?: string | null;
+            /** Resource Id */
+            resource_id?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Stable Key */
+            stable_key?: string | null;
+            state?: components["schemas"]["JudgeCompactUiNodeState"];
+            /** Text */
+            text?: string | null;
+            /** Visual Ids */
+            visual_ids?: string[];
+        };
+        /** JudgeCompactUiNodeState */
+        JudgeCompactUiNodeState: {
+            /** Checkable */
+            checkable?: boolean | null;
+            /** Checked */
+            checked?: boolean | null;
+            /** Clickable */
+            clickable?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Focused */
+            focused?: boolean | null;
+            /** Scrollable */
+            scrollable?: boolean | null;
+            /** Selected */
+            selected?: boolean | null;
+        };
+        /** JudgeCompactUiTree */
+        JudgeCompactUiTree: {
+            /** Focus Term Count */
+            focus_term_count?: number | null;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count: number;
+            /** Nodes */
+            nodes?: components["schemas"]["JudgeCompactUiNode"][];
+        };
+        /** JudgeDecisionEventPayload */
+        JudgeDecisionEventPayload: {
+            /** Decision Type */
+            decision_type?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** JudgeDecisionTraceEvidence */
+        JudgeDecisionTraceEvidence: {
             /** Evidence Id */
             evidence_id: string;
-            /** Kind */
-            kind: string;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
             /**
-             * Source
+             * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            source: "execution" | "event" | "artifact";
+            kind: "decision_trace";
+            payload: components["schemas"]["JudgeDecisionTraceEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
             /** Summary */
             summary: string;
+        };
+        /** JudgeDecisionTraceEvidencePayload */
+        JudgeDecisionTraceEvidencePayload: {
+            /** Action */
+            action?: string | null;
+            /** Arguments */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            /** Attempt Index */
+            attempt_index?: number | null;
+            /** Decision */
+            decision?: string | null;
+            /** Path */
+            path?: string | null;
+            /** Raw Line */
+            raw_line?: string | null;
+            /** Result Summary */
+            result_summary?: string | null;
+            /** Seeded Element Count */
+            seeded_element_count?: number | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Summary */
+            summary?: string | null;
+            /** Tool Name */
+            tool_name?: string | null;
+            /** Tool Names */
+            tool_names?: string[];
+            /** Ui Elements Summary */
+            ui_elements_summary?: string | null;
+            /** Will Retry */
+            will_retry?: boolean | null;
+        };
+        /** JudgeEventEvidence */
+        JudgeEventEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "event";
+            payload: components["schemas"]["JudgeEventEvidencePayload"];
+            /**
+             * Source
+             * @default event
+             * @constant
+             */
+            source: "event";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeEventEvidencePayload */
+        JudgeEventEvidencePayload: {
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            };
+            /** Event Type */
+            event_type: string;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /** JudgeExecutionEvidence */
+        JudgeExecutionEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "execution_outcome";
+            payload: components["schemas"]["JudgeExecutionEvidencePayload"];
+            /**
+             * Source
+             * @default execution
+             * @constant
+             */
+            source: "execution";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeExecutionEvidencePayload */
+        JudgeExecutionEvidencePayload: {
+            /** Error Message */
+            error_message?: string | null;
+            /** Error Type */
+            error_type?: string | null;
+            /** Last Action Summary */
+            last_action_summary?: string | null;
+            /** Last Surface Identity */
+            last_surface_identity?: string | null;
+            /** Last Target Identity */
+            last_target_identity?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "failed" | "incomplete";
+            /**
+             * Steps Completed
+             * @default 0
+             */
+            steps_completed: number;
+            /** Stop Reason */
+            stop_reason?: string | null;
+        };
+        /** JudgeFocusHit */
+        JudgeFocusHit: {
+            /** Label */
+            label?: string | null;
+            /** Node Id */
+            node_id?: string | null;
+            /** Score */
+            score?: number | null;
+        };
+        /** JudgeRunnerHistoryEntry */
+        JudgeRunnerHistoryEntry: {
+            /** Action Type */
+            action_type?: string | null;
+            /** Outcome Summary */
+            outcome_summary?: string | null;
+            /** Record */
+            record?: {
+                [key: string]: unknown;
+            } | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Summary */
+            summary?: string | null;
+        };
+        /** JudgeRunnerHistoryEvidence */
+        JudgeRunnerHistoryEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "runner_history";
+            payload: components["schemas"]["JudgeRunnerHistoryEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeRunnerHistoryEvidencePayload */
+        JudgeRunnerHistoryEvidencePayload: {
+            /** Entries */
+            entries?: components["schemas"]["JudgeRunnerHistoryEntry"][];
+            /** Excerpt */
+            excerpt?: components["schemas"]["JudgeRunnerHistoryEntry"][];
+            /** Latest Step Index */
+            latest_step_index?: number | null;
+            /** Path */
+            path?: string | null;
+        };
+        /** JudgeRunnerIssueEvidence */
+        JudgeRunnerIssueEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "runner_issue";
+            payload: components["schemas"]["JudgeRunnerIssueEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeRunnerIssueEvidencePayload */
+        JudgeRunnerIssueEvidencePayload: {
+            issue: components["schemas"]["JudgeRunnerIssueRecord"];
+            /** Path */
+            path?: string | null;
+        };
+        /** JudgeRunnerIssueRecord */
+        JudgeRunnerIssueRecord: {
+            /** Record */
+            record?: {
+                [key: string]: unknown;
+            } | null;
+            /** Severity */
+            severity?: string | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Summary */
+            summary?: string | null;
+        };
+        /** JudgeRunnerMemoryEntry */
+        JudgeRunnerMemoryEntry: {
+            /** Key */
+            key?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Updated Step Index */
+            updated_step_index?: number | null;
+            /** Value */
+            value?: unknown;
+        };
+        /** JudgeRunnerMemoryEvidence */
+        JudgeRunnerMemoryEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "runner_memory";
+            payload: components["schemas"]["JudgeRunnerMemoryEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeRunnerMemoryEvidencePayload */
+        JudgeRunnerMemoryEvidencePayload: {
+            /** Entries */
+            entries?: components["schemas"]["JudgeRunnerMemoryEntry"][];
+            /** Excerpt */
+            excerpt?: components["schemas"]["JudgeRunnerMemoryEntry"][];
+            /** Path */
+            path?: string | null;
+        };
+        /** JudgeRuntimeErrorLogEvidence */
+        JudgeRuntimeErrorLogEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "runtime_error_log";
+            payload: components["schemas"]["JudgeRuntimeErrorLogEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeRuntimeErrorLogEvidencePayload */
+        JudgeRuntimeErrorLogEvidencePayload: {
+            /** Entries */
+            entries?: components["schemas"]["JudgeRuntimeLogEntry"][];
+            /** Excerpt */
+            excerpt: string;
+            /** Path */
+            path?: string | null;
+            /** Step Indexes */
+            step_indexes?: number[];
+        };
+        /** JudgeRuntimeEventPayload */
+        JudgeRuntimeEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Error Type */
+            error_type?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Evidence Count */
+            evidence_count?: number | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Primary Evidence Count */
+            primary_evidence_count?: number | null;
+            /** Prompt Path */
+            prompt_path?: string | null;
+            /** Root Dir */
+            root_dir?: string | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Supporting Evidence Count */
+            supporting_evidence_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Tool Call Count */
+            tool_call_count?: number | null;
+            /** Verdict */
+            verdict?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** JudgeRuntimeLogEntry */
+        JudgeRuntimeLogEntry: {
+            /** Message */
+            message: string;
+            /** Source */
+            source?: string | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Surface Identity */
+            surface_identity?: string | null;
+        };
+        /** JudgeScreenDiffEvidence */
+        JudgeScreenDiffEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "screen_diff";
+            payload: components["schemas"]["JudgeScreenDiffEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeScreenDiffEvidencePayload */
+        JudgeScreenDiffEvidencePayload: {
+            /** Appeared Labels */
+            appeared_labels?: string[];
+            /** Appeared Nodes */
+            appeared_nodes?: components["schemas"]["JudgeScreenNodeChange"][];
+            /** Disappeared Labels */
+            disappeared_labels?: string[];
+            /** Disappeared Nodes */
+            disappeared_nodes?: components["schemas"]["JudgeScreenNodeChange"][];
+            /** Linked Visual Changes */
+            linked_visual_changes?: string[];
+            /** Path */
+            path: string;
+            /** Step Index */
+            step_index: number;
+            /** Summary */
+            summary?: string | null;
+            /** Updated Labels */
+            updated_labels?: string[];
+            /** Updated Nodes */
+            updated_nodes?: components["schemas"]["JudgeScreenNodeChange"][];
+        };
+        /** JudgeScreenFrameEvidence */
+        JudgeScreenFrameEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "screen_frame";
+            payload: components["schemas"]["JudgeScreenFrameEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeScreenFrameEvidencePayload */
+        JudgeScreenFrameEvidencePayload: {
+            compact_tree?: components["schemas"]["JudgeCompactUiTree"];
+            /** Focus Hits */
+            focus_hits?: components["schemas"]["JudgeFocusHit"][];
+            /** Package */
+            package?: string | null;
+            /** Path */
+            path: string;
+            /** Step Index */
+            step_index: number;
+            /** Tree Available */
+            tree_available?: boolean | null;
+            /** Tree Summary */
+            tree_summary?: string | null;
+        };
+        /** JudgeScreenNodeChange */
+        JudgeScreenNodeChange: {
+            /** Change Type */
+            change_type?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Stable Key */
+            stable_key?: string | null;
+        };
+        /** JudgeScreenshotEvidence */
+        JudgeScreenshotEvidence: {
+            /** Evidence Id */
+            evidence_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "screenshot";
+            payload: components["schemas"]["JudgeScreenshotEvidencePayload"];
+            /**
+             * Source
+             * @default artifact
+             * @constant
+             */
+            source: "artifact";
+            /** Summary */
+            summary: string;
+        };
+        /** JudgeScreenshotEvidencePayload */
+        JudgeScreenshotEvidencePayload: {
+            /** Action Summary */
+            action_summary?: string | null;
+            /** Diff Evidence Id */
+            diff_evidence_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "raw" | "annotated";
+            /** Observation Summary */
+            observation_summary?: string | null;
+            /** Package */
+            package?: string | null;
+            /** Path */
+            path: string;
+            /** Screenshot Id */
+            screenshot_id: string;
+            /** Step Index */
+            step_index: number;
+            /** Tree Evidence Id */
+            tree_evidence_id?: string | null;
+        };
+        /** KeyPressStepPayload */
+        KeyPressStepPayload: {
+            /** Key */
+            key: string;
+        };
+        /** KeyTransitionStepPayload */
+        KeyTransitionStepPayload: {
+            /** Key */
+            key: string;
         };
         /** KnowledgeCandidateApproveData */
         KnowledgeCandidateApproveData: {
@@ -2132,6 +3085,32 @@ export interface components {
             /** Card */
             card: components["schemas"]["ScreenKnowledgeCardInput"] | components["schemas"]["FlowKnowledgeCardInput"] | components["schemas"]["AssertionKnowledgeCardInput"] | components["schemas"]["IssueKnowledgeCardInput"] | components["schemas"]["DataKnowledgeCardInput"] | components["schemas"]["PolicyKnowledgeCardInput"] | components["schemas"]["DomainTermKnowledgeCardInput"];
         };
+        /** KnowledgePostActionOperationResultPayload */
+        KnowledgePostActionOperationResultPayload: {
+            /** Artifacts */
+            artifacts: {
+                [key: string]: string;
+            };
+            /** Candidate Id */
+            candidate_id?: string | null;
+            /** Knowledge Post Action Diagnostics Path */
+            knowledge_post_action_diagnostics_path: string;
+            /** Knowledge Post Action Request Path */
+            knowledge_post_action_request_path: string;
+            /** Knowledge Post Action Result Path */
+            knowledge_post_action_result_path: string;
+            /** Knowledge Post Action Tool Calls Path */
+            knowledge_post_action_tool_calls_path: string;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /**
+             * Submitted
+             * @default false
+             */
+            submitted: boolean;
+            /** Summary */
+            summary: string;
+        };
         /** KnowledgeSource */
         KnowledgeSource: {
             /**
@@ -2143,6 +3122,49 @@ export interface components {
             note?: string | null;
             /** Ref */
             ref?: string | null;
+        };
+        /** KnowledgeTimelineEventPayload */
+        KnowledgeTimelineEventPayload: {
+            /** Agent Input Path */
+            agent_input_path?: string | null;
+            /** Agent Role */
+            agent_role?: string | null;
+            /** Artifact Count */
+            artifact_count?: number | null;
+            /** Candidate Count */
+            candidate_count?: number | null;
+            /** Candidate Id */
+            candidate_id?: string | null;
+            /** Candidate Title */
+            candidate_title?: string | null;
+            /** Card Type */
+            card_type?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Generated Candidate Count */
+            generated_candidate_count?: number | null;
+            /** Judge Verdict */
+            judge_verdict?: string | null;
+            /** Lifecycle State */
+            lifecycle_state?: string | null;
+            /** Prompt Path */
+            prompt_path?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Submitted */
+            submitted?: boolean | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Tool Call Count */
+            tool_call_count?: number | null;
+            /** Tool Calls */
+            tool_calls?: string[] | null;
+            /** Tool Index */
+            tool_index?: number | null;
+            /** Tool Name */
+            tool_name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** LatestOptimizeOperationData */
         LatestOptimizeOperationData: {
@@ -2162,6 +3184,43 @@ export interface components {
             status: string;
             /** Summary */
             summary?: string | null;
+        };
+        /** LlmRequestTimelinePayload */
+        LlmRequestTimelinePayload: {
+            /** Llm Model */
+            llm_model?: string | null;
+            /** Llm Provider */
+            llm_provider?: string | null;
+            /** Llm Request Id */
+            llm_request_id?: string | null;
+            /** Llm Text */
+            llm_text?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** LlmResponseTimelinePayload */
+        LlmResponseTimelinePayload: {
+            /** Llm Model */
+            llm_model?: string | null;
+            /** Llm Provider */
+            llm_provider?: string | null;
+            /** Llm Request Id */
+            llm_request_id?: string | null;
+            /** Llm Status Code */
+            llm_status_code?: number | null;
+            /** Llm Text */
+            llm_text?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** LogEventPayload */
+        LogEventPayload: {
+            /** Level */
+            level: string;
+            /** Logger */
+            logger: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ObservationSnapshot */
         ObservationSnapshot: {
@@ -2281,10 +3340,6 @@ export interface components {
             execution_usage?: components["schemas"]["TokenUsageData"] | null;
             /** Failure Category */
             failure_category?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            };
             /** Operation Id */
             operation_id: string;
             /** Phase */
@@ -2304,10 +3359,7 @@ export interface components {
             resource_scope?: string | null;
             /** Run Type */
             run_type?: string | null;
-            /** Schema Versions */
-            schema_versions?: {
-                [key: string]: string;
-            };
+            schema_versions?: components["schemas"]["ArtifactSchemaVersions"];
             /** Source Recording Id */
             source_recording_id?: string | null;
             /** Status */
@@ -2437,24 +3489,16 @@ export interface components {
             position_label?: string | null;
             /** Primary Artifact Ids */
             primary_artifact_ids?: string[];
-            /** Progress */
-            progress?: {
-                [key: string]: unknown;
-            };
+            progress?: components["schemas"]["OperationProgressData"] | null;
             /** Repro Dir */
             repro_dir?: string | null;
             /** Resource Scope */
             resource_scope?: string | null;
             /** Result */
-            result?: components["schemas"]["RunCaseResultData"] | {
-                [key: string]: unknown;
-            } | null;
+            result?: components["schemas"]["RunCaseResultData"] | components["schemas"]["PhasedOperationResult"] | components["schemas"]["RunPlanOperationResultPayload"] | components["schemas"]["RunPlansResultPayload"] | components["schemas"]["VerifyChangeOperationResultPayload"] | components["schemas"]["ReviewOperationResultPayload"] | components["schemas"]["OptimizeCaseOperationResultPayload"] | components["schemas"]["KnowledgePostActionOperationResultPayload"] | components["schemas"]["RecordingSessionTerminalResult"] | components["schemas"]["RecordingReplayOperationResult"] | components["schemas"]["RecordingAnalysisResult"] | null;
             /** Run Type */
             run_type?: string | null;
-            /** Schema Versions */
-            schema_versions?: {
-                [key: string]: string;
-            };
+            schema_versions?: components["schemas"]["ArtifactSchemaVersions"];
             /** Source Recording Id */
             source_recording_id?: string | null;
             /** Started At */
@@ -2471,35 +3515,60 @@ export interface components {
             /** Warning Summary */
             warning_summary?: string[];
         };
-        /** OperationEventRecord */
-        OperationEventRecord: {
+        /** OperationEventItemData */
+        OperationEventItemData: {
+            /** Agent Role */
+            agent_role?: string | null;
+            /** App Id */
+            app_id?: string | null;
+            /** Attempt Index */
+            attempt_index?: number | null;
+            /** Case Id */
+            case_id?: string | null;
+            /** Child Operation Id */
+            child_operation_id?: string | null;
             /** Data Json */
-            data_json?: {
-                [key: string]: unknown;
-            };
+            data_json?: components["schemas"]["RunStartedEventPayload"] | components["schemas"]["StepStartedEventPayload"] | components["schemas"]["PerceptionCompletedEventPayload"] | components["schemas"]["RunnerToolCalledEventPayload"] | components["schemas"]["RunnerContractMissEventPayload"] | components["schemas"]["RunnerDecisionCompletedEventPayload"] | components["schemas"]["RunnerActionEventPayload"] | components["schemas"]["RunStoppedEventPayload"] | components["schemas"]["RunFailedEventPayload"] | components["schemas"]["LogEventPayload"] | components["schemas"]["LlmRequestTimelinePayload"] | components["schemas"]["LlmResponseTimelinePayload"] | components["schemas"]["WorkflowStartedEventPayload"] | components["schemas"]["WorkflowAttemptStartedEventPayload"] | components["schemas"]["WorkflowAttemptFinishedEventPayload"] | components["schemas"]["WorkflowRetryScheduledEventPayload"] | components["schemas"]["WorkflowFinishedEventPayload"] | components["schemas"]["JudgeDecisionEventPayload"] | components["schemas"]["AgentRuntimeLifecycleEventPayload"] | components["schemas"]["ContextPrepareParamsResolvedEventPayload"] | components["schemas"]["ContextPrepareDeviceReadyEventPayload"] | components["schemas"]["ContextPreparePerceptionReadyEventPayload"] | components["schemas"]["RunnerRuntimeEventPayload"] | components["schemas"]["JudgeRuntimeEventPayload"] | components["schemas"]["PostRunChildOperationEventPayload"] | components["schemas"]["OperationSubmittedEventPayload"] | components["schemas"]["OperationStartedEventPayload"] | components["schemas"]["OperationInterruptedEventPayload"] | components["schemas"]["ResourceClaimedEventPayload"] | components["schemas"]["ResourceReleasedEventPayload"] | components["schemas"]["ResourceConflictEventPayload"] | components["schemas"]["BatchStartedEventPayload"] | components["schemas"]["BatchChildStartedEventPayload"] | components["schemas"]["BatchChildFinishedEventPayload"] | components["schemas"]["BatchStoppedEarlyEventPayload"] | components["schemas"]["BatchFinishedEventPayload"] | components["schemas"]["PlanningTimelineEventPayload"] | components["schemas"]["ChangeVerificationReviewContractLoadedPayload"] | components["schemas"]["ChangeVerificationCasesReadyPayload"] | components["schemas"]["ChangeVerificationPlanSavedPayload"] | components["schemas"]["ReviewTimelineEventPayload"] | components["schemas"]["KnowledgeTimelineEventPayload"] | components["schemas"]["OptimizeTimelineEventPayload"] | components["schemas"]["RecordingIdEventPayload"] | components["schemas"]["RecordingStartedEventPayload"] | components["schemas"]["RecordingTapObservedEventPayload"] | components["schemas"]["RecordingInteractionRecordedEventPayload"] | components["schemas"]["RecordingCaseExportedEventPayload"] | components["schemas"]["RecordingReplayLinkedEventPayload"] | components["schemas"]["RecordingReplayStartedEventPayload"] | components["schemas"]["RecordingReplayCompletedEventPayload"] | components["schemas"]["RecordingBridgeCleanupFailedEventPayload"] | components["schemas"]["RecordingAnalysisStatusEventPayload"] | components["schemas"]["RecordingAnalysisBundleLoadedEventPayload"] | components["schemas"]["RecordingAnalysisStepEventPayload"] | components["schemas"]["GenericOperationEventPayload"] | null;
             /** Event Type */
             event_type: string;
             /** Message */
             message?: string | null;
             /** Operation Id */
             operation_id: string;
+            /** Parent Operation Id */
+            parent_operation_id?: string | null;
+            /** Plan Id */
+            plan_id?: string | null;
             /** Seq */
             seq: number;
+            /** Summary */
+            summary?: string | null;
+            /** Timeline Phase */
+            timeline_phase?: string | null;
+            /** Timeline Scope */
+            timeline_scope?: string | null;
             /** Timestamp */
-            timestamp?: string;
+            timestamp: string;
         };
         /** OperationEventsData */
         OperationEventsData: {
             /** After Seq */
             after_seq: number;
             /** Items */
-            items?: components["schemas"]["OperationEventRecord"][];
+            items?: components["schemas"]["OperationEventItemData"][];
             /** Limit */
             limit: number;
             /** Next After Seq */
             next_after_seq: number;
             /** Operation Id */
             operation_id: string;
+        };
+        /** OperationInterruptedEventPayload */
+        OperationInterruptedEventPayload: {
+            /** Command */
+            command?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** OperationListData */
         OperationListData: {
@@ -2521,14 +3590,146 @@ export interface components {
              */
             total: number;
         };
+        /** OperationProgressData */
+        OperationProgressData: {
+            /** Agent Role */
+            agent_role?: string | null;
+            /** Analysis Status */
+            analysis_status?: string | null;
+            /** App Id */
+            app_id?: string | null;
+            /** Background Mode */
+            background_mode?: string | null;
+            /** Batch Kind */
+            batch_kind?: string | null;
+            /** Bridge Status */
+            bridge_status?: string | null;
+            /** Case Count */
+            case_count?: number | null;
+            /** Case Id */
+            case_id?: string | null;
+            /** Case Index */
+            case_index?: number | null;
+            /** Case Title */
+            case_title?: string | null;
+            /** Completed Case Count */
+            completed_case_count?: number | null;
+            /** Completed Cases */
+            completed_cases?: number | null;
+            /** Completed Children */
+            completed_children?: number | null;
+            /** Completed Steps */
+            completed_steps?: number | null;
+            /** Current Case Id */
+            current_case_id?: string | null;
+            /** Current Child Case Id */
+            current_child_case_id?: string | null;
+            /** Current Child Operation Id */
+            current_child_operation_id?: string | null;
+            /** Current Child Plan Id */
+            current_child_plan_id?: string | null;
+            /** Current Child Title */
+            current_child_title?: string | null;
+            /** Current Step Seq */
+            current_step_seq?: number | null;
+            /** Detached Pid */
+            detached_pid?: number | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            interactive_session?: components["schemas"]["InteractiveSessionStateData"] | null;
+            /** Last Case Id */
+            last_case_id?: string | null;
+            /** Last Child Case Id */
+            last_child_case_id?: string | null;
+            /** Last Child Operation Id */
+            last_child_operation_id?: string | null;
+            /** Last Child Plan Id */
+            last_child_plan_id?: string | null;
+            /** Last Child Title */
+            last_child_title?: string | null;
+            /** Last Event Type */
+            last_event_type?: string | null;
+            /** Latest Event Count */
+            latest_event_count?: number | null;
+            /** Latest Frame Seq */
+            latest_frame_seq?: number | null;
+            /** Latest Timeline Count */
+            latest_timeline_count?: number | null;
+            /** Lifecycle State */
+            lifecycle_state?: string | null;
+            /** Manual Case Count */
+            manual_case_count?: number | null;
+            /** Phase */
+            phase?: string | null;
+            /** Plan Event Type */
+            plan_event_type?: string | null;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Plan Name */
+            plan_name?: string | null;
+            /** Plan Path */
+            plan_path?: string | null;
+            /** Planner Case Count */
+            planner_case_count?: number | null;
+            /** Recording Id */
+            recording_id?: string | null;
+            /** Replay Operation Id */
+            replay_operation_id?: string | null;
+            /** Review Hint Enabled */
+            review_hint_enabled?: boolean | null;
+            /** Review Required Case Count */
+            review_required_case_count?: number | null;
+            /** Snapshot Path */
+            snapshot_path?: string | null;
+            /** Source Recording Case Path */
+            source_recording_case_path?: string | null;
+            /** Stage */
+            stage?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Target Case Count */
+            target_case_count?: number | null;
+            /** Total Cases */
+            total_cases?: number | null;
+            /** Total Children */
+            total_children?: number | null;
+            /** Total Steps */
+            total_steps?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Verification Verdict */
+            verification_verdict?: string | null;
+            /** Verify Change Event Type */
+            verify_change_event_type?: string | null;
+        };
+        /** OperationStartedEventPayload */
+        OperationStartedEventPayload: {
+            /** Case Id */
+            case_id?: string | null;
+            /** Case Title */
+            case_title?: string | null;
+            /** Command */
+            command?: string | null;
+            /** Operation Id */
+            operation_id?: string | null;
+            /** Parent Operation Id */
+            parent_operation_id?: string | null;
+            /** Pid */
+            pid?: number | null;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Position Label */
+            position_label?: string | null;
+            /** Title */
+            title?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** OperationSubmissionData */
         OperationSubmissionData: {
             /** App Id */
             app_id?: string | null;
-            /** Execution Result */
-            execution_result?: {
-                [key: string]: unknown;
-            } | null;
+            execution_result?: components["schemas"]["ExecutedPlanResult"] | null;
             /** Operation Id */
             operation_id: string;
             /** Phase */
@@ -2537,14 +3738,18 @@ export interface components {
             plan_id?: string | null;
             /** Plan Name */
             plan_name?: string | null;
-            /** Plan Result */
-            plan_result?: {
-                [key: string]: unknown;
-            } | null;
+            plan_result?: components["schemas"]["GeneratedPlanResult"] | null;
             /** Status */
             status: string;
             /** Verification Verdict */
             verification_verdict?: string | null;
+        };
+        /** OperationSubmittedEventPayload */
+        OperationSubmittedEventPayload: {
+            /** Mode */
+            mode?: string | null;
+            /** Pid */
+            pid?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -2597,6 +3802,83 @@ export interface components {
             /** Verification Verdict */
             verification_verdict?: string | null;
         };
+        /** OptimizeCaseOperationResultPayload */
+        OptimizeCaseOperationResultPayload: {
+            /**
+             * Applied
+             * @default false
+             */
+            applied: boolean;
+            /** Artifacts */
+            artifacts: {
+                [key: string]: string;
+            };
+            /** Confidence */
+            confidence?: number | null;
+            /** Field Diff Artifact Path */
+            field_diff_artifact_path: string;
+            /** Field Diffs */
+            field_diffs: {
+                [key: string]: unknown;
+            }[];
+            /** Optimization Diagnostics Path */
+            optimization_diagnostics_path: string;
+            /** Optimization Request Path */
+            optimization_request_path: string;
+            /** Optimization Result Path */
+            optimization_result_path: string;
+            /** Patched Fields */
+            patched_fields: string[];
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Summary */
+            summary: string;
+        };
+        /** OptimizeTimelineEventPayload */
+        OptimizeTimelineEventPayload: {
+            /** Agent Role */
+            agent_role?: string | null;
+            /** Applied */
+            applied?: boolean | null;
+            /** Attempt Count */
+            attempt_count?: number | null;
+            /** Error Type */
+            error_type?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state?: string | null;
+            /** Patched Field Count */
+            patched_field_count?: number | null;
+            /** Patched Field Summaries */
+            patched_field_summaries?: string[] | null;
+            /** Patched Fields */
+            patched_fields?: string[] | null;
+            /** Request Path */
+            request_path?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Skipped Field Count */
+            skipped_field_count?: number | null;
+            /** Step Screen Count */
+            step_screen_count?: number | null;
+            /** Step Summary Count */
+            step_summary_count?: number | null;
+            /** Step Transition Count */
+            step_transition_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Tool Call Count */
+            tool_call_count?: number | null;
+            /** Tool Calls */
+            tool_calls?: string[] | null;
+            /** Tool Index */
+            tool_index?: number | null;
+            /** Tool Name */
+            tool_name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** OrchestrationConfigEditor */
         OrchestrationConfigEditor: {
             /**
@@ -2619,6 +3901,73 @@ export interface components {
              * @default 0
              */
             max_retry_attempts: number;
+        };
+        /** PerceptionCompletedEventPayload */
+        PerceptionCompletedEventPayload: {
+            /** Element Count */
+            element_count: number;
+            /** Icon Conf */
+            icon_conf?: number | null;
+            /** Step */
+            step: number;
+            /** Tree Available */
+            tree_available?: boolean | null;
+            /** Tree Node Count */
+            tree_node_count?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PhasedOperationResult */
+        PhasedOperationResult: {
+            /** App Id */
+            app_id: string;
+            execution_result?: components["schemas"]["ExecutedPlanResult"] | null;
+            execution_usage?: components["schemas"]["TokenUsage"] | null;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: "planned" | "executed";
+            /** Plan Id */
+            plan_id: string;
+            /** Plan Name */
+            plan_name?: string | null;
+            plan_result: components["schemas"]["GeneratedPlanResult"];
+            planning_usage?: components["schemas"]["TokenUsage"] | null;
+            total_usage?: components["schemas"]["TokenUsage"] | null;
+        };
+        /** PlanCaseExecutionItem */
+        PlanCaseExecutionItem: {
+            /** Case Id */
+            case_id: string;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Execution Status
+             * @enum {string}
+             */
+            execution_status: "completed" | "failed" | "incomplete";
+            /** Judge Summary */
+            judge_summary?: string | null;
+            /** Operation Id */
+            operation_id?: string | null;
+            /**
+             * Run Dir
+             * Format: path
+             */
+            run_dir: string;
+            /** Status */
+            status?: string | null;
+            /** Stop Reason */
+            stop_reason?: string | null;
+            /** Title */
+            title: string;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "passed" | "failed" | "inconclusive";
         };
         /** PlanCaseReorderRequest */
         PlanCaseReorderRequest: {
@@ -2767,6 +4116,68 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** PlanningTimelineEventPayload */
+        PlanningTimelineEventPayload: {
+            /** App Id */
+            app_id?: string | null;
+            /** Assets Root */
+            assets_root?: string | null;
+            /** Case Count */
+            case_count?: number | null;
+            /** Case Id */
+            case_id?: string | null;
+            /** Case Index */
+            case_index?: number | null;
+            /** Case Title */
+            case_title?: string | null;
+            /** Completed Case Count */
+            completed_case_count?: number | null;
+            /** Duplicate Titles */
+            duplicate_titles?: string[] | null;
+            /** Has Requirement Doc */
+            has_requirement_doc?: boolean | null;
+            /** Has Review Contract */
+            has_review_contract?: boolean | null;
+            /** Has Technical Doc */
+            has_technical_doc?: boolean | null;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Plan Path */
+            plan_path?: string | null;
+            planning_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Snapshot Path */
+            snapshot_path?: string | null;
+            /** Target Case Count */
+            target_case_count?: number | null;
+            /** Uncovered Indices */
+            uncovered_indices?: number[] | null;
+        };
+        /** PointerForwardingPayload */
+        PointerForwardingPayload: {
+            /** End X */
+            end_x: number;
+            /** End Y */
+            end_y: number;
+            /** Height */
+            height: number;
+            /** Pointer Id */
+            pointer_id: number;
+            /** Start X */
+            start_x: number;
+            /** Start Y */
+            start_y: number;
+            /** Width */
+            width: number;
+        };
+        /** PointerStepPayload */
+        PointerStepPayload: {
+            /** Pointer Id */
+            pointer_id: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** PolicyKnowledgeCandidateDraft */
         PolicyKnowledgeCandidateDraft: {
             /** App Id */
@@ -2844,6 +4255,29 @@ export interface components {
             platform_constraints?: string[];
             /** Risk Controls */
             risk_controls?: string[];
+        };
+        /** PostRunChildOperationEventPayload */
+        PostRunChildOperationEventPayload: {
+            /** Case Id */
+            case_id: string;
+            /** Child Kind */
+            child_kind: string;
+            /** Error */
+            error?: string | null;
+            /** Judge Result Path */
+            judge_result_path?: string | null;
+            /** Operation Id */
+            operation_id?: string | null;
+            /** Optimization Fields */
+            optimization_fields?: string[];
+            /** Request Path */
+            request_path?: string | null;
+            /** Source Attempt Index */
+            source_attempt_index?: number | null;
+            /** Trigger Signals */
+            trigger_signals?: string[];
+            /** Trigger Source */
+            trigger_source?: string | null;
         };
         /** ProxyConfigEditor */
         ProxyConfigEditor: {
@@ -2944,9 +4378,17 @@ export interface components {
             /** Warnings */
             warnings?: string[];
         };
+        /** RecordingAnalysisBundleLoadedEventPayload */
+        RecordingAnalysisBundleLoadedEventPayload: {
+            /** Recording Id */
+            recording_id: string;
+            /** Total Steps */
+            total_steps: number;
+        };
         /** RecordingAnalysisData */
         RecordingAnalysisData: {
             analysis: components["schemas"]["RecordingAnalysisResult"];
+            operation?: components["schemas"]["OperationSubmissionData"] | null;
         };
         /** RecordingAnalysisOutcomeEvidence */
         RecordingAnalysisOutcomeEvidence: {
@@ -3056,6 +4498,13 @@ export interface components {
             /** Tree Evidence Id */
             tree_evidence_id?: string | null;
         };
+        /** RecordingAnalysisStatusEventPayload */
+        RecordingAnalysisStatusEventPayload: {
+            /** Analysis Status */
+            analysis_status?: string | null;
+            /** Recording Id */
+            recording_id: string;
+        };
         /** RecordingAnalysisStep */
         RecordingAnalysisStep: {
             /** Action */
@@ -3089,6 +4538,17 @@ export interface components {
             summary?: string | null;
             /** Warnings */
             warnings?: string[];
+        };
+        /** RecordingAnalysisStepEventPayload */
+        RecordingAnalysisStepEventPayload: {
+            /** Completed Steps */
+            completed_steps?: number | null;
+            /** Current Step Seq */
+            current_step_seq?: number | null;
+            /** Recording Id */
+            recording_id: string;
+            /** Total Steps */
+            total_steps?: number | null;
         };
         /** RecordingAnalysisTargetCandidate */
         RecordingAnalysisTargetCandidate: {
@@ -3173,6 +4633,15 @@ export interface components {
             bridge: components["schemas"]["RecordingBridgeInfo"];
             session: components["schemas"]["RecordingSession"];
         };
+        /** RecordingBridgeCleanupFailedEventPayload */
+        RecordingBridgeCleanupFailedEventPayload: {
+            /** Error */
+            error: string;
+            /** Recording Id */
+            recording_id: string;
+            /** Status */
+            status: string;
+        };
         /** RecordingBridgeInfo */
         RecordingBridgeInfo: {
             /** Base Url */
@@ -3207,6 +4676,19 @@ export interface components {
             /** Snapshot Path */
             snapshot_path?: string | null;
         };
+        /** RecordingCaseExportedEventPayload */
+        RecordingCaseExportedEventPayload: {
+            /** Case Id */
+            case_id: string;
+            /** Case Path */
+            case_path: string;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Plan Path */
+            plan_path?: string | null;
+            /** Recording Id */
+            recording_id: string;
+        };
         /** RecordingCreateData */
         RecordingCreateData: {
             session: components["schemas"]["RecordingSession"];
@@ -3228,17 +4710,134 @@ export interface components {
             /** Timeline */
             timeline?: components["schemas"]["TimelineEntry"][];
         };
+        /** RecordingIdEventPayload */
+        RecordingIdEventPayload: {
+            /** Recording Id */
+            recording_id: string;
+        };
         /** RecordingInteractionData */
         RecordingInteractionData: {
             entry: components["schemas"]["TimelineEntry"];
+        };
+        /** RecordingInteractionRecordedEventPayload */
+        RecordingInteractionRecordedEventPayload: {
+            /** After Observation Id */
+            after_observation_id?: string | null;
+            /** After Stabilized */
+            after_stabilized?: boolean | null;
+            /** Before Observation Id */
+            before_observation_id?: string | null;
+            /** Entry Id */
+            entry_id: string;
+            /** Forwarding Event Id */
+            forwarding_event_id?: string | null;
+            /** Kind */
+            kind: string;
+            /** Recording Event Id */
+            recording_event_id?: string | null;
         };
         /** RecordingObservationData */
         RecordingObservationData: {
             observation: components["schemas"]["ObservationSnapshot"];
         };
+        /** RecordingReplayCompletedEventPayload */
+        RecordingReplayCompletedEventPayload: {
+            /** Case Id */
+            case_id: string;
+            /** Recording Id */
+            recording_id: string;
+            /** Run Dir */
+            run_dir: string;
+            /** Verdict */
+            verdict?: string | null;
+        };
         /** RecordingReplayData */
         RecordingReplayData: {
             replay: components["schemas"]["RecordingReplayResult"];
+        };
+        /** RecordingReplayLinkedEventPayload */
+        RecordingReplayLinkedEventPayload: {
+            /** Operation Id */
+            operation_id: string;
+            /** Recording Id */
+            recording_id: string;
+            /** Verdict */
+            verdict?: string | null;
+        };
+        /** RecordingReplayOperationResult */
+        RecordingReplayOperationResult: {
+            /** App Id */
+            app_id?: string | null;
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            };
+            /**
+             * Attempt Count
+             * @default 0
+             */
+            attempt_count: number;
+            /** Attempts */
+            attempts?: components["schemas"]["CaseExecutionAttempt"][];
+            /** Case Id */
+            case_id: string;
+            /** Confidence */
+            confidence?: number | null;
+            /** Current Step */
+            current_step?: string | null;
+            /** Event History */
+            event_history?: {
+                [key: string]: unknown;
+            }[];
+            /** Evidence */
+            evidence?: (components["schemas"]["JudgeExecutionEvidence"] | components["schemas"]["JudgeEventEvidence"] | components["schemas"]["JudgeDecisionTraceEvidence"] | components["schemas"]["JudgeRunnerHistoryEvidence"] | components["schemas"]["JudgeRunnerMemoryEvidence"] | components["schemas"]["JudgeRunnerIssueEvidence"] | components["schemas"]["JudgeRuntimeErrorLogEvidence"] | components["schemas"]["JudgeScreenFrameEvidence"] | components["schemas"]["JudgeScreenDiffEvidence"] | components["schemas"]["JudgeScreenshotEvidence"])[];
+            execution: components["schemas"]["ExecutionOutcome"];
+            /** Failure Hypothesis */
+            failure_hypothesis?: string | null;
+            /** Final Decision */
+            final_decision?: {
+                [key: string]: unknown;
+            } | null;
+            /** Judge Reason */
+            judge_reason?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** Missing Evidence */
+            missing_evidence?: string[];
+            /** Plan Id */
+            plan_id: string;
+            /** Recording Id */
+            recording_id: string;
+            /**
+             * Run Dir
+             * Format: path
+             */
+            run_dir: string;
+            /**
+             * Schema Version
+             * @default phase8.orchestrated_case_execution_result.v1
+             */
+            schema_version: string;
+            /**
+             * Status
+             * @default finished
+             * @enum {string}
+             */
+            status: "pending" | "ready" | "running" | "needs_retry" | "escalated" | "finished";
+            /** Summary */
+            summary?: string | null;
+            /** Supplemental Context */
+            supplemental_context?: string[];
+            /** Supporting Evidence Ids */
+            supporting_evidence_ids?: string[];
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "passed" | "failed" | "inconclusive";
         };
         /** RecordingReplayResult */
         RecordingReplayResult: {
@@ -3270,6 +4869,13 @@ export interface components {
              * @enum {string}
              */
             verdict: "passed" | "failed" | "inconclusive";
+        };
+        /** RecordingReplayStartedEventPayload */
+        RecordingReplayStartedEventPayload: {
+            /** Case Id */
+            case_id: string;
+            /** Recording Id */
+            recording_id: string;
         };
         /** RecordingSession */
         RecordingSession: {
@@ -3307,9 +4913,34 @@ export interface components {
         RecordingSessionData: {
             session: components["schemas"]["RecordingSession"];
         };
+        /** RecordingSessionTerminalResult */
+        RecordingSessionTerminalResult: {
+            /** Recording Id */
+            recording_id: string;
+            /** Status */
+            status: string;
+        };
+        /** RecordingStartedEventPayload */
+        RecordingStartedEventPayload: {
+            /** Bridge Ws Url */
+            bridge_ws_url: string;
+            /** Recording Id */
+            recording_id: string;
+        };
         /** RecordingTapData */
         RecordingTapData: {
             event: components["schemas"]["RecordedInputEvent"];
+        };
+        /** RecordingTapObservedEventPayload */
+        RecordingTapObservedEventPayload: {
+            /** Event Id */
+            event_id: string;
+            /** Kind */
+            kind: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
         };
         /** RecordingTimelineData */
         RecordingTimelineData: {
@@ -3339,10 +4970,6 @@ export interface components {
             execution_usage?: components["schemas"]["TokenUsageData"] | null;
             /** Failure Category */
             failure_category?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            };
             /** Operation Id */
             operation_id: string;
             /** Phase */
@@ -3362,10 +4989,7 @@ export interface components {
             resource_scope?: string | null;
             /** Run Type */
             run_type?: string | null;
-            /** Schema Versions */
-            schema_versions?: {
-                [key: string]: string;
-            };
+            schema_versions?: components["schemas"]["ArtifactSchemaVersions"];
             /** Source Recording Id */
             source_recording_id?: string | null;
             /** Status */
@@ -3400,7 +5024,38 @@ export interface components {
              * Target Kind
              * @enum {string}
              */
-            target_kind: "plan" | "run_case" | "run_plan" | "run_plans" | "verify_change" | "review";
+            target_kind: "plan" | "run_case" | "run_plan" | "run_plans" | "verify_change" | "review" | "optimize_case" | "knowledge_post_action";
+        };
+        /** ResourceClaimedEventPayload */
+        ResourceClaimedEventPayload: {
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Resource Scope */
+            resource_scope?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ResourceConflictEventPayload */
+        ResourceConflictEventPayload: {
+            /** Blocking Device Ref */
+            blocking_device_ref?: string | null;
+            /** Command */
+            command?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Requested Device Ref */
+            requested_device_ref?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ResourceReleasedEventPayload */
+        ResourceReleasedEventPayload: {
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ReviewCliRequest */
         ReviewCliRequest: {
@@ -3426,6 +5081,64 @@ export interface components {
             tags?: string[];
             /** Technical Doc Path */
             technical_doc_path?: string | null;
+        };
+        /** ReviewOperationResultPayload */
+        ReviewOperationResultPayload: {
+            /** App Id */
+            app_id?: string | null;
+            /** Artifact Manifest Path */
+            artifact_manifest_path: string;
+            /** Artifact Manifest Version */
+            artifact_manifest_version?: number | null;
+            /** Artifacts */
+            artifacts: {
+                [key: string]: string;
+            };
+            /** Contract Versions */
+            contract_versions?: {
+                [key: string]: string | null;
+            };
+            /** Diagnostics Path */
+            diagnostics_path?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Failure Category */
+            failure_category?: string | null;
+            /** Finding Count */
+            finding_count: number;
+            /** High Risk Count */
+            high_risk_count: number;
+            /** Llm Transcript Path */
+            llm_transcript_path?: string | null;
+            /** Retrieval Path */
+            retrieval_path: string;
+            /** Review Orchestration Path */
+            review_orchestration_path: string;
+            /** Review Request Path */
+            review_request_path: string;
+            /** Review Result Path */
+            review_result_path: string;
+            /** Risk Summary */
+            risk_summary: string;
+            /** Warning Summary */
+            warning_summary?: string[];
+        };
+        /** ReviewTimelineEventPayload */
+        ReviewTimelineEventPayload: {
+            /** App Id */
+            app_id: string;
+            /** Finding Count */
+            finding_count?: number | null;
+            /** Prompt Hit Count */
+            prompt_hit_count?: number | null;
+            /** Retrieval Hit Count */
+            retrieval_hit_count?: number | null;
+            /** Root Dir */
+            root_dir?: string | null;
+            /** Suggested Case Count */
+            suggested_case_count?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** RunArtifactChildItemData */
         RunArtifactChildItemData: {
@@ -3563,7 +5276,7 @@ export interface components {
                 [key: string]: unknown;
             }[];
             /** Evidence */
-            evidence?: components["schemas"]["JudgeEvidence"][];
+            evidence?: (components["schemas"]["JudgeExecutionEvidence"] | components["schemas"]["JudgeEventEvidence"] | components["schemas"]["JudgeDecisionTraceEvidence"] | components["schemas"]["JudgeRunnerHistoryEvidence"] | components["schemas"]["JudgeRunnerMemoryEvidence"] | components["schemas"]["JudgeRunnerIssueEvidence"] | components["schemas"]["JudgeRuntimeErrorLogEvidence"] | components["schemas"]["JudgeScreenFrameEvidence"] | components["schemas"]["JudgeScreenDiffEvidence"] | components["schemas"]["JudgeScreenshotEvidence"])[];
             execution: components["schemas"]["ExecutionOutcome"];
             /** Failure Hypothesis */
             failure_hypothesis?: string | null;
@@ -3595,6 +5308,13 @@ export interface components {
             supporting_evidence_ids?: string[];
             /** Verdict */
             verdict: string;
+        };
+        /** RunFailedEventPayload */
+        RunFailedEventPayload: {
+            /** Run Dir */
+            run_dir: string;
+        } & {
+            [key: string]: unknown;
         };
         /** RunPlanCliRequest */
         RunPlanCliRequest: {
@@ -3632,6 +5352,92 @@ export interface components {
                 [key: string]: string | number | boolean;
             };
         };
+        /** RunPlanOperationResultPayload */
+        RunPlanOperationResultPayload: {
+            /** Artifacts */
+            artifacts: {
+                [key: string]: string;
+            };
+            /** Failed Cases */
+            failed_cases: number;
+            /** Inconclusive Cases */
+            inconclusive_cases: number;
+            /** Items */
+            items: components["schemas"]["PlanCaseExecutionItem"][];
+            /** Passed Cases */
+            passed_cases: number;
+            /** Plan Id */
+            plan_id: string;
+            /** Report Path */
+            report_path: string;
+            /** Stopped Early */
+            stopped_early: boolean;
+            /** Summary Path */
+            summary_path: string;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Total Cases */
+            total_cases: number;
+            /**
+             * Verification Status
+             * @enum {string}
+             */
+            verification_status: "passed" | "failed" | "inconclusive" | "stopped";
+        };
+        /** RunPlansAggregate */
+        RunPlansAggregate: {
+            /** Cancelled Children */
+            cancelled_children: number;
+            /** Completed Children */
+            completed_children: number;
+            /** Current Child Operation Id */
+            current_child_operation_id?: string | null;
+            /** Current Child Plan Id */
+            current_child_plan_id?: string | null;
+            /** Current Child Title */
+            current_child_title?: string | null;
+            /** Failed Children */
+            failed_children: number;
+            /** Queued Children */
+            queued_children: number;
+            /** Running Children */
+            running_children: number;
+            /** Succeeded Children */
+            succeeded_children: number;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Total Children */
+            total_children: number;
+        };
+        /** RunPlansChildSummary */
+        RunPlansChildSummary: {
+            /** Created At */
+            created_at: string;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /** Plan Id */
+            plan_id?: string | null;
+            /** Position Index */
+            position_index?: number | null;
+            /** Position Label */
+            position_label?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Title */
+            title: string;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Verification Verdict */
+            verification_verdict?: ("passed" | "failed" | "inconclusive") | null;
+        };
         /** RunPlansCliRequest */
         RunPlansCliRequest: {
             /** App Id */
@@ -3668,6 +5474,133 @@ export interface components {
                 [key: string]: string | number | boolean;
             };
         };
+        /** RunPlansResultPayload */
+        RunPlansResultPayload: {
+            aggregate: components["schemas"]["RunPlansAggregate"];
+            /** App Id */
+            app_id: string;
+            /**
+             * Batch Kind
+             * @default single_device_multi_plan
+             * @constant
+             */
+            batch_kind: "single_device_multi_plan";
+            /** Children */
+            children: components["schemas"]["RunPlansChildSummary"][];
+            /** Completed Children */
+            completed_children: number;
+            /** Device Ref */
+            device_ref?: string | null;
+            /** Plan Ids */
+            plan_ids: string[];
+            /**
+             * Stopped Early
+             * @default false
+             */
+            stopped_early: boolean;
+            token_usage?: components["schemas"]["TokenUsage"] | null;
+            /** Total Children */
+            total_children: number;
+            /** Verification Verdict */
+            verification_verdict?: ("passed" | "failed" | "inconclusive") | null;
+        };
+        /** RunStartedEventPayload */
+        RunStartedEventPayload: {
+            /** Case Title */
+            case_title?: string | null;
+            /** Run Dir */
+            run_dir: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunStoppedEventPayload */
+        RunStoppedEventPayload: {
+            /** Action */
+            action?: string | null;
+            /** Consecutive No Effect Count */
+            consecutive_no_effect_count?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Step */
+            step?: number | null;
+            /** Summary */
+            summary?: string | null;
+            /** Warning Code */
+            warning_code?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunnerActionEventPayload */
+        RunnerActionEventPayload: {
+            /** Action */
+            action: string;
+            /** Step */
+            step?: number | null;
+            /** Summary */
+            summary?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunnerContractMissEventPayload */
+        RunnerContractMissEventPayload: {
+            /** Attempt */
+            attempt: number;
+            /** Result Summary */
+            result_summary: string;
+            /** Seeded Element Count */
+            seeded_element_count: number;
+            /** Step */
+            step?: number | null;
+            /** Tool Names */
+            tool_names: string[];
+            /** Will Retry */
+            will_retry: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunnerDecisionCompletedEventPayload */
+        RunnerDecisionCompletedEventPayload: {
+            /** Action */
+            action: string;
+            /** Step */
+            step?: number | null;
+            /** Summary */
+            summary?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunnerRuntimeEventPayload */
+        RunnerRuntimeEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Root Dir */
+            root_dir?: string | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RunnerToolCalledEventPayload */
+        RunnerToolCalledEventPayload: {
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Result Summary */
+            result_summary: string;
+            /** Step */
+            step?: number | null;
+            /** Tool Name */
+            tool_name: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** RuntimeConfigEditor */
         RuntimeConfigEditor: {
             /** Icon Conf */
@@ -3682,6 +5615,16 @@ export interface components {
             max_steps?: number | null;
             /** Max Tokens */
             max_tokens?: number | null;
+            /** Runner Include Screenshot */
+            runner_include_screenshot?: boolean | null;
+            /** Settle Delay Sec */
+            settle_delay_sec?: number | null;
+            /** Settle Mode */
+            settle_mode?: ("strict" | "ratio" | "delay") | null;
+            /** Settle Ocr Only */
+            settle_ocr_only?: boolean | null;
+            /** Settle Ratio Threshold */
+            settle_ratio_threshold?: number | null;
             /** Settle Timeout */
             settle_timeout?: number | null;
             /** Temperature */
@@ -3957,6 +5900,7 @@ export interface components {
              */
             file_exists: boolean;
             gemini?: components["schemas"]["GeminiSectionEditor"];
+            ios_bridge?: components["schemas"]["IOSBridgeConfigEditor"];
             openai_compatible?: components["schemas"]["OpenAICompatibleSectionEditor"];
             orchestration?: components["schemas"]["OrchestrationConfigEditor"];
             /** Provider */
@@ -3968,6 +5912,7 @@ export interface components {
         SettingsConfigUpsertRequest: {
             agents?: components["schemas"]["SettingsAgentsEditor"];
             gemini?: components["schemas"]["GeminiSectionEditor"];
+            ios_bridge?: components["schemas"]["IOSBridgeConfigEditor"];
             openai_compatible?: components["schemas"]["OpenAICompatibleSectionEditor"];
             orchestration?: components["schemas"]["OrchestrationConfigEditor"];
             /**
@@ -3978,6 +5923,13 @@ export interface components {
             provider: "openai_compatible" | "gemini";
             proxy?: components["schemas"]["ProxyConfigEditor"];
             runtime?: components["schemas"]["RuntimeConfigEditor"];
+        };
+        /** StepStartedEventPayload */
+        StepStartedEventPayload: {
+            /** Step */
+            step: number;
+        } & {
+            [key: string]: unknown;
         };
         /** SuccessResponse[AppDetailData] */
         SuccessResponse_AppDetailData_: {
@@ -4132,6 +6084,38 @@ export interface components {
             /** Command */
             command: string;
             data: components["schemas"]["DeviceListData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[DeviceStateData] */
+        SuccessResponse_DeviceStateData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["DeviceStateData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[DeviceUnlockData] */
+        SuccessResponse_DeviceUnlockData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["DeviceUnlockData"];
             /**
              * Ok
              * @default true
@@ -4701,6 +6685,8 @@ export interface components {
         };
         /** TestCase */
         TestCase: {
+            /** Acceptance Criteria Indices */
+            acceptance_criteria_indices?: number[];
             ai_guidance?: components["schemas"]["AiGuidance"] | null;
             budget?: components["schemas"]["CaseBudget"] | null;
             /** Case Id */
@@ -4732,6 +6718,7 @@ export interface components {
         };
         /** TestCasePayload */
         TestCasePayload: {
+            ai_guidance?: components["schemas"]["AiGuidance"] | null;
             budget?: components["schemas"]["CaseBudgetRequest"] | null;
             /** Case Id */
             case_id: string;
@@ -4759,6 +6746,16 @@ export interface components {
             start_state?: components["schemas"]["CaseStartStateRequest"];
             /** Title */
             title: string;
+        };
+        /** TextInjectStepPayload */
+        TextInjectStepPayload: {
+            /**
+             * Submit
+             * @default false
+             */
+            submit: boolean;
+            /** Text */
+            text: string;
         };
         /** TimelineEntry */
         TimelineEntry: {
@@ -4861,6 +6858,8 @@ export interface components {
         };
         /** VerifyChangeCliRequest */
         VerifyChangeCliRequest: {
+            /** Acceptance Criteria */
+            acceptance_criteria?: string[];
             /** App Id */
             app_id: string;
             app_target?: components["schemas"]["AppTarget"] | null;
@@ -4886,10 +6885,11 @@ export interface components {
              * @default false
              */
             enable_plan_agent: boolean;
-            /** Previous Report Path */
-            previous_report_path?: string | null;
-            /** Previous Result Paths */
-            previous_result_paths?: string[];
+            /**
+             * Fail Fast
+             * @default false
+             */
+            fail_fast: boolean;
             /** Provided Cases */
             provided_cases?: components["schemas"]["TestCase"][];
             /** Requirement Doc Path */
@@ -4903,12 +6903,88 @@ export interface components {
             /** Technical Doc Path */
             technical_doc_path?: string | null;
         };
+        /** VerifyChangeOperationResultPayload */
+        VerifyChangeOperationResultPayload: {
+            /** App Id */
+            app_id: string;
+            /** Artifacts */
+            artifacts: {
+                [key: string]: string;
+            };
+            execution_result?: components["schemas"]["ExecutedPlanResult"] | null;
+            /** Phase */
+            phase: string;
+            /** Plan Id */
+            plan_id: string;
+            plan_result: components["schemas"]["GeneratedPlanResult"];
+        };
         /** WebAppIdentity */
         WebAppIdentity: {
             /** Base Url */
             base_url?: string | null;
             /** Origin */
             origin?: string | null;
+        };
+        /** WorkflowAttemptFinishedEventPayload */
+        WorkflowAttemptFinishedEventPayload: {
+            /** Attempt Index */
+            attempt_index?: number | null;
+            /** Decision Type */
+            decision_type?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowAttemptStartedEventPayload */
+        WorkflowAttemptStartedEventPayload: {
+            /** Attempt Index */
+            attempt_index?: number | null;
+            /** Case Id */
+            case_id?: string | null;
+            /** Retry Count */
+            retry_count?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowFinishedEventPayload */
+        WorkflowFinishedEventPayload: {
+            /** Attempt Count */
+            attempt_count?: number | null;
+            /** Decision Type */
+            decision_type?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowRetryScheduledEventPayload */
+        WorkflowRetryScheduledEventPayload: {
+            /** Attempt Index */
+            attempt_index?: number | null;
+            /** Focus Items */
+            focus_items?: string[] | null;
+            /** Handoff Summary */
+            handoff_summary?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Retry Attempt */
+            retry_attempt?: number | null;
+            /** Retry Count */
+            retry_count?: number | null;
+            /** Retry Reason */
+            retry_reason?: string | null;
+            /** Supplemental Context */
+            supplemental_context?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowStartedEventPayload */
+        WorkflowStartedEventPayload: {
+            /** Case Id */
+            case_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
@@ -5676,6 +7752,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse_DashboardSummaryData_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_device_state_v1_device_state_get: {
+        parameters: {
+            query: {
+                device_ref: string;
+                platform?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_DeviceStateData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unlock_device_v1_device_unlock_post: {
+        parameters: {
+            query: {
+                device_ref: string;
+                platform?: string | null;
+                strategy?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_DeviceUnlockData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Internal Server Error */

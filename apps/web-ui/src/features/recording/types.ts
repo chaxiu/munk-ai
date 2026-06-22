@@ -25,23 +25,119 @@ export interface BridgeSizeChangedEvent {
   height: number
 }
 
-export interface BridgeForwardingStep {
+export interface BridgeForwardingDeviceResult {
+  ok: boolean
+  error_code?: string
+  message?: string
+}
+
+export interface BridgePointerForwardingPayload {
+  pointer_id: number
+  start_x: number
+  start_y: number
+  end_x: number
+  end_y: number
+  width: number
+  height: number
+}
+
+export interface BridgeInputForwardingPayload {
+  text: string
+  submit: boolean
+}
+
+export type BridgeBackForwardingPayload = Record<string, never>
+
+export interface BridgePointerStepPayload {
+  pointer_id: number
+  x: number
+  y: number
+}
+
+export interface BridgeTextInjectStepPayload {
+  text: string
+  submit: boolean
+}
+
+export interface BridgeKeyPressStepPayload {
+  key: string
+}
+
+export interface BridgeKeyTransitionStepPayload {
+  key: string
+}
+
+export interface BridgePointerForwardingStep {
   seq: number
-  stepKind: 'pointer_down' | 'pointer_move' | 'pointer_up' | 'key_press' | 'key_down' | 'key_up' | 'text_inject'
-  payload: Record<string, unknown>
+  stepKind: 'pointer_down' | 'pointer_move' | 'pointer_up'
+  payload: BridgePointerStepPayload
   dispatchedAt: string
 }
 
-export interface BridgeForwardingAckEvent {
+export interface BridgeTextInjectForwardingStep {
+  seq: number
+  stepKind: 'text_inject'
+  payload: BridgeTextInjectStepPayload
+  dispatchedAt: string
+}
+
+export interface BridgeKeyPressForwardingStep {
+  seq: number
+  stepKind: 'key_press'
+  payload: BridgeKeyPressStepPayload
+  dispatchedAt: string
+}
+
+export interface BridgeKeyTransitionForwardingStep {
+  seq: number
+  stepKind: 'key_down' | 'key_up'
+  payload: BridgeKeyTransitionStepPayload
+  dispatchedAt: string
+}
+
+export type BridgeForwardingStep =
+  | BridgePointerForwardingStep
+  | BridgeTextInjectForwardingStep
+  | BridgeKeyPressForwardingStep
+  | BridgeKeyTransitionForwardingStep
+
+export interface BridgePointerForwardingAckEvent {
   type: 'forwarding_ack'
   clientCommandId: string
-  kind: 'pointer' | 'input' | 'back'
+  kind: 'pointer'
   ackAt: string
   dispatchedAt?: string
-  payload: Record<string, unknown>
-  steps: BridgeForwardingStep[]
-  deviceResult: Record<string, unknown>
+  payload: BridgePointerForwardingPayload
+  steps: BridgePointerForwardingStep[]
+  deviceResult: BridgeForwardingDeviceResult
 }
+
+export interface BridgeInputForwardingAckEvent {
+  type: 'forwarding_ack'
+  clientCommandId: string
+  kind: 'input'
+  ackAt: string
+  dispatchedAt?: string
+  payload: BridgeInputForwardingPayload
+  steps: Array<BridgeTextInjectForwardingStep | BridgeKeyPressForwardingStep>
+  deviceResult: BridgeForwardingDeviceResult
+}
+
+export interface BridgeBackForwardingAckEvent {
+  type: 'forwarding_ack'
+  clientCommandId: string
+  kind: 'back'
+  ackAt: string
+  dispatchedAt?: string
+  payload: BridgeBackForwardingPayload
+  steps: BridgeKeyTransitionForwardingStep[]
+  deviceResult: BridgeForwardingDeviceResult
+}
+
+export type BridgeForwardingAckEvent =
+  | BridgePointerForwardingAckEvent
+  | BridgeInputForwardingAckEvent
+  | BridgeBackForwardingAckEvent
 
 export interface BridgeErrorEvent {
   type: 'error'

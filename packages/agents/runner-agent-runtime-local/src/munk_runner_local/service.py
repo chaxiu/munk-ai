@@ -58,12 +58,17 @@ class RunnerRuntimeService:
             agent_role="runner",
             operation_id=context.operation_id,
             event_sink=context.progress,
+            timeline_scope="parent_run",
+            attempt_index=context.attempt_index,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
         )
         started_at = datetime.now(timezone.utc).isoformat()
         started = time.monotonic()
         emitter.emit_started(
             message="runner runtime started",
-            data={"app_id": request.app_id, "plan_id": request.plan_id, "case_id": request.case_id},
+            summary="runner runtime started",
         )
         run_context: RunContext | None = None
         try:
@@ -84,7 +89,9 @@ class RunnerRuntimeService:
             emitter.emit_progress(
                 event_type="runner_context_loaded",
                 message="runner context loaded",
-                data={"app_id": request.app_id, "case_id": request.case_id, "root_dir": str(context.managed_paths.root_dir)},
+                timeline_phase="context_loaded",
+                summary="runner context loaded",
+                data={"root_dir": str(context.managed_paths.root_dir)},
             )
             with llm_transcript_scope(context.managed_paths.llm_transcript_path):
                 kernel_result = execute_run_loop(
@@ -108,9 +115,8 @@ class RunnerRuntimeService:
         except Exception as exc:
             emitter.emit_failed(
                 message="runner runtime failed",
+                summary="runner runtime failed",
                 data={
-                    "app_id": request.app_id,
-                    "case_id": request.case_id,
                     "error_type": exc.__class__.__name__,
                 },
             )
@@ -122,15 +128,13 @@ class RunnerRuntimeService:
         if self._should_stop(cancel_controller) or output.result_data.stop_reason == "stop_requested":
             emitter.emit_canceled(
                 message="runner runtime canceled",
-                data={"app_id": request.app_id, "plan_id": request.plan_id, "case_id": request.case_id},
+                summary="runner runtime canceled",
             )
         else:
             emitter.emit_ended(
                 message="runner runtime completed",
+                summary="runner runtime completed",
                 data={
-                    "app_id": request.app_id,
-                    "plan_id": request.plan_id,
-                    "case_id": request.case_id,
                     "status": output.result_data.status,
                     "stop_reason": output.result_data.stop_reason,
                     "steps_completed": output.result_data.steps_completed,

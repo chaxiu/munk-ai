@@ -86,6 +86,10 @@ async function handleAppKnowledgeChange(event: Event) {
     <UiInput v-model="props.form.iosBundleId" :placeholder="t('apps.placeholders.iosBundleId')" />
   </UiField>
 
+  <UiField v-if="props.form.platform === 'ios'" :label="t('apps.fields.iosWdaBundleId')" :hint="t('apps.fields.optional')">
+    <UiInput v-model="props.form.iosWdaBundleId" :placeholder="t('apps.placeholders.iosWdaBundleId')" />
+  </UiField>
+
   <UiField v-if="props.form.platform === 'web'" :label="t('apps.fields.webBaseUrl')">
     <UiInput v-model="props.form.webBaseUrl" :placeholder="t('apps.placeholders.webBaseUrl')" />
   </UiField>

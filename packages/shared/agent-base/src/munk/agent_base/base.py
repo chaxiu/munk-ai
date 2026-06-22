@@ -11,6 +11,7 @@ from munk.perception.types import ClickableElement
 from .types import Action
 
 if TYPE_CHECKING:
+    from munk.core.action_targets import TargetParts
     from munk.core.screen_graph import ObservedScreenFrame, ScreenDiff
 
 
@@ -53,6 +54,7 @@ class ActionHistoryEntry:
     target_id: int | None
     target_label: str | None
     summary: str
+    relative_time_sec: float | None = None
     detail: str | None = None
     outcome_summary: str | None = None
     memory_operation: str | None = None
@@ -65,6 +67,8 @@ class ActionHistoryEntry:
             payload.pop("target_id", None)
         if self.target_label is None:
             payload.pop("target_label", None)
+        if self.relative_time_sec is None:
+            payload.pop("relative_time_sec", None)
         if self.detail is None:
             payload.pop("detail", None)
         if self.outcome_summary is None:
@@ -90,6 +94,7 @@ class ScreenState:
     platform: str | None = None
     platform_context: dict[str, object] | None = None
     surface_identity: str | None = None
+    action_target_parts: TargetParts | None = None
 
 
 ObservationSnapshotSource = Literal[
@@ -112,5 +117,8 @@ class Brain(ABC):
     def next_action(self, screen: ScreenState) -> Action:
         raise NotImplementedError
 
-    def on_step_started(self, step_index: int) -> None:
+    def on_run_started(self, _started_at_monotonic: float) -> None:
+        return None
+
+    def on_step_started(self, _step_index: int) -> None:
         return None

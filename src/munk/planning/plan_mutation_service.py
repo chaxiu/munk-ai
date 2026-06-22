@@ -29,7 +29,7 @@ class PlanMutationService:
         self._validate_case(case)
         self._ensure_case_id_unique(plan, case.case_id)
         updated_plan = plan.model_copy(update={"cases": [*plan.cases, case]})
-        self._plan_store.save(updated_plan)
+        self._plan_store.replace(updated_plan)
         return CaseMutationResult(plan=updated_plan, case=case)
 
     def replace_case(self, app_id: str, plan_id: str, case_id: str, case: TestCase) -> CaseMutationResult:
@@ -42,7 +42,7 @@ class PlanMutationService:
         updated_cases = list(plan.cases)
         updated_cases[case_index] = case
         updated_plan = plan.model_copy(update={"cases": updated_cases})
-        self._plan_store.save(updated_plan)
+        self._plan_store.replace(updated_plan)
         return CaseMutationResult(plan=updated_plan, case=case)
 
     def update_ai_guidance_fields(
@@ -63,7 +63,7 @@ class PlanMutationService:
         updated_cases = list(plan.cases)
         updated_cases[case_index] = updated_case
         updated_plan = plan.model_copy(update={"cases": updated_cases})
-        self._plan_store.save(updated_plan)
+        self._plan_store.replace(updated_plan)
         return CaseMutationResult(plan=updated_plan, case=updated_case)
 
     def delete_case(self, app_id: str, plan_id: str, case_id: str) -> CaseDeleteResult:
@@ -71,13 +71,13 @@ class PlanMutationService:
         case_index = self._find_case_index(plan, case_id)
         updated_cases = [item for index, item in enumerate(plan.cases) if index != case_index]
         updated_plan = plan.model_copy(update={"cases": updated_cases})
-        self._plan_store.save(updated_plan)
+        self._plan_store.replace(updated_plan)
         return CaseDeleteResult(plan=updated_plan, case_id=case_id)
 
     def reorder_cases(self, app_id: str, plan_id: str, ordered_case_ids: list[str]) -> RequirementPlan:
         plan = self._load_plan_or_raise(app_id, plan_id)
         updated_plan = plan.model_copy(update={"cases": self._reordered_cases(plan, ordered_case_ids)})
-        self._plan_store.save(updated_plan)
+        self._plan_store.replace(updated_plan)
         return updated_plan
 
     def _load_plan_or_raise(self, app_id: str, plan_id: str) -> RequirementPlan:

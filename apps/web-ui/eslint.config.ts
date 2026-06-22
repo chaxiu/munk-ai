@@ -25,5 +25,30 @@ export default defineConfigWithVueTs(
     files: ['src/**/__tests__/*'],
   },
 
+  {
+    name: 'app/size-and-complexity-rules',
+    files: ['src/**/*.{vue,ts,mts,tsx}'],
+    ignores: [
+      'src/**/__tests__/**',
+      'src/shared/contracts/generated/**',
+      'src/shared/i18n/locales/**',
+    ],
+    rules: {
+      'complexity': ['error', 15],
+      'max-depth': ['error', 4],
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': [
+        'error',
+        { max: 120, skipBlankLines: true, skipComments: true, IIFEs: true },
+      ],
+      'max-params': ['error', 6],
+      'max-statements': ['error', 60],
+      'vue/max-lines-per-block': [
+        'error',
+        { template: 400, script: 250, style: 400, skipBlankLines: true },
+      ],
+    },
+  },
+
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 )

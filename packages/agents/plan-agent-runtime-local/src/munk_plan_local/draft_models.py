@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def empty_strings() -> list[str]:
+    return []
+
+
+def empty_case_outlines() -> list["GeneratedCaseOutlineDraft"]:
     return []
 
 
@@ -26,6 +30,16 @@ def _strip_non_empty(value: str, *, field_name: str) -> str:
 
 def _strip_string_list(values: list[str], *, field_name: str) -> list[str]:
     return [_strip_non_empty(value, field_name=field_name) for value in values]
+
+
+class GeneratedCaseOutlineDraft(BaseModel):
+    title: str
+    acceptance_criteria_indices: list[int] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return _strip_non_empty(value, field_name="title")
 
 
 class GeneratedTestCaseDraft(BaseModel):
@@ -61,11 +75,19 @@ class GeneratedPlanSkeletonDraft(BaseModel):
     name: str
     summary: str
     target_case_count: int = Field(gt=0)
+    case_outlines: list[GeneratedCaseOutlineDraft] = Field(min_length=1)
 
     @field_validator("name", "summary")
     @classmethod
     def validate_required_text(cls, value: str, info) -> str:  # type: ignore[override]
         return _strip_non_empty(value, field_name=str(info.field_name))
+
+    @model_validator(mode="after")
+    def sync_target_case_count(self) -> "GeneratedPlanSkeletonDraft":
+        outline_count = len(self.case_outlines)
+        if self.target_case_count != outline_count:
+            object.__setattr__(self, "target_case_count", outline_count)
+        return self
 
 
 class GeneratedCaseAppendDraft(BaseModel):

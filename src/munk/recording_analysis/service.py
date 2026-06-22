@@ -14,6 +14,7 @@ from munk.recording import (
     RecordingAnalysisScreenshotRef,
     RecordingAnalysisStep,
 )
+from munk.services.case_validation import validate_case_definition
 from munk.services.perception_runtime import build_perception_provider_for_runtime
 from munk.testing import CaseStartState, TestCase
 
@@ -273,6 +274,10 @@ class RecordingAnalysisService:
             runner_goal=finalized.runner_goal,
             start_state=CaseStartState(page_id=None),
         )
+        test_case = validate_case_definition(
+            test_case,
+            context=f"recording analysis for '{prepared.recording_id}'",
+        )
         return RecordingAnalysisResult(
             recording_id=prepared.recording_id,
             status="completed",
@@ -298,6 +303,10 @@ class RecordingAnalysisService:
             max_tokens=runtime_config.max_tokens,
             temperature=runtime_config.temperature,
             vl_max_side=runtime_config.vl_max_side,
+            vl_image_format=runtime_config.vl_image_format,
+            vl_fallback_image_format=runtime_config.vl_fallback_image_format,
+            vl_webp_quality=runtime_config.vl_webp_quality,
+            vl_jpeg_quality=runtime_config.vl_jpeg_quality,
         )
         return self._agent
 

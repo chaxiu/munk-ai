@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Check, RefreshCcw, SquarePen, X } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -24,6 +24,12 @@ const time = useTime({ relative: true })
 const candidateMutations = useKnowledgeCandidateMutations()
 const actionError = ref<string | null>(null)
 const actionMessage = ref<string | null>(null)
+const candidateCardRefs = ref<Record<string, HTMLElement | null>>({})
+const highlightCandidateId = computed(() => {
+  const value = route.query.candidate_id
+  return typeof value === 'string' && value.length > 0 ? value : null
+})
+const highlightCandidateNotFound = ref(false)
 
 const appId = computed(() => {
   const value = route.params.appId
@@ -52,6 +58,37 @@ const candidatesErrorMessage = computed(() => translateUnknownError(candidatesQu
 const busyCandidateId = computed(() => candidateMutations.approveCandidate.variables.value?.candidateId
   ?? candidateMutations.rejectCandidate.variables.value?.candidateId
   ?? null)
+
+function setCandidateCardRef(candidateId: string, element: Element | ComponentPublicInstance | null) {
+  if (element instanceof HTMLElement) {
+    candidateCardRefs.value[candidateId] = element
+    return
+  }
+  delete candidateCardRefs.value[candidateId]
+}
+
+function isHighlightedCandidate(candidateId: string): boolean {
+  return highlightCandidateId.value === candidateId
+}
+
+watch(
+  [highlightCandidateId, candidates, () => candidatesQuery.isFetching.value],
+  async ([targetCandidateId, items, isFetching]) => {
+    highlightCandidateNotFound.value = false
+    if (!targetCandidateId || isFetching) {
+      return
+    }
+    await nextTick()
+    const matched = items.some((item) => item.candidate_id === targetCandidateId)
+    if (!matched) {
+      highlightCandidateNotFound.value = true
+      return
+    }
+    const element = candidateCardRefs.value[targetCandidateId]
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  },
+  { immediate: true },
+)
 
 function translateUnknownError(error: unknown): string | null {
   if (!error) {
@@ -216,6 +253,12 @@ async function handleReject(candidate: KnowledgeCandidateRecord) {
         />
 
         <div v-else class="grid gap-4">
+          <p
+            v-if="highlightCandidateNotFound"
+            class="rounded-2xl border border-border-muted bg-surface-muted px-4 py-3 text-sm text-text-secondary"
+          >
+            {{ t('apps.knowledge.highlightNotFound') }}
+          </p>
           <p v-if="actionError" class="text-sm text-error-text">{{ actionError }}</p>
           <div
             v-else-if="actionMessage"
@@ -228,7 +271,9 @@ async function handleReject(candidate: KnowledgeCandidateRecord) {
             <article
               v-for="item in candidates"
               :key="item.candidate_id"
+              :ref="(element) => setCandidateCardRef(item.candidate_id, element)"
               class="grid gap-3 rounded-xl border border-border-muted bg-surface-muted p-4"
+              :class="{ 'candidate-highlight': isHighlightedCandidate(item.candidate_id) }"
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="grid gap-2">
@@ -302,3 +347,10 @@ async function handleReject(candidate: KnowledgeCandidateRecord) {
     </template>
   </section>
 </template>
+
+<style scoped>
+.candidate-highlight {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+</style>

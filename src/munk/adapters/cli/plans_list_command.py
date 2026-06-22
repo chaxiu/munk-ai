@@ -17,7 +17,7 @@ def plans_list_command(*, app_id: str | None, source: str | None, limit: int, js
             limit=limit,
             offset=0,
         )
-        payload = build_success_response(command="plans_list", data={"items": data.items})
+        payload = build_success_response(command="plans_list", data=data.model_dump(mode="json"))
     except Exception as exc:
         handle_cli_error(command="plans_list", exc=exc, json_output=json_output)
     if json_output:

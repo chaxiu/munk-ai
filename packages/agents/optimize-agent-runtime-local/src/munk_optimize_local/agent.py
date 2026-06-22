@@ -22,7 +22,7 @@ SYSTEM_PROMPT = "\n".join(
         "If the evidence points to runner/runtime/tooling issues rather than case-quality issues, prefer returning no patch.",
         "Improve ai_guidance for future executions without changing the core business intent.",
         "Only update fields that have strong support from the run evidence and judge trigger.",
-        "Prioritize structured evidence from artifact_payloads before exploring optional artifact tools.",
+        "Prioritize structured evidence from the host-provided structured_evidence before exploring optional artifact tools.",
         "Prefer small, durable guidance updates over verbose rewrites.",
         "Do not duplicate existing guidance unless a clearer version is needed.",
         "Return only the structured output.",
@@ -41,6 +41,7 @@ class PydanticAiOptimizeAgent:
     ) -> None:
         output_spec = build_structured_output_spec(OptimizeAgentOutput, output_strategy=output_strategy)
         self.last_tool_calls: list[str] = []
+        self.last_prompt: str = ""
         self._agent = Agent(
             model=cast(Any, model),
             deps_type=OptimizeToolDeps,
@@ -55,7 +56,10 @@ class PydanticAiOptimizeAgent:
         register_optimize_tools(self._agent)
 
     def optimize(self, request: OptimizeRequest, *, deps: OptimizeToolDeps) -> OptimizeAgentOutput:
-        result = run_agent_sync_compatible(self._agent, user_prompt=self._build_user_prompt(request), deps=deps)
+        user_prompt = self._build_user_prompt(request)
+        if user_prompt and isinstance(user_prompt[0], TextContent):
+            self.last_prompt = user_prompt[0].content
+        result = run_agent_sync_compatible(self._agent, user_prompt=user_prompt, deps=deps)
         self.last_tool_calls = list(deps.tool_calls)
         return result.output
 
@@ -76,7 +80,7 @@ class PydanticAiOptimizeAgent:
             "source_attempt_index": request.trigger.source_attempt_index,
             "execution_summary": request.execution_summary.model_dump(mode="json"),
             "current_ai_guidance": guidance,
-            "structured_evidence": request.artifact_payloads,
+            "structured_evidence": request.structured_evidence,
             "available_artifacts": sorted(request.artifacts.keys()),
             "requirements": {
                 "only_patch_target_fields": list(request.trigger.optimization_fields),

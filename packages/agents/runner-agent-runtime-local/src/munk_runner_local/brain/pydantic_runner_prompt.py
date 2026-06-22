@@ -4,49 +4,32 @@ from collections.abc import Iterable
 
 from munk.agent_base.platform_profile import PlatformRunnerProfile, get_runner_profile
 
-
 def build_runner_system_prompt(profile: PlatformRunnerProfile | None = None) -> str:
     active_profile = profile or get_runner_profile(None)
     sections = [
         _section("ROLE", [active_profile.role_identity]),
         _section("MISSION", active_profile.mission_lines),
-        _section("COMPLETION_CONTRACT", active_profile.completion_contract_lines),
-        _section("TOOL_POLICY", active_profile.tool_policy_lines),
-        _section("ACTION_BIAS", active_profile.action_bias_lines),
-        _section("PLATFORM_NOTES", active_profile.platform_capability_notes),
+        _section("OUTPUT", active_profile.completion_contract_lines),
+        _section(
+            "RULES",
+            [
+                *active_profile.tool_policy_lines,
+                *active_profile.action_bias_lines,
+                *active_profile.platform_capability_notes,
+            ],
+        ),
     ]
     return "\n\n".join(sections)
 
 
 def build_runner_prompt_preamble() -> str:
-    return "\n\n".join(
+    return _section(
+        "TASK",
         [
-            _section(
-                "TASK",
-                [
-                    "Choose the single next action for this step from the current case context.",
-                    "Use the objective, prepared context, recent history, last outcome, last action feedback, goal progress, screen summary, seeded vision targets, and image together.",
-                    "If the seeded vision targets are insufficient, use read tools only for missing evidence before deciding.",
-                    "Treat the prepared page knowledge bundle as the primary app knowledge input for this run.",
-                    "If the current screen does not satisfy the step precondition, the next action should move toward that precondition page instead of stop.",
-                    "If the step depends on before/after comparison and the next action will overwrite the current state, save the baseline facts first.",
-                    "If the required target for the current step is not present in the visible targets, do not substitute a semantically similar control.",
-                    "When a blocker such as a soft keyboard, popup, dropdown, picker, or modal is present, remove it first with a clear available action and then re-observe before continuing; do not stop only because the blocker exists.",
-                    "Use click only for a currently visible numbered target; never use click to simulate back, home, or keyboard dismissal.",
-                    "Use long_press only for a currently visible numbered target when the product behavior specifically requires press-and-hold.",
-                    "Use back only for the system back event.",
-                    "Use input_text only when the intended input already has focus; use clear_and_input when you must target a specific visible input element.",
-                    "Use memory tools only for facts worth reusing across later steps; do not turn them into verbose logs.",
-                    "If app knowledge is absent or inconclusive, do not invent knowledge card details, page assertions, or flow constraints.",
-                ],
-            ),
-            _section(
-                "OUTPUT_REMINDER",
-                [
-                    "When enough information is available, finish by calling exactly one final structured action output.",
-                ],
-            ),
-        ]
+            "Use OBJECTIVE, PROCEDURE, SCREEN, and TARGETS first for this test step.",
+            "Use APP_CONTEXT only as supporting context.",
+            "Use read tools only when the seeded evidence is insufficient.",
+        ],
     )
 
 
@@ -60,8 +43,6 @@ def build_runner_user_prompt(
     screen_summary: str,
     targets_text: str,
     prepared_context_text: str,
-    prepared_knowledge_text: str,
-    context_prep_fallback_reason: str | None,
     missing_action_attempted: bool,
 ) -> str:
     objective_lines, procedure_lines = _split_case_brief_sections(case_brief)
@@ -69,8 +50,7 @@ def build_runner_user_prompt(
         build_runner_prompt_preamble(),
         _section("OBJECTIVE", objective_lines),
         _section("PROCEDURE", procedure_lines),
-        _section("CONTEXT_PREP", _split_block(prepared_context_text)),
-        _section("PAGE_KNOWLEDGE", _split_block(prepared_knowledge_text)),
+        _section("APP_CONTEXT", _split_block(prepared_context_text)),
         _section("HISTORY", [history_summary]),
         _section("LAST_OUTCOME", [last_outcome]),
         _section("LAST_ACTION_FEEDBACK", _split_block(last_action_feedback)),
@@ -78,8 +58,6 @@ def build_runner_user_prompt(
         _section("SCREEN", _split_block(screen_summary)),
         _section("TARGETS", _split_block(targets_text)),
     ]
-    if context_prep_fallback_reason is not None:
-        sections.append(_section("CONTEXT_PREP_FALLBACK", [context_prep_fallback_reason]))
     retry_block = build_runner_retry_block(missing_action_attempted)
     if retry_block is not None:
         sections.append(retry_block)

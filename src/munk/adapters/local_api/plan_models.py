@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from munk.testing import CaseBudget, CaseStartState, TestCase
+from munk.testing import AiGuidance, CaseBudget, CaseStartState, TestCase
 
 _EDITABLE_CASE_FIELDS = (
     "intent",
@@ -128,6 +128,7 @@ class TestCasePayload(BaseModel):
     runner_goal: str
     budget: CaseBudgetRequest | None = None
     start_state: CaseStartStateRequest = Field(default_factory=CaseStartStateRequest)
+    ai_guidance: AiGuidance | None = None
     source_metadata: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("case_id", "title", "intent", "runner_goal")
@@ -143,6 +144,17 @@ class TestCasePayload(BaseModel):
     def _validate_text_lists(cls, value: list[str], info) -> list[str]:  # type: ignore[no-untyped-def]
         cleaned = _clean_text_list(value, field_name=info.field_name)
         return cleaned or []
+
+    @field_validator("ai_guidance")
+    @classmethod
+    def _validate_ai_guidance(cls, value: AiGuidance | None) -> AiGuidance | None:
+        if value is None:
+            return None
+        cleaned_fields: dict[str, list[str]] = {}
+        for field_name in AiGuidance.model_fields:
+            cleaned_items = _clean_text_list(list(getattr(value, field_name)), field_name=f"ai_guidance.{field_name}")
+            cleaned_fields[field_name] = cleaned_items or []
+        return AiGuidance(**cleaned_fields)
 
     @field_validator("source_metadata")
     @classmethod
@@ -171,6 +183,7 @@ class TestCasePayload(BaseModel):
             runner_goal=self.runner_goal,
             budget=None if self.budget is None else self.budget.to_case_budget(),
             start_state=self.start_state.to_case_start_state(),
+            ai_guidance=self.ai_guidance,
             source_metadata=dict(self.source_metadata),
         )
 

@@ -5,6 +5,16 @@ from typing import Any, cast
 
 from munk.agent_base.llm import run_agent_sync_compatible
 from munk.agent_base.output_strategy import append_system_prompt_suffix, build_structured_output_spec
+from munk.judging.models import (
+    JudgeEvidence,
+    JudgeScreenshotRef,
+    is_runner_history_evidence,
+    is_runner_issue_evidence,
+    is_runner_memory_evidence,
+    is_screen_diff_evidence,
+    is_screen_frame_evidence,
+    is_screenshot_evidence,
+)
 from pydantic_ai import Agent
 from pydantic_ai.messages import TextContent, UserContent
 
@@ -13,6 +23,7 @@ from munk.config.schema import OutputStrategy
 from munk.runtime_defaults import DEFAULT_VL_MAX_SIDE
 
 from .agent_models import JudgeAgentOutput
+from .evidence_builder import MAX_PRIMARY_EVIDENCE
 from .image_payloads import load_screenshot_binary_image
 from .models import JudgeEvidencePack
 from .step_projection import build_recent_step_summaries
@@ -26,17 +37,12 @@ SYSTEM_PROMPT = "\n".join(
         "Use only the provided evidence. Never invent unseen UI states or hidden business logic.",
         "Prefer inconclusive over pass when the evidence is incomplete or ambiguous.",
         "Treat explicit execution failures as failure if they are present in the evidence pack.",
-        "A completed runner stop does not automatically mean the case passed.",
-        "An incomplete run does not automatically mean inconclusive.",
-        "If the evidence shows the runner explored relevant screens repeatedly but never found a required entry, action, or affordance, you may return failed with a concrete reason.",
+        "A completed runner stop does not automatically mean the case passed, and an incomplete run does not automatically mean inconclusive.",
         "Use PRIMARY_EVIDENCE first. Read tools are fallback only when those primary excerpts are still insufficient.",
-        "Write summary as a short verdict statement.",
-        "Write reason as an expected-versus-observed business difference, not as generic judge commentary.",
-        "For failed or inconclusive verdicts, failure_hypothesis must be one concise product-facing hypothesis such as 'save succeeded but list did not update', 'entry exists but is not reachable', or 'state toggle did not persist'.",
-        "For passed verdicts, omit failure_hypothesis unless a useful residual risk must be noted.",
+        "Write summary as a short verdict statement, and write reason as an expected-versus-observed business difference.",
+        "For failed or inconclusive verdicts, failure_hypothesis must be one concise product-facing hypothesis.",
         "When the evidence suggests the case wording or execution guidance should be improved for future runs, set needs_optimization=true and choose the smallest relevant ai_guidance fields to update.",
         "Only request optimization for durable case-quality issues such as ambiguity, missing preflight expectations, interaction confusion, weak recovery guidance, or judge misread risk.",
-        "Explain the verdict briefly and cite the most relevant evidence ids.",
         "Return only the structured output.",
     ]
 )
@@ -88,7 +94,7 @@ class PydanticAiJudgeAgent:
         preconditions = evidence_pack.preconditions or ["none"]
         primary_lines = [
             PydanticAiJudgeAgent._format_primary_evidence(item)
-            for item in evidence_pack.primary_evidence[:4]
+            for item in evidence_pack.primary_evidence[:MAX_PRIMARY_EVIDENCE]
         ] or ["- none"]
         recent_step_summary_lines = [
             PydanticAiJudgeAgent._format_recent_step_summary(item)
@@ -98,6 +104,10 @@ class PydanticAiJudgeAgent:
         runner_memory_lines = [
             PydanticAiJudgeAgent._format_runner_memory_summary(item)
             for item in evidence_pack.runner_memory_summary
+        ] or ["- none"]
+        runner_issue_lines = [
+            PydanticAiJudgeAgent._format_runner_issue_summary(item)
+            for item in evidence_pack.runner_issue_summary
         ] or ["- none"]
         final_screenshot = PydanticAiJudgeAgent._select_final_raw_screenshot(evidence_pack)
         final_screenshot_lines = (
@@ -116,20 +126,6 @@ class PydanticAiJudgeAgent:
         ] or ["- none"]
         return "\n".join(
             [
-                "[RULES]",
-                "- Use only the provided evidence.",
-                "- Do not assume completed means passed.",
-                "- Prefer PRIMARY_EVIDENCE over SUPPORTING_EVIDENCE.",
-                "- Treat recent compact tree, screenshots, and screen diffs as the strongest state evidence.",
-                "- Use runner history as action context, not as a replacement for visual or structural proof.",
-                "- Read screenshots in step order and reason about state transitions before the final verdict.",
-                "- `reason` must describe the business gap in the form of expected versus observed behavior.",
-                "- Good `reason` example: expected the saved task to appear in the list, observed the app returned to the list but the new task was missing.",
-                "- Bad `reason` example: evidence was insufficient or the case failed.",
-                "- For failed or inconclusive verdicts, `failure_hypothesis` must be exactly one concise product-facing sentence.",
-                "- Good `failure_hypothesis` examples: save succeeded but list did not update; entry exists but is not reachable; state toggle did not persist.",
-                "- Bad `failure_hypothesis` examples: test failed; evidence unclear; runner had issues.",
-                "",
                 "[OBJECTIVE]",
                 f"Plan ID: {evidence_pack.plan_id}",
                 f"Case ID: {evidence_pack.case_id}",
@@ -164,6 +160,9 @@ class PydanticAiJudgeAgent:
                 "[RUNNER_MEMORY_SUMMARY]",
                 *runner_memory_lines,
                 "",
+                "[RUNNER_ISSUES]",
+                *runner_issue_lines,
+                "",
                 "[FINAL_SCREENSHOT]",
                 *final_screenshot_lines,
                 "",
@@ -172,15 +171,6 @@ class PydanticAiJudgeAgent:
                 "",
                 "[SUPPORTING_EVIDENCE]",
                 *supporting_lines,
-                "",
-                "[TOOL_POLICY]",
-                "- Read tools are fallback only.",
-                "- When PRIMARY_EVIDENCE is insufficient, call `read_recent_step_summaries` first for a global view.",
-                "- If one step becomes important, call `read_step_summary` before requesting detailed step evidence.",
-                "- Use `read_step_screen` or `read_step_transition` only when step summaries still leave a business gap unresolved.",
-                "- Use `read_runner_memory` when runner-saved baseline facts may decide the verdict.",
-                "- Use `read_step_screen_raw_image` when a raw screenshot is needed for visual confirmation.",
-                "- Use at most a small number of tool calls when PRIMARY_EVIDENCE is insufficient.",
             ]
         )
 
@@ -222,8 +212,8 @@ class PydanticAiJudgeAgent:
         return content
 
     @staticmethod
-    def _format_primary_evidence(item: Any) -> str:
-        excerpt: object = item.payload.get("excerpt")
+    def _format_primary_evidence(item: JudgeEvidence) -> str:
+        excerpt = PydanticAiJudgeAgent._evidence_excerpt(item)
         excerpt_text = "none"
         if excerpt is not None:
             excerpt_text = json.dumps(excerpt, ensure_ascii=False, sort_keys=True)
@@ -252,7 +242,15 @@ class PydanticAiJudgeAgent:
         )
 
     @staticmethod
-    def _format_final_screenshot_line(item: Any) -> str:
+    def _format_runner_issue_summary(item: dict[str, object]) -> str:
+        return (
+            f"- step={item.get('step_index')} "
+            f"severity={item.get('severity') or 'warning'} "
+            f"summary={item.get('summary') or 'none'}"
+        )
+
+    @staticmethod
+    def _format_final_screenshot_line(item: JudgeScreenshotRef) -> str:
         return (
             f"- step={item.step_index} kind={item.kind} "
             f"action={item.action_summary or 'none'} "
@@ -273,9 +271,9 @@ class PydanticAiJudgeAgent:
         )
 
     @staticmethod
-    def _format_runtime_error_log(item: Any) -> str:
-        excerpt: object = item.payload.get("excerpt")
-        excerpt_text = str(excerpt).strip() if excerpt is not None else "none"
+    def _format_runtime_error_log(item: JudgeEvidence) -> str:
+        excerpt = item.payload.excerpt if item.kind == "runtime_error_log" else None
+        excerpt_text = excerpt.strip() if isinstance(excerpt, str) else "none"
         return f"- {item.evidence_id} [{item.kind}/{item.source}] {item.summary}\n{excerpt_text}"
 
     @staticmethod
@@ -284,7 +282,35 @@ class PydanticAiJudgeAgent:
         return lines or ["none"]
 
     @staticmethod
-    def _select_final_raw_screenshot(evidence_pack: JudgeEvidencePack) -> Any | None:
+    def _select_final_raw_screenshot(evidence_pack: JudgeEvidencePack) -> JudgeScreenshotRef | None:
         if not evidence_pack.recent_raw_screenshots:
             return None
         return max(evidence_pack.recent_raw_screenshots, key=lambda item: item.step_index)
+
+    @staticmethod
+    def _evidence_excerpt(item: JudgeEvidence) -> object | None:
+        if is_screen_diff_evidence(item):
+            return {
+                "summary": item.payload.summary,
+                "appeared_labels": list(item.payload.appeared_labels),
+                "updated_labels": list(item.payload.updated_labels),
+                "disappeared_labels": list(item.payload.disappeared_labels),
+                "linked_visual_changes": list(item.payload.linked_visual_changes),
+            }
+        if is_screen_frame_evidence(item):
+            return {
+                "package": item.payload.package,
+                "tree_available": item.payload.tree_available,
+                "tree_summary": item.payload.tree_summary,
+                "compact_tree": item.payload.compact_tree.model_dump(mode="json"),
+                "focus_hits": [entry.model_dump(mode="json") for entry in item.payload.focus_hits],
+            }
+        if is_runner_history_evidence(item):
+            return [entry.model_dump(mode="json") for entry in item.payload.excerpt]
+        if is_runner_memory_evidence(item):
+            return [entry.model_dump(mode="json") for entry in item.payload.excerpt]
+        if is_runner_issue_evidence(item):
+            return item.payload.issue.model_dump(mode="json")
+        if is_screenshot_evidence(item):
+            return item.payload.model_dump(mode="json")
+        return item.payload.model_dump(mode="json")

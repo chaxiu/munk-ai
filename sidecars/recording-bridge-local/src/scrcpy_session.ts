@@ -26,19 +26,25 @@ import {
   resolveScrcpyServerBinaryPath
 } from './config.js'
 import type {
+  BridgeBackForwardingAckEvent,
   BridgeClosedEvent,
   BridgeErrorEvent,
   BridgeForwardingAckEvent,
-  BridgeForwardingStep,
   BridgeHelloEvent,
+  BridgeInputForwardingAckEvent,
+  BridgeKeyPressForwardingStep,
+  BridgeKeyTransitionForwardingStep,
   BridgePacketConfigurationEvent,
   BridgePacketDataEvent,
+  BridgePointerForwardingAckEvent,
+  BridgePointerForwardingStep,
   BridgePointerDownCommand,
   BridgePointerMoveCommand,
   BridgePointerUpCommand,
   BridgeServerEvent,
   BridgeSizeChangedEvent,
   BridgeBackCommand,
+  BridgeTextInjectForwardingStep,
   BridgeInputCommand
 } from './protocol.js'
 import { toBase64 } from './protocol.js'
@@ -57,7 +63,7 @@ interface ActivePointerTransaction {
   startY: number
   lastX: number
   lastY: number
-  steps: BridgeForwardingStep[]
+  steps: BridgePointerForwardingStep[]
 }
 
 export class RecordingBridgeSessionError extends Error {
@@ -199,7 +205,7 @@ export class ScrcpySession {
       lastX: command.x,
       lastY: command.y,
       steps: [
-        this.buildStep(1, 'pointer_down', {
+        this.buildPointerStep(1, 'pointer_down', {
           pointer_id: command.pointerId,
           x: command.x,
           y: command.y
@@ -233,7 +239,7 @@ export class ScrcpySession {
     transaction.lastY = command.y
     transaction.width = command.width
     transaction.height = command.height
-    transaction.steps.push(this.buildStep(transaction.steps.length + 1, 'pointer_move', {
+    transaction.steps.push(this.buildPointerStep(transaction.steps.length + 1, 'pointer_move', {
       pointer_id: command.pointerId,
       x: command.x,
       y: command.y
@@ -259,7 +265,7 @@ export class ScrcpySession {
     transaction.lastY = command.y
     transaction.width = command.width
     transaction.height = command.height
-    transaction.steps.push(this.buildStep(transaction.steps.length + 1, 'pointer_up', {
+    transaction.steps.push(this.buildPointerStep(transaction.steps.length + 1, 'pointer_up', {
       pointer_id: command.pointerId,
       x: command.x,
       y: command.y
@@ -276,7 +282,7 @@ export class ScrcpySession {
         actionButton: AndroidMotionEventButton.Primary,
         buttons: 0
       })
-      return this.buildAck(command.clientCommandId, 'pointer', {
+      return this.buildPointerAck(command.clientCommandId, {
         pointer_id: command.pointerId,
         start_x: transaction.startX,
         start_y: transaction.startY,
@@ -298,12 +304,12 @@ export class ScrcpySession {
     if (typeof controller.injectText !== 'function') {
       throw new RecordingBridgeSessionError('bridge_text_unavailable', 'scrcpy controller does not support text injection')
     }
-    const steps: BridgeForwardingStep[] = [
-      this.buildStep(1, 'text_inject', { text: command.text, submit: command.submit === true })
+    const steps: Array<BridgeTextInjectForwardingStep | BridgeKeyPressForwardingStep> = [
+      this.buildTextInjectStep(1, { text: command.text, submit: command.submit === true })
     ]
     await controller.injectText(command.text)
     if (command.submit === true && typeof controller.injectKeyCode === 'function') {
-      steps.push(this.buildStep(2, 'key_press', { key: 'enter' }))
+      steps.push(this.buildKeyPressStep(2, { key: 'enter' }))
       await controller.injectKeyCode({
         action: AndroidKeyEventAction.Down,
         keyCode: AndroidKeyCode.Enter,
@@ -317,7 +323,7 @@ export class ScrcpySession {
         metaState: AndroidKeyEventMeta.None
       })
     }
-    return this.buildAck(command.clientCommandId, 'input', {
+    return this.buildInputAck(command.clientCommandId, {
       text: command.text,
       submit: command.submit === true
     }, steps)
@@ -328,9 +334,9 @@ export class ScrcpySession {
     if (!controller) {
       throw new RecordingBridgeSessionError('bridge_control_unavailable', 'scrcpy controller is unavailable')
     }
-    const steps: BridgeForwardingStep[] = [
-      this.buildStep(1, 'key_down', { key: 'back' }),
-      this.buildStep(2, 'key_up', { key: 'back' })
+    const steps: BridgeKeyTransitionForwardingStep[] = [
+      this.buildKeyTransitionStep(1, 'key_down', { key: 'back' }),
+      this.buildKeyTransitionStep(2, 'key_up', { key: 'back' })
     ]
     if (typeof controller.injectKeyCode !== 'function') {
       throw new RecordingBridgeSessionError('bridge_key_unavailable', 'scrcpy controller does not support key injection')
@@ -347,7 +353,7 @@ export class ScrcpySession {
       repeat: 0,
       metaState: AndroidKeyEventMeta.None
     })
-    return this.buildAck(command.clientCommandId, 'back', {}, steps)
+    return this.buildBackAck(command.clientCommandId, steps)
   }
 
   async close (): Promise<void> {
@@ -414,11 +420,11 @@ export class ScrcpySession {
     }
   }
 
-  private buildStep (
+  private buildPointerStep (
     seq: number,
-    stepKind: BridgeForwardingStep['stepKind'],
-    payload: Record<string, unknown>
-  ): BridgeForwardingStep {
+    stepKind: BridgePointerForwardingStep['stepKind'],
+    payload: BridgePointerForwardingStep['payload']
+  ): BridgePointerForwardingStep {
     return {
       seq,
       stepKind,
@@ -427,18 +433,89 @@ export class ScrcpySession {
     }
   }
 
-  private buildAck (
+  private buildTextInjectStep (
+    seq: number,
+    payload: BridgeTextInjectForwardingStep['payload']
+  ): BridgeTextInjectForwardingStep {
+    return {
+      seq,
+      stepKind: 'text_inject',
+      payload,
+      dispatchedAt: new Date().toISOString()
+    }
+  }
+
+  private buildKeyPressStep (
+    seq: number,
+    payload: BridgeKeyPressForwardingStep['payload']
+  ): BridgeKeyPressForwardingStep {
+    return {
+      seq,
+      stepKind: 'key_press',
+      payload,
+      dispatchedAt: new Date().toISOString()
+    }
+  }
+
+  private buildKeyTransitionStep (
+    seq: number,
+    stepKind: BridgeKeyTransitionForwardingStep['stepKind'],
+    payload: BridgeKeyTransitionForwardingStep['payload']
+  ): BridgeKeyTransitionForwardingStep {
+    return {
+      seq,
+      stepKind,
+      payload,
+      dispatchedAt: new Date().toISOString()
+    }
+  }
+
+  private buildPointerAck (
     clientCommandId: string,
-    kind: BridgeForwardingAckEvent['kind'],
-    payload: Record<string, unknown>,
-    steps: BridgeForwardingStep[]
-  ): BridgeForwardingAckEvent {
-    const ack: BridgeForwardingAckEvent = {
+    payload: BridgePointerForwardingAckEvent['payload'],
+    steps: BridgePointerForwardingAckEvent['steps']
+  ): BridgePointerForwardingAckEvent {
+    const ack: BridgePointerForwardingAckEvent = {
       type: 'forwarding_ack',
       clientCommandId,
-      kind,
+      kind: 'pointer',
       ackAt: new Date().toISOString(),
       payload,
+      steps,
+      deviceResult: { ok: true }
+    }
+    this.broadcast(ack)
+    return ack
+  }
+
+  private buildInputAck (
+    clientCommandId: string,
+    payload: BridgeInputForwardingAckEvent['payload'],
+    steps: BridgeInputForwardingAckEvent['steps']
+  ): BridgeInputForwardingAckEvent {
+    const ack: BridgeInputForwardingAckEvent = {
+      type: 'forwarding_ack',
+      clientCommandId,
+      kind: 'input',
+      ackAt: new Date().toISOString(),
+      payload,
+      steps,
+      deviceResult: { ok: true }
+    }
+    this.broadcast(ack)
+    return ack
+  }
+
+  private buildBackAck (
+    clientCommandId: string,
+    steps: BridgeBackForwardingAckEvent['steps']
+  ): BridgeBackForwardingAckEvent {
+    const ack: BridgeBackForwardingAckEvent = {
+      type: 'forwarding_ack',
+      clientCommandId,
+      kind: 'back',
+      ackAt: new Date().toISOString(),
+      payload: {},
       steps,
       deviceResult: { ok: true }
     }

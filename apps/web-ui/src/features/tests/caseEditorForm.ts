@@ -8,6 +8,12 @@ export type CaseEditorFormModel = {
   expectedText: string
   procedureText: string
   postActionText: string
+  objectiveClarificationsText: string
+  preflightChecksText: string
+  interactionHintsText: string
+  disambiguationRulesText: string
+  recoveryHintsText: string
+  judgeHintsText: string
   isCoreCase: boolean
   startMode: 'reset' | 'resume'
   startPageId: string
@@ -16,6 +22,7 @@ export type CaseEditorFormModel = {
 }
 
 export function createCaseEditorForm(detail: CaseDetailData): CaseEditorFormModel {
+  const aiGuidance = detail.ai_guidance
   return {
     title: detail.title,
     intent: detail.intent,
@@ -24,6 +31,12 @@ export function createCaseEditorForm(detail: CaseDetailData): CaseEditorFormMode
     expectedText: formatList(detail.expected ?? []),
     procedureText: formatList(detail.procedure ?? []),
     postActionText: formatList(detail.post_action ?? []),
+    objectiveClarificationsText: formatList(aiGuidance?.objective_clarifications ?? []),
+    preflightChecksText: formatList(aiGuidance?.preflight_checks ?? []),
+    interactionHintsText: formatList(aiGuidance?.interaction_hints ?? []),
+    disambiguationRulesText: formatList(aiGuidance?.disambiguation_rules ?? []),
+    recoveryHintsText: formatList(aiGuidance?.recovery_hints ?? []),
+    judgeHintsText: formatList(aiGuidance?.judge_hints ?? []),
     isCoreCase: detail.is_core_case,
     startMode: detail.start_mode === 'resume' ? 'resume' : 'reset',
     startPageId: detail.start_page_id ?? '',
@@ -34,6 +47,7 @@ export function createCaseEditorForm(detail: CaseDetailData): CaseEditorFormMode
 
 export function createCaseEditorFormFromPayload(payload: TestCasePayload): CaseEditorFormModel {
   const startState = payload.start_state ?? { mode: 'reset', page_id: null }
+  const aiGuidance = payload.ai_guidance
   return {
     title: payload.title,
     intent: payload.intent,
@@ -42,6 +56,12 @@ export function createCaseEditorFormFromPayload(payload: TestCasePayload): CaseE
     expectedText: formatList(payload.expected ?? []),
     procedureText: formatList(payload.procedure ?? []),
     postActionText: formatList(payload.post_action ?? []),
+    objectiveClarificationsText: formatList(aiGuidance?.objective_clarifications ?? []),
+    preflightChecksText: formatList(aiGuidance?.preflight_checks ?? []),
+    interactionHintsText: formatList(aiGuidance?.interaction_hints ?? []),
+    disambiguationRulesText: formatList(aiGuidance?.disambiguation_rules ?? []),
+    recoveryHintsText: formatList(aiGuidance?.recovery_hints ?? []),
+    judgeHintsText: formatList(aiGuidance?.judge_hints ?? []),
     isCoreCase: payload.is_core_case,
     startMode: startState.mode === 'resume' ? 'resume' : 'reset',
     startPageId: startState.page_id ?? '',
@@ -70,6 +90,7 @@ export function buildCaseUpsertRequest(form: CaseEditorFormModel, caseId: string
         mode: form.startMode,
         page_id: normalizeOptionalText(form.startPageId),
       },
+      ai_guidance: buildAiGuidancePayload(form),
     },
   }
 }
@@ -131,6 +152,19 @@ function parseListText(value: string): string[] {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function buildAiGuidancePayload(form: CaseEditorFormModel): TestCasePayload['ai_guidance'] {
+  const aiGuidance = {
+    objective_clarifications: parseListText(form.objectiveClarificationsText),
+    preflight_checks: parseListText(form.preflightChecksText),
+    interaction_hints: parseListText(form.interactionHintsText),
+    disambiguation_rules: parseListText(form.disambiguationRulesText),
+    recovery_hints: parseListText(form.recoveryHintsText),
+    judge_hints: parseListText(form.judgeHintsText),
+  }
+  const hasItems = Object.values(aiGuidance).some((items) => items.length > 0)
+  return hasItems ? aiGuidance : null
 }
 
 function parseOptionalInteger(value: string, fieldName: string): number | null {

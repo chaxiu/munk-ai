@@ -4,7 +4,7 @@ from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
-from munk.adapters.shared.payload_models import DeviceListData
+from munk.adapters.shared.payload_models import DeviceListData, DeviceStateData, DeviceUnlockData
 
 
 class InteractiveScreenData(BaseModel):
@@ -67,11 +67,25 @@ class InteractiveActionData(BaseModel):
     box: tuple[int, int, int, int] | None = Field(default=None, description="Optional action box.")
     point: tuple[int, int] | None = Field(default=None, description="Optional action point.")
     text: str | None = Field(default=None, description="Optional action text.")
+    direction: str | None = Field(default=None, description="Optional gesture direction.")
+    start_x_ratio: float | None = Field(default=None, description="Optional normalized gesture start x ratio.")
+    start_y_ratio: float | None = Field(default=None, description="Optional normalized gesture start y ratio.")
+    distance_ratio: float | None = Field(
+        default=None,
+        description="Optional normalized gesture travel along the primary axis.",
+    )
     start: tuple[int, int] | None = Field(default=None, description="Optional action start point.")
     end: tuple[int, int] | None = Field(default=None, description="Optional action end point.")
     duration: float | None = Field(default=None, description="Optional action duration in seconds.")
     dismiss_keyboard: bool | None = Field(default=None, description="Optional keyboard dismissal flag.")
     summary: str | None = Field(default=None, description="Optional human-readable action summary.")
+
+
+class InteractiveActionDiffSummaryData(BaseModel):
+    before_summary: str = Field(description="Concise summary of the observation captured before action execution.")
+    after_summary: str = Field(description="Concise summary of the observation captured after action execution.")
+    effect_summary: str = Field(description="Concise action effect summary derived from the before/after diff.")
+    settle_summary: str | None = Field(default=None, description="Optional settle diff summary.")
 
 
 class InteractiveSessionData(BaseModel):
@@ -135,6 +149,16 @@ class DevicesListOutput(BaseModel):
     data: DeviceListData = Field(description="Canonical discovered device payload.")
 
 
+class DeviceStateOutput(BaseModel):
+    summary: str = Field(description="Concise device state summary.")
+    data: DeviceStateData = Field(description="Current device state payload.")
+
+
+class DeviceUnlockOutput(BaseModel):
+    summary: str = Field(description="Concise device unlock summary.")
+    data: DeviceUnlockData = Field(description="Device unlock result payload.")
+
+
 class AppLifecycleOutput(BaseModel):
     summary: str = Field(description="Concise lifecycle action summary.")
     data: AppLifecycleData = Field(description="Lifecycle action result payload.")
@@ -166,14 +190,19 @@ class SessionObserveOutput(BaseModel):
 
 class SessionActOutput(BaseModel):
     summary: str = Field(description="Concise action result summary.")
+    detail: Literal["summary", "compact", "full"] = Field(description="Applied action result payload detail level.")
     session: InteractiveSessionData = Field(description="Interactive session summary after action.")
     action: InteractiveActionData = Field(description="Original requested action payload.")
     normalized_action: InteractiveActionData = Field(description="Normalized action payload actually executed.")
+    diff: InteractiveActionDiffSummaryData = Field(description="Structured diff summary for the action result.")
     before: InteractiveObservationData | None = Field(
         default=None,
         description="Observation captured before action execution when full detail is requested.",
     )
-    after: InteractiveObservationData = Field(description="Observation captured after action execution.")
+    after: InteractiveObservationData | None = Field(
+        default=None,
+        description="Observation captured after action execution when compact or full detail is requested.",
+    )
     before_summary: str = Field(description="Concise summary of the observation captured before action execution.")
     after_summary: str = Field(description="Concise summary of the observation captured after action execution.")
     executed: bool = Field(description="Whether the action executed.")

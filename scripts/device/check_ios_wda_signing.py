@@ -67,7 +67,12 @@ class CheckIOSWDASigningError(RuntimeError):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Check local iOS WDA signing prerequisites.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Legacy/manual helper: check local iOS WDA signing prerequisites for the standalone real-device "
+            "WDA install path."
+        )
+    )
     parser.add_argument("--signing-env-file", type=Path, default=DEFAULT_IOS_SIGNING_ENV_FILE)
     parser.add_argument("--profile-dir", type=Path, default=DEFAULT_PROVISIONING_PROFILE_DIR)
     parser.add_argument("--profile-file", type=Path, default=None)

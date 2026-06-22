@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, Sequence, TypeVar, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from munk.app import AppTarget
 from munk.testing import TestCase
@@ -106,20 +106,106 @@ class ObservedTapCommand(BaseModel):
     source: str = "scrcpy_bridge"
 
 
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PointerForwardingPayload(_StrictModel):
+    pointer_id: int
+    start_x: int
+    start_y: int
+    end_x: int
+    end_y: int
+    width: int
+    height: int
+
+
+class InputForwardingPayload(_StrictModel):
+    text: str
+    submit: bool = False
+
+
+class BackForwardingPayload(_StrictModel):
+    pass
+
+
+class PointerStepPayload(_StrictModel):
+    pointer_id: int
+    x: int
+    y: int
+
+
+class TextInjectStepPayload(_StrictModel):
+    text: str
+    submit: bool = False
+
+
+class KeyPressStepPayload(_StrictModel):
+    key: str
+
+
+class KeyTransitionStepPayload(_StrictModel):
+    key: str
+
+
+class ForwardingDeviceResult(_StrictModel):
+    ok: bool = True
+    error_code: str | None = None
+    message: str | None = None
+
+
+ForwardingAckPayload = PointerForwardingPayload | InputForwardingPayload | BackForwardingPayload
+ForwardingStepPayload = (
+    PointerStepPayload
+    | TextInjectStepPayload
+    | KeyPressStepPayload
+    | KeyTransitionStepPayload
+)
+PayloadModelT = TypeVar("PayloadModelT", bound=BaseModel)
+
+
 class ForwardingStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     seq: int
     step_kind: ForwardingStepKind
-    payload: dict[str, Any] = Field(default_factory=empty_data)
+    payload: ForwardingStepPayload
     dispatched_at: str = Field(default_factory=now_iso)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_payload_model(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw_data = cast(dict[str, Any], data)
+        payload = raw_data.get("payload")
+        normalized: dict[str, Any] = {**raw_data}
+        normalized["payload"] = _coerce_forwarding_step_payload(
+            normalized.get("step_kind"), payload
+        )
+        return normalized
 
 
 class ForwardingAck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     kind: ForwardingKind
     dispatched_at: str | None = None
     ack_at: str = Field(default_factory=now_iso)
-    payload: dict[str, Any] = Field(default_factory=empty_data)
+    payload: ForwardingAckPayload = Field(default_factory=BackForwardingPayload)
     steps: list[ForwardingStep] = Field(default_factory=empty_steps)
-    device_result: dict[str, Any] = Field(default_factory=empty_data)
+    device_result: ForwardingDeviceResult = Field(default_factory=ForwardingDeviceResult)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_payload_model(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw_data = cast(dict[str, Any], data)
+        payload = raw_data.get("payload")
+        normalized: dict[str, Any] = {**raw_data}
+        normalized["payload"] = _coerce_forwarding_ack_payload(
+            normalized.get("kind"), payload
+        )
+        return normalized
 
 
 class RecordInteractionCommand(BaseModel):
@@ -137,9 +223,9 @@ class ForwardingEvent(BaseModel):
     kind: ForwardingKind
     dispatched_at: str | None = None
     ack_at: str = Field(default_factory=now_iso)
-    payload: dict[str, Any] = Field(default_factory=empty_data)
+    payload: ForwardingAckPayload = Field(default_factory=BackForwardingPayload)
     steps: list[ForwardingStep] = Field(default_factory=empty_steps)
-    device_result: dict[str, Any] = Field(default_factory=empty_data)
+    device_result: ForwardingDeviceResult = Field(default_factory=ForwardingDeviceResult)
 
 
 class RecordingEvent(BaseModel):
@@ -356,6 +442,84 @@ class RecordingAssetManifest(BaseModel):
     generated_files: dict[str, str] = Field(default_factory=empty_generated_files)
 
 
+def _coerce_forwarding_step_payload(
+    step_kind: Any,
+    payload: Any,
+) -> ForwardingStepPayload:
+    if step_kind in {"pointer_down", "pointer_move", "pointer_up"}:
+        return _validate_payload_model(
+            PointerStepPayload,
+            payload,
+            context=f"forwarding step '{step_kind}'",
+        )
+    if step_kind == "text_inject":
+        return _validate_payload_model(
+            TextInjectStepPayload,
+            payload,
+            context=f"forwarding step '{step_kind}'",
+        )
+    if step_kind == "key_press":
+        return _validate_payload_model(
+            KeyPressStepPayload,
+            payload,
+            context=f"forwarding step '{step_kind}'",
+        )
+    if step_kind in {"key_down", "key_up"}:
+        return _validate_payload_model(
+            KeyTransitionStepPayload,
+            payload,
+            context=f"forwarding step '{step_kind}'",
+        )
+    return _validate_payload_model(
+        KeyTransitionStepPayload,
+        payload,
+        context=f"forwarding step '{step_kind}'",
+    )
+
+
+def _coerce_forwarding_ack_payload(
+    kind: Any,
+    payload: Any,
+) -> ForwardingAckPayload:
+    if kind == "pointer":
+        return _validate_payload_model(
+            PointerForwardingPayload,
+            payload,
+            context=f"forwarding ack '{kind}'",
+        )
+    if kind == "input":
+        return _validate_payload_model(
+            InputForwardingPayload,
+            payload,
+            context=f"forwarding ack '{kind}'",
+        )
+    if kind == "back":
+        return _validate_payload_model(
+            BackForwardingPayload,
+            payload,
+            context=f"forwarding ack '{kind}'",
+        )
+    return _validate_payload_model(
+        BackForwardingPayload,
+        payload,
+        context=f"forwarding ack '{kind}'",
+    )
+
+
+def _validate_payload_model(
+    model: type[PayloadModelT],
+    payload: Any,
+    *,
+    context: str,
+) -> PayloadModelT:
+    try:
+        return model.model_validate(payload if payload is not None else {})
+    except Exception as err:  # pragma: no cover - pydantic error shaping
+        raise RecordingInteractionContractError(
+            f"{context} has invalid payload: {err}"
+        ) from err
+
+
 def validate_record_interaction_contract(command: RecordInteractionCommand) -> None:
     expected_forwarding_kind = "pointer" if command.kind in {"click", "swipe"} else command.kind
     if command.forwarding_ack.kind != expected_forwarding_kind:
@@ -366,6 +530,7 @@ def validate_record_interaction_contract(command: RecordInteractionCommand) -> N
         )
 
     step_kinds = cast(list[ForwardingStepKind], [step.step_kind for step in command.forwarding_ack.steps])
+    _require_step_sequence(command.forwarding_ack.steps)
     if command.kind == "click":
         _require_step_kinds(
             command.kind,
@@ -404,6 +569,17 @@ def validate_record_interaction_contract(command: RecordInteractionCommand) -> N
         required={"key_down", "key_up"},
         allowed={"key_down", "key_up"},
     )
+
+
+def _require_step_sequence(steps: Sequence[ForwardingStep]) -> None:
+    if not steps:
+        return
+    expected_seq = list(range(1, len(steps) + 1))
+    actual_seq = [step.seq for step in steps]
+    if actual_seq != expected_seq:
+        raise RecordingInteractionContractError(
+            f"forwarding steps must use contiguous seq values starting at 1, got {actual_seq}"
+        )
 
 
 def _require_step_kinds(

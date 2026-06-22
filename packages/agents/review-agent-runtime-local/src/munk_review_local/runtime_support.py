@@ -10,6 +10,8 @@ from time import perf_counter
 from typing import Any, cast
 from uuid import uuid4
 
+from pydantic import BaseModel
+
 OPERATION_DIAGNOSTICS_SCHEMA_VERSION = "phase7e.operation_diagnostics.v1"
 _MUNK_HOME_ENV = "MUNK_HOME"
 _RUNTIME_ROOT_ENV = "MUNK_RUNTIME_ROOT"
@@ -65,47 +67,13 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def build_operation_manifest(
-    *,
-    root_dir: Path,
-    artifacts: dict[str, str],
-    operation_id: str | None,
-    operation_kind: str,
-    schema_versions: dict[str, str],
-) -> dict[str, Any]:
-    return {
-        "manifest_version": 2,
-        "operation_id": operation_id,
-        "operation_kind": operation_kind,
-        "verification_verdict": None,
-        "root_dir": str(root_dir),
-        "primary_artifacts": _build_artifact_refs(artifacts=artifacts, scope="operation"),
-        "case_runs": [],
-        "reproduction": [],
-        "schema_versions": dict(schema_versions),
-        "upstream_review": None,
-        "metadata": {},
-    }
-
-
-def refresh_manifest_artifact_exists(manifest: dict[str, Any]) -> dict[str, Any]:
-    refreshed = dict(manifest)
-    refreshed["primary_artifacts"] = {
-        artifact_id: {
-            **ref,
-            "exists": Path(ref["path"]).exists(),
-        }
-        for artifact_id, ref in manifest.get("primary_artifacts", {}).items()
-    }
-    return refreshed
-
-
 def build_json_artifact_check(
     *,
     artifact_id: str,
     path: Path,
     required_fields: tuple[str, ...] = (),
     expected_schema_version: str | None = None,
+    model_type: type[BaseModel] | None = None,
     required: bool = True,
 ) -> dict[str, Any]:
     if not path.exists():
@@ -128,6 +96,16 @@ def build_json_artifact_check(
             "exists": True,
             "valid": False,
             "summary": f"invalid json: {exc}",
+        }
+
+    if not isinstance(payload, dict):
+        return {
+            "artifact_id": artifact_id,
+            "path": str(path),
+            "required": required,
+            "exists": True,
+            "valid": False,
+            "summary": f"expected json object, got {type(payload).__name__}",
         }
 
     missing_fields = [field for field in required_fields if field not in payload]
@@ -153,6 +131,19 @@ def build_json_artifact_check(
                 f"{payload.get('schema_version')!r} != {expected_schema_version!r}"
             ),
         }
+
+    if model_type is not None:
+        try:
+            model_type.model_validate(payload)
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "artifact_id": artifact_id,
+                "path": str(path),
+                "required": required,
+                "exists": True,
+                "valid": False,
+                "summary": f"invalid {model_type.__name__}: {exc}",
+            }
 
     return {
         "artifact_id": artifact_id,
@@ -193,63 +184,6 @@ def resolve_provider_metadata(
     model = getattr(section, "model", None) if section is not None else None
     role_models = {role: model} if model else {}
     return provider, model, role_models, _fingerprint_config(config)
-
-
-def _build_artifact_refs(*, artifacts: dict[str, str], scope: str) -> dict[str, dict[str, Any]]:
-    refs: dict[str, dict[str, Any]] = {}
-    for artifact_id, raw_path in artifacts.items():
-        path = Path(raw_path)
-        refs[artifact_id] = {
-            "artifact_id": artifact_id,
-            "role": artifact_id,
-            "kind": _infer_kind(path),
-            "scope": scope,
-            "path": str(path),
-            "media_type": _infer_media_type(path),
-            "exists": path.exists(),
-            "metadata": {},
-        }
-    return refs
-
-
-def _infer_kind(path: Path) -> str:
-    if path.is_dir():
-        if path.name in {"raw", "annotated"}:
-            return "image_directory"
-        return "directory"
-    suffix = path.suffix.lower()
-    if suffix == ".json":
-        return "json_file"
-    if suffix == ".jsonl":
-        return "jsonl_file"
-    if suffix == ".log":
-        return "log_file"
-    if suffix in {".txt", ".md", ".xml", ".yaml", ".yml"}:
-        return "text_file"
-    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
-        return "binary_file"
-    return "other_file"
-
-
-def _infer_media_type(path: Path) -> str | None:
-    suffix = path.suffix.lower()
-    if suffix == ".json":
-        return "application/json"
-    if suffix == ".jsonl":
-        return "application/x-ndjson"
-    if suffix == ".log":
-        return "text/plain"
-    if suffix in {".txt", ".md"}:
-        return "text/plain"
-    if suffix == ".xml":
-        return "application/xml"
-    if suffix == ".png":
-        return "image/png"
-    if suffix in {".jpg", ".jpeg"}:
-        return "image/jpeg"
-    return None
-
-
 def _resolve_role_value(*, config: Any, role: str, attr_name: str) -> Any:
     agents = getattr(config, "agents", None)
     role_config = getattr(agents, role, None) if agents is not None else None

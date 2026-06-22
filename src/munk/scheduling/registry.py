@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from munk.scheduling.models import ScheduleRecord, ScheduleRunRecord, ScheduleRunStatus, ScheduleTriggerKind
+from munk.scheduling.models import ScheduleRecord, ScheduleRunRecord, ScheduleRunStatus
+from munk.scheduling._registry_rows import dump_json, row_to_schedule, row_to_schedule_run
+from munk.scheduling._registry_schema import initialize_registry_schema
 from munk.services.errors import ScheduleNotFoundError
 from munk.services.operations.paths import operations_db_path
 
@@ -28,80 +29,7 @@ class ScheduleRegistry:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS schedules (
-                    schedule_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    app_id TEXT NOT NULL,
-                    device_ref TEXT NOT NULL,
-                    timezone TEXT NOT NULL,
-                    enabled INTEGER NOT NULL DEFAULT 1,
-                    trigger_kind TEXT NOT NULL,
-                    cron_expr TEXT NOT NULL,
-                    request_json TEXT NOT NULL,
-                    next_run_at TEXT NULL,
-                    last_run_at TEXT NULL,
-                    last_schedule_run_id TEXT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS schedule_runs (
-                    schedule_run_id TEXT PRIMARY KEY,
-                    schedule_id TEXT NOT NULL,
-                    scheduled_for TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    operation_id TEXT NULL,
-                    error_code TEXT NULL,
-                    error_message TEXT NULL,
-                    created_at TEXT NOT NULL,
-                    started_at TEXT NULL,
-                    triggered_at TEXT NULL,
-                    finished_at TEXT NULL,
-                    FOREIGN KEY(schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE
-                );
-                """
-            )
-            self._ensure_column(connection, "schedule_runs", "triggered_at", "TEXT NULL")
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_schedules_enabled_next_run_at
-                ON schedules(enabled, next_run_at)
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_schedules_app_id
-                ON schedules(app_id)
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule_id_created_at
-                ON schedule_runs(schedule_id, created_at DESC)
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_schedule_runs_operation_id
-                ON schedule_runs(operation_id)
-                """
-            )
-
-    @staticmethod
-    def _ensure_column(
-        connection: sqlite3.Connection,
-        table_name: str,
-        column_name: str,
-        column_sql: str,
-    ) -> None:
-        row = connection.execute(
-            f"SELECT 1 FROM pragma_table_info('{table_name}') WHERE name = ?",
-            (column_name,),
-        ).fetchone()
-        if row is None:
-            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}")
+            initialize_registry_schema(connection)
 
     def create_schedule(self, record: ScheduleRecord) -> ScheduleRecord:
         with self._connect() as connection:
@@ -121,7 +49,7 @@ class ScheduleRegistry:
                     int(record.enabled),
                     record.trigger_kind,
                     record.cron_expr,
-                    self._dump_json(record.request_json),
+                    dump_json(record.request_json),
                     record.next_run_at,
                     record.last_run_at,
                     record.last_schedule_run_id,
@@ -149,7 +77,7 @@ class ScheduleRegistry:
                     int(record.enabled),
                     record.trigger_kind,
                     record.cron_expr,
-                    self._dump_json(record.request_json),
+                    dump_json(record.request_json),
                     record.next_run_at,
                     record.last_run_at,
                     record.last_schedule_run_id,
@@ -165,7 +93,7 @@ class ScheduleRegistry:
         if not fields:
             return self.get_schedule(schedule_id)
         assignments = ", ".join(f"{key} = ?" for key in fields)
-        values = [self._dump_json(value) if key == "request_json" else value for key, value in fields.items()]
+        values = [dump_json(value) if key == "request_json" else value for key, value in fields.items()]
         values.append(schedule_id)
         with self._connect() as connection:
             cursor = connection.execute(
@@ -184,7 +112,7 @@ class ScheduleRegistry:
             ).fetchone()
         if row is None:
             raise ScheduleNotFoundError(schedule_id)
-        return self._row_to_schedule(row)
+        return row_to_schedule(row)
 
     def list_schedules(
         self,
@@ -230,7 +158,7 @@ class ScheduleRegistry:
             total_row = connection.execute(count_sql, params).fetchone()
             rows = connection.execute(sql, query_params).fetchall()
         total = int(total_row["count"]) if total_row is not None else 0
-        return [self._row_to_schedule(row) for row in rows], total
+        return [row_to_schedule(row) for row in rows], total
 
     def delete_schedule(self, schedule_id: str) -> None:
         with self._connect() as connection:
@@ -307,7 +235,7 @@ class ScheduleRegistry:
             ).fetchone()
         if row is None:
             raise ScheduleNotFoundError(f"schedule run not found: {schedule_run_id}")
-        return self._row_to_schedule_run(row)
+        return row_to_schedule_run(row)
 
     def list_schedule_runs(self, schedule_id: str, *, limit: int = 20) -> list[ScheduleRunRecord]:
         with self._connect() as connection:
@@ -327,7 +255,7 @@ class ScheduleRegistry:
                 """,
                 (schedule_id, limit),
             ).fetchall()
-        return [self._row_to_schedule_run(row) for row in rows]
+        return [row_to_schedule_run(row) for row in rows]
 
     def count_runs_for_schedule(self, schedule_id: str, *, statuses: list[ScheduleRunStatus]) -> int:
         if not statuses:
@@ -372,7 +300,7 @@ class ScheduleRegistry:
                 """,
                 [*statuses, limit],
             ).fetchall()
-        return [self._row_to_schedule_run(row) for row in rows]
+        return [row_to_schedule_run(row) for row in rows]
 
     def list_due_schedules(self, *, now_iso: str, limit: int = 100) -> list[ScheduleRecord]:
         with self._connect() as connection:
@@ -386,7 +314,7 @@ class ScheduleRegistry:
                 """,
                 (now_iso, limit),
             ).fetchall()
-        return [self._row_to_schedule(row) for row in rows]
+        return [row_to_schedule(row) for row in rows]
 
     def find_active_schedule_run(self) -> ScheduleRunRecord | None:
         runs = self.list_runs_by_statuses(statuses=["dispatching", "triggered"], limit=1)
@@ -404,7 +332,7 @@ class ScheduleRegistry:
                 """,
                 (schedule_id,),
             ).fetchone()
-        return self._row_to_schedule_run(row) if row is not None else None
+        return row_to_schedule_run(row) if row is not None else None
 
     def create_queued_run_if_absent(
         self,
@@ -486,48 +414,3 @@ class ScheduleRegistry:
                 (claimed_at, schedule_run_id),
             )
         return self.get_schedule_run(schedule_run_id)
-
-    @staticmethod
-    def _dump_json(value: dict[str, Any]) -> str:
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-    @staticmethod
-    def _load_json(value: str | None) -> dict[str, Any]:
-        if not value:
-            return {}
-        loaded = json.loads(value)
-        return cast(dict[str, Any], loaded if isinstance(loaded, dict) else {})
-
-    def _row_to_schedule(self, row: sqlite3.Row) -> ScheduleRecord:
-        return ScheduleRecord(
-            schedule_id=str(row["schedule_id"]),
-            name=str(row["name"]),
-            app_id=str(row["app_id"]),
-            device_ref=str(row["device_ref"]),
-            timezone=str(row["timezone"]),
-            enabled=bool(row["enabled"]),
-            trigger_kind=cast(ScheduleTriggerKind, str(row["trigger_kind"])),
-            cron_expr=str(row["cron_expr"]),
-            request_json=self._load_json(row["request_json"]),
-            next_run_at=row["next_run_at"],
-            last_run_at=row["last_run_at"],
-            last_schedule_run_id=row["last_schedule_run_id"],
-            created_at=str(row["created_at"]),
-            updated_at=str(row["updated_at"]),
-        )
-
-    @staticmethod
-    def _row_to_schedule_run(row: sqlite3.Row) -> ScheduleRunRecord:
-        return ScheduleRunRecord(
-            schedule_run_id=str(row["schedule_run_id"]),
-            schedule_id=str(row["schedule_id"]),
-            scheduled_for=str(row["scheduled_for"]),
-            status=cast(ScheduleRunStatus, str(row["status"])),
-            operation_id=row["operation_id"],
-            error_code=row["error_code"],
-            error_message=row["error_message"],
-            created_at=str(row["created_at"]),
-            started_at=row["started_at"],
-            triggered_at=row["triggered_at"],
-            finished_at=row["finished_at"],
-        )

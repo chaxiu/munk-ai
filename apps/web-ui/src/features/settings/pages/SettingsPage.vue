@@ -14,7 +14,7 @@ import {
   buildSettingsForm,
   buildSettingsRequest,
   createEmptySettingsForm,
-  parseHeaders,
+  isActiveProviderSectionMissingRequiredFields,
   type ProviderKind,
   type RoleName,
 } from '@/features/settings/types'
@@ -23,6 +23,8 @@ import AppCard from '@/shared/components/AppCard.vue'
 import AppEmptyState from '@/shared/components/AppEmptyState.vue'
 import { translateErrorCode } from '@/shared/i18n/errorMessages'
 import UiButton from '@/shared/ui/UiButton.vue'
+import UiField from '@/shared/ui/UiField.vue'
+import UiInput from '@/shared/ui/UiInput.vue'
 import UiSelect from '@/shared/ui/UiSelect.vue'
 
 const { t } = useI18n()
@@ -63,15 +65,6 @@ watch(() => settingsConfigQuery.data.value, (data) => {
   submitError.value = null
 }, { immediate: true })
 
-watch(() => form.provider, (provider) => {
-  if (provider === 'openai_compatible') {
-    form.openai_compatible.configured = true
-  }
-  if (provider === 'gemini') {
-    form.gemini.configured = true
-  }
-})
-
 function translateUnknownError(error: unknown): string | null {
   if (!error) {
     return null
@@ -89,23 +82,18 @@ function activeSectionMissingRequiredFields(): boolean {
   if (form.proxy.enabled && !form.proxy.url.trim()) {
     return true
   }
-  const activeSection = form.provider === 'openai_compatible' ? form.openai_compatible : form.gemini
-  if (!activeSection.configured) {
+  if (form.ios_bridge.sudo_enabled && !form.ios_bridge.sudo_password.trim()) {
     return true
   }
-  if (!activeSection.model.trim()) {
+
+  if (
+    form.provider === 'openai_compatible'
+      ? isActiveProviderSectionMissingRequiredFields('openai_compatible', form.openai_compatible)
+      : isActiveProviderSectionMissingRequiredFields('gemini', form.gemini)
+  ) {
     return true
   }
-  if (form.provider === 'openai_compatible') {
-    if (!form.openai_compatible.base_url.trim()) {
-      return true
-    }
-    try {
-      parseHeaders(form.openai_compatible.extra_headers_json)
-    } catch {
-      return true
-    }
-  }
+
   for (const role of ['plan', 'runner', 'judge', 'review', 'analysis'] as RoleName[]) {
     const agent = form.agents[role]
     if (!agent.enabled) {
@@ -114,19 +102,12 @@ function activeSectionMissingRequiredFields(): boolean {
     if (!agent.provider) {
       return true
     }
-    const agentSection = agent.provider === 'openai_compatible' ? agent.openai_compatible : agent.gemini
-    if (!agentSection.configured || !agentSection.model.trim()) {
+    if (
+      agent.provider === 'openai_compatible'
+        ? isActiveProviderSectionMissingRequiredFields('openai_compatible', agent.openai_compatible)
+        : isActiveProviderSectionMissingRequiredFields('gemini', agent.gemini)
+    ) {
       return true
-    }
-    if (agent.provider === 'openai_compatible') {
-      if (!agent.openai_compatible.base_url.trim()) {
-        return true
-      }
-      try {
-        parseHeaders(agent.openai_compatible.extra_headers_json)
-      } catch {
-        return true
-      }
     }
   }
   return false
@@ -182,12 +163,18 @@ function isActiveProvider(kind: ProviderKind): boolean {
       <section class="grid gap-3">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 class="text-lg font-semibold text-text-primary">{{ t('settings.sections.globalProvider') }}</h2>
-          <div class="w-full md:w-[280px]">
-            <UiSelect
-              v-model="form.provider"
-              :options="providerOptions"
-              :placeholder="t('settings.placeholders.selectProvider')"
-            />
+          <div class="w-full md:w-[320px]">
+            <UiField
+              :label="t('settings.fields.provider')"
+              required
+              :description="t('settings.fieldDescriptions.provider')"
+            >
+              <UiSelect
+                v-model="form.provider"
+                :options="providerOptions"
+                :placeholder="t('settings.placeholders.selectProvider')"
+              />
+            </UiField>
           </div>
         </div>
         <div class="grid gap-3">
@@ -243,6 +230,44 @@ function isActiveProvider(kind: ProviderKind): boolean {
         </div>
         <div class="rounded-2xl border border-border bg-surface-elevated px-4 py-4 md:px-5">
           <ProxyConfigForm :proxy="form.proxy" />
+        </div>
+      </section>
+
+      <section class="grid gap-3">
+        <div class="grid gap-1">
+          <h2 class="text-lg font-semibold text-text-primary">{{ t('settings.sections.iosBridge') }}</h2>
+          <p class="text-sm text-text-secondary">{{ t('settings.sections.iosBridgeDescription') }}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-surface-elevated px-4 py-4 md:px-5">
+          <div class="grid gap-4">
+            <UiField
+              :label="t('settings.fields.iosBridgeSudoEnabled')"
+              optional
+              :description="t('settings.fieldDescriptions.iosBridgeSudoEnabled')"
+            >
+              <label class="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-muted/35 px-3.5 text-sm text-text-secondary">
+                <input v-model="form.ios_bridge.sudo_enabled" type="checkbox" class="h-4 w-4 rounded border-border">
+                {{ t('settings.iosBridge.enableSudoToggle') }}
+              </label>
+            </UiField>
+
+            <UiField
+              :label="t('settings.fields.iosBridgeSudoPassword')"
+              :required="form.ios_bridge.sudo_enabled"
+              :optional="!form.ios_bridge.sudo_enabled"
+              :description="t('settings.fieldDescriptions.iosBridgeSudoPassword', {
+                requirement: form.ios_bridge.sudo_enabled
+                  ? t('settings.fieldDescriptions.common.enabledRequired')
+                  : t('settings.fieldDescriptions.common.disabledOptional'),
+              })"
+            >
+              <UiInput
+                v-model="form.ios_bridge.sudo_password"
+                type="password"
+                :placeholder="t('settings.placeholders.iosBridgeSudoPassword')"
+              />
+            </UiField>
+          </div>
         </div>
       </section>
 

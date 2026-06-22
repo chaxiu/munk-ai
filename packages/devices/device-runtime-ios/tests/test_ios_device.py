@@ -169,11 +169,15 @@ def test_ios_device_click_scroll_input_and_press_delegate_to_provider() -> None:
 
     device.click(12, 34)
     device.scroll((10, 20), (100, 200), duration=0.5)
+    device.drag((30, 40), (120, 240), duration=0.8)
     device.input_text("hello ios")
     device.press("home")
 
     assert provider.tap_calls == [(12, 34)]
-    assert provider.swipe_calls == [(10, 20, 100, 200, 0.5)]
+    assert provider.swipe_calls == [
+        (10, 20, 100, 200, 0.5),
+        (30, 40, 120, 240, 0.8),
+    ]
     assert provider.type_calls == ["hello ios"]
     assert provider.press_calls == ["home"]
 

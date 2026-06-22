@@ -1,25 +1,17 @@
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, Literal
 
 from munk.agent_base.base import ActionHistoryEntry, ScreenState
-from munk.agent_base.llm import coerce_json_container_string
-from munk.agent_base.locator import ElementLocator
 from munk.shared_tools import KnowledgeToolProvider
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from munk.services.events import RunEventSink, utc_now_iso
 from munk_runner_local.brain.context_prep_models import ContextPrepKnowledgeItem
 from munk_runner_local.brain.memory_store import RunnerMemoryStore
-
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonLeaf: TypeAlias = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
-JsonLikeValue: TypeAlias = JsonLeaf | list[JsonLeaf] | dict[str, JsonLeaf]
-
 
 @dataclass
 class RunnerStepDeps:
@@ -28,6 +20,13 @@ class RunnerStepDeps:
     history_entries: list[ActionHistoryEntry]
     max_elements: int
     run_dir: Path
+    raw_dir: Path
+    annotated_dir: Path
+    vl_max_side: int
+    vl_image_format: str = "webp"
+    vl_fallback_image_format: str = "jpeg"
+    vl_webp_quality: int = 80
+    vl_jpeg_quality: int = 82
     app_id: str = "unknown"
     knowledge_tools: KnowledgeToolProvider | None = None
     prepared_context_text: str = "none"
@@ -38,6 +37,7 @@ class RunnerStepDeps:
     event_sink: RunEventSink | None = None
     trace_path: Path | None = None
     runner_memory_path: Path | None = None
+    runner_issues_path: Path | None = None
     step_index: int | None = None
     target_part_limit_override: int | None = None
     seed_context_recorded: bool = False
@@ -98,36 +98,47 @@ class ScrollToolArgs(BaseModel):
         return value
 
 
-class ElementLocatorArgs(BaseModel):
-    text_contains: str | None = None
-    resource_id_contains: str | None = None
-    content_desc_contains: str | None = None
-    class_name: str | None = None
-    package: str | None = None
+class TextMatchArgs(BaseModel):
+    match_type: Literal["any_of_texts", "all_texts", "none_of_texts"]
+    texts: list[str] = Field(
+        description="Visible stable texts to match against the whole-screen OCR-style text snapshot.",
+    )
 
-    def to_locator(self) -> ElementLocator:
-        return ElementLocator(
-            text_contains=self.text_contains,
-            resource_id_contains=self.resource_id_contains,
-            content_desc_contains=self.content_desc_contains,
-            class_name=self.class_name,
-            package=self.package,
-        )
+    @field_validator("texts")
+    @classmethod
+    def validate_texts(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("texts must contain at least one non-empty string")
+        return cleaned
 
 
-class ClearAndInputToolArgs(BaseModel):
-    target_id: int
+class EditTextToolArgs(BaseModel):
+    mode: Literal["append", "replace"]
+    target_id: int | None = None
     text: str
     summary: str
-    dismiss_keyboard: bool = True
+    dismiss_keyboard: bool | None = None
 
     @field_validator("text", "summary")
     @classmethod
-    def validate_clear_and_input_value(cls, value: str) -> str:
+    def validate_edit_text_value(cls, value: str) -> str:
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("value must not be empty")
         return cleaned
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> "EditTextToolArgs":
+        if self.mode == "replace":
+            if self.target_id is None:
+                raise ValueError("target_id is required for replace mode")
+            if self.dismiss_keyboard is None:
+                self.dismiss_keyboard = True
+            return self
+        if self.dismiss_keyboard is None:
+            self.dismiss_keyboard = False
+        return self
 
 
 class DismissSoftKeyboardToolArgs(BaseModel):
@@ -142,8 +153,8 @@ class DismissSoftKeyboardToolArgs(BaseModel):
         return cleaned
 
 
-class WaitForElementToolArgs(BaseModel):
-    locator: ElementLocatorArgs
+class WaitForTextToolArgs(BaseModel):
+    match: TextMatchArgs
     timeout_sec: float
     summary: str
 
@@ -158,21 +169,17 @@ class WaitForElementToolArgs(BaseModel):
 
     @field_validator("summary")
     @classmethod
-    def validate_wait_for_element_summary(cls, value: str) -> str:
+    def validate_wait_for_text_summary(cls, value: str) -> str:
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("summary must not be empty")
         return cleaned
 
 
-class WaitUntilGoneToolArgs(WaitForElementToolArgs):
-    pass
-
-
-class ScrollUntilVisibleToolArgs(BaseModel):
-    locator: ElementLocatorArgs
+class ScrollUntilTextToolArgs(BaseModel):
+    match: TextMatchArgs
     direction: str = "down"
-    max_attempts: int = 5
+    max_attempts: int = 8
     summary: str
 
     @field_validator("direction")
@@ -230,9 +237,9 @@ class RunnerToolTraceEntry(BaseModel):
 
 class ListClickableElementsToolArgs(BaseModel):
     max: int | None = None
-    source: str = "all"
+    source: Literal["vision", "tree", "all"] = "all"
 
-    @field_validator("source")
+    @field_validator("source", mode="before")
     @classmethod
     def validate_source(cls, value: str) -> str:
         cleaned = value.strip().lower()
@@ -243,12 +250,10 @@ class ListClickableElementsToolArgs(BaseModel):
 
 class SaveMemoryToolArgs(BaseModel):
     key: str
-    value: JsonLikeValue = Field(
-        description="Structured JSON value for later reuse. Arrays/objects must be passed as JSON containers, not quoted strings."
-    )
+    value: str = Field(description="Reusable fact string for later steps. Keep it concise and directly reusable.")
     summary: str
 
-    @field_validator("key", "summary")
+    @field_validator("key", "value", "summary")
     @classmethod
     def validate_non_empty_text(cls, value: str) -> str:
         cleaned = value.strip()
@@ -256,16 +261,25 @@ class SaveMemoryToolArgs(BaseModel):
             raise ValueError("value must not be empty")
         return cleaned
 
-    @field_validator("value", mode="before")
-    @classmethod
-    def coerce_container_string(cls, value: Any) -> Any:
-        return coerce_json_container_string(value)
 
-    @field_validator("value")
+class ReportIssueToolArgs(BaseModel):
+    severity: Literal["warning", "error"]
+    summary: str
+
+    @field_validator("summary")
     @classmethod
-    def validate_json_value(cls, value: JsonLikeValue) -> JsonLikeValue:
-        json.dumps(value, ensure_ascii=False)
-        return value
+    def validate_summary(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("summary must not be empty")
+        return cleaned
+
+
+class RunnerIssueRecord(BaseModel):
+    step_index: int | None = None
+    severity: Literal["warning", "error"]
+    summary: str
+    timestamp: str = Field(default_factory=utc_now_iso)
 
 
 class ReadMemoryToolArgs(BaseModel):

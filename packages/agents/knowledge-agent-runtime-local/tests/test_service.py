@@ -22,6 +22,14 @@ from munk_knowledge_agent_local.runtime import LocalKnowledgeAgentRuntimeFactory
 from munk_knowledge_agent_local.service import KnowledgeAgentRuntimeService
 
 
+class RecordingProgressSink:
+    def __init__(self) -> None:
+        self.events = []
+
+    def emit(self, event) -> None:  # noqa: ANN001
+        self.events.append(event)
+
+
 def _build_judge_result(path: Path, *, verdict: Literal["passed", "failed", "inconclusive"]) -> JudgeResult:
     return JudgeResult(
         app_id="app-1",
@@ -40,6 +48,7 @@ def _build_judge_result(path: Path, *, verdict: Literal["passed", "failed", "inc
 
 
 def test_generate_candidates_skips_passed_case(tmp_path: Path) -> None:
+    sink = RecordingProgressSink()
     request = KnowledgeAgentRequest(
         app_id="app-1",
         plan_id="plan-1",
@@ -54,15 +63,27 @@ def test_generate_candidates_skips_passed_case(tmp_path: Path) -> None:
     result = KnowledgeAgentRuntimeService(
         resolved_config=None,
         agent=_FakeKnowledgeAgent(KnowledgeAgentResult(summary="unused")),
-    ).generate_candidates(request, context=_build_context(tmp_path))
+    ).generate_candidates(request, context=_build_context(tmp_path, progress=sink))
 
     assert result.candidate_submissions == []
     assert result.skip_reason == "verdict_passed"
     assert result.tool_calls == []
     assert result.artifacts["knowledge_agent_tool_calls"].endswith("knowledge_post_action_tool_calls.json")
+    assert [event.event_type for event in sink.events] == [
+        "knowledge_started",
+        "knowledge_evidence_ready",
+        "knowledge_skipped",
+    ]
+    for event in sink.events:
+        assert event.agent_role == "knowledge"
+        assert event.timeline_scope == "child_operation"
+        assert event.app_id == "app-1"
+        assert event.plan_id == "plan-1"
+        assert event.case_id == "case-1"
 
 
 def test_generate_candidates_builds_issue_submission_with_evidence_bundle(tmp_path: Path) -> None:
+    sink = RecordingProgressSink()
     judge_result_path = tmp_path / "judge_result.json"
     decision_trace_path = tmp_path / "decision_trace.jsonl"
     request = KnowledgeAgentRequest(
@@ -120,7 +141,7 @@ def test_generate_candidates_builds_issue_submission_with_evidence_bundle(tmp_pa
             ),
             last_tool_calls=["read_judge_result", "read_decision_trace_tail"],
         ),
-    ).generate_candidates(request, context=_build_context(tmp_path))
+    ).generate_candidates(request, context=_build_context(tmp_path, progress=sink))
 
     assert result.skip_reason is None
     assert len(result.candidate_submissions) == 1
@@ -143,6 +164,23 @@ def test_generate_candidates_builds_issue_submission_with_evidence_bundle(tmp_pa
     ]
     assert submission.candidate.payload.workaround == "登录接口返回异常"
     assert submission.candidate.payload.severity == "high"
+    assert [event.event_type for event in sink.events] == [
+        "knowledge_started",
+        "knowledge_evidence_ready",
+        "knowledge_prompt_ready",
+        "knowledge_tool_called",
+        "knowledge_tool_called",
+        "knowledge_tool_calls_completed",
+        "knowledge_result_generated",
+        "knowledge_candidate_generation_completed",
+        "knowledge_completed",
+    ]
+    for event in sink.events:
+        assert event.agent_role == "knowledge"
+        assert event.timeline_scope == "child_operation"
+        assert event.app_id == "app-1"
+        assert event.plan_id == "plan-1"
+        assert event.case_id == "case-1"
 
 
 def test_local_runtime_factory_reports_health() -> None:
@@ -168,15 +206,17 @@ class _FakeKnowledgeAgent:
         return self._result
 
 
-def _build_context(tmp_path: Path) -> KnowledgeAgentRuntimeContext:
+def _build_context(tmp_path: Path, *, progress=None) -> KnowledgeAgentRuntimeContext:  # noqa: ANN001
     root_dir = tmp_path / "knowledge"
     root_dir.mkdir(parents=True, exist_ok=True)
     return KnowledgeAgentRuntimeContext(
         operation_id="op-1",
+        attempt_index=0,
         managed_paths=KnowledgeAgentManagedPaths(
             root_dir=root_dir,
             prompt_path=root_dir / "knowledge_post_action_prompt.txt",
             tool_calls_path=root_dir / "knowledge_post_action_tool_calls.json",
             llm_transcript_path=root_dir / "knowledge_post_action_llm_transcript.json",
         ),
+        progress=progress,
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from concurrent.futures import Executor, Future
 from dataclasses import dataclass, replace
 
@@ -20,7 +21,7 @@ from munk.running import (
     RunnerManagedPaths,
     RunnerRequest,
     RunnerRuntimeContext,
-    RuntimeOverrideValue,
+    apply_runtime_overrides,
     build_case_brief,
 )
 from munk.shared_tools import KnowledgeToolProvider
@@ -29,10 +30,17 @@ from munk.app_assets.storage import AppRegistry
 from munk.config import ResolvedConfig, resolve_role_model_config
 from munk.services.errors import ConfigValidationError, VisionPreflightError
 from munk.services.events import RunEventSink
-from munk.services.knowledge import build_knowledge_provider_from_document, load_app_knowledge_document
+from munk.services.knowledge import (
+    ContextPrepRecallResult,
+    build_app_knowledge_tools,
+    build_context_prep_recall,
+    build_knowledge_provider_from_document,
+    load_app_knowledge_document,
+    resolve_effective_assets_root,
+)
 from munk.services.models import RunPaths, RunStartParams
 
-from .brain.context_prep_agent import ContextPrepAgent, build_context_prep_fallback, build_knowledge_card_catalog_text
+from .brain.context_prep_agent import FALLBACK_PREP_SUMMARY, build_context_prep_fallback
 from .brain.context_prep_models import (
     ContextPrepBundleToolResult,
     ContextPrepKnowledgeItem,
@@ -60,18 +68,24 @@ class RunContext:
     brain: Brain
     knowledge_tools: KnowledgeToolProvider | None = None
     app_introduction: str | None = None
-    context_prep_agent: ContextPrepAgent | None = None
+    context_prep_agent: object | None = None
     context_prep_executor: Executor | None = None
     context_prep_future: Future[ContextPrepOutput] | None = None
     context_prep_output: ContextPrepOutput | None = None
     context_prep_selection_source: str | None = None
     prepared_knowledge_bundle: tuple[ContextPrepKnowledgeItem, ...] = ()
     context_prep_missing_card_ids: tuple[str, ...] = ()
+    context_prep_recall: ContextPrepRecallResult | None = None
     log_collector: RunLogCollector | None = None
 
 
-def load_runner_knowledge_tools(request: RunnerRequest) -> KnowledgeToolProvider:
-    registry = AppRegistry(request.assets_root)
+def load_runner_knowledge_tools(
+    request: RunnerRequest,
+    *,
+    resolved_config: ResolvedConfig | None = None,
+) -> KnowledgeToolProvider:
+    effective_assets_root = resolve_effective_assets_root(request.assets_root)
+    registry = AppRegistry(effective_assets_root)
     try:
         profile = registry.load(request.app_id)
     except FileNotFoundError:
@@ -81,9 +95,14 @@ def load_runner_knowledge_tools(request: RunnerRequest) -> KnowledgeToolProvider
         registry=registry,
         ref=profile.app_knowledge_ref,
     )
-    if document is None:
-        document = AppKnowledgeImportDocument(app_id=request.app_id, cards=[])
-    return build_knowledge_provider_from_document(document)
+    config_payload = dict(resolved_config.config) if resolved_config is not None else {}
+    config_payload["app_registry_root"] = effective_assets_root
+    return build_app_knowledge_tools(
+        app_id=request.app_id,
+        assets_root=effective_assets_root,
+        document=document,
+        resolved_config=config_payload,
+    )
 
 
 def load_runner_app_introduction(request: RunnerRequest) -> str | None:
@@ -131,17 +150,9 @@ def build_local_runner_context(
     except RuntimeError as exc:
         raise VisionPreflightError(str(exc)) from exc
 
-    context_prep_model = build_pydantic_ai_model(runner_config, config=params.resolved_config.config)
     runner_model = build_pydantic_ai_model(runner_config, config=params.resolved_config.config)
-    knowledge_tools = load_runner_knowledge_tools(request)
+    knowledge_tools = load_runner_knowledge_tools(request, resolved_config=resolved_config)
     app_introduction = load_runner_app_introduction(request)
-    context_prep_agent = ContextPrepAgent(
-        model=context_prep_model,
-        output_strategy=resolve_output_strategy(runner_config),
-        max_tokens=params.max_tokens,
-        temperature=params.temperature,
-        top_p=0.9,
-    )
     brain: Brain = PydanticAiRunnerBrain(
         app_id=request.app_id,
         knowledge_tools=knowledge_tools,
@@ -150,18 +161,27 @@ def build_local_runner_context(
         output_strategy=resolve_output_strategy(runner_config),
         paths=paths,
         event_sink=event_sink,
-        max_tokens=params.max_tokens,
-        temperature=params.temperature,
+        max_tokens=params.runtime.max_tokens,
+        temperature=params.runtime.temperature,
         top_p=0.9,
-        vl_max_side=params.vl_max_side,
-        max_elements=params.runner_max_elements,
+        vl_max_side=params.runtime.vl_max_side,
+        vl_image_format=params.runtime.vl_image_format,
+        vl_fallback_image_format=params.runtime.vl_fallback_image_format,
+        vl_webp_quality=params.runtime.vl_webp_quality,
+        vl_jpeg_quality=params.runtime.vl_jpeg_quality,
+        include_screenshot=params.runtime.runner_include_screenshot,
+        max_elements=params.runtime.runner_max_elements,
         platform=request.app_target.platform,
     )
 
     perception = runtime_context.perception
     executor = ActionExecutor(device)
-    high_level_actions = HighLevelActionService(device, executor)
-    monitor = SimpleMonitor(max_steps=params.max_steps, max_duration=params.max_seconds)
+    high_level_actions = HighLevelActionService(
+        device,
+        executor,
+        app_entry_identity=request.app_target.entry_identity,
+    )
+    monitor = SimpleMonitor(max_steps=params.runtime.max_steps, max_duration=params.runtime.max_seconds)
     return RunContext(
         request,
         params,
@@ -174,45 +194,72 @@ def build_local_runner_context(
         brain,
         knowledge_tools,
         app_introduction,
-        context_prep_agent,
+        None,
         None,
         None,
         None,
         None,
         (),
         (),
+        None,
         log_collector,
     )
 
 
 def prepare_runner_context(context: RunContext) -> ContextPrepOutput:
-    selection_source = "primary"
+    total_started = time.monotonic()
+    logger.info(
+        "context_prep_start app_id=%s case_id=%s",
+        context.request.app_id,
+        context.request.case.case_id,
+    )
+    selection_source = "recall_direct"
     try:
-        if context.context_prep_agent is None:
-            output = build_context_prep_fallback("context prep agent unavailable")
+        provider = context.knowledge_tools or build_knowledge_provider_from_document(
+            AppKnowledgeImportDocument(app_id=context.request.app_id, cards=[])
+        )
+        recall_started = time.monotonic()
+        recall = build_context_prep_recall(
+            provider,
+            case_brief=build_case_brief(context.request.case),
+            app_introduction=context.app_introduction,
+        )
+        recall_ms = int(round((time.monotonic() - recall_started) * 1000.0))
+        context.context_prep_recall = recall
+        logger.info(
+            "context_prep_recall_done elapsed_ms=%s candidate_count=%s mode=%s",
+            recall_ms,
+            recall.candidate_count,
+            recall.mode,
+        )
+        direct_started = time.monotonic()
+        output = build_direct_context_prep_output(context, recall)
+        direct_ms = int(round((time.monotonic() - direct_started) * 1000.0))
+        if output.fallback_reason is not None:
             selection_source = "fallback_default"
-        else:
-            output = context.context_prep_agent.prepare_with_fallback(
-                app_introduction=context.app_introduction,
-                case_brief=build_case_brief(context.request.case),
-                knowledge_tools=context.knowledge_tools or build_knowledge_provider_from_document(
-                    AppKnowledgeImportDocument(app_id=context.request.app_id, cards=[])
-                ),
-            )
-            if output.fallback_reason is not None:
-                selection_source = "fallback_prompted"
+        logger.info(
+            "context_prep_direct_done elapsed_ms=%s selected_entries=%s candidate_count=%s fallback=%s",
+            direct_ms,
+            len(output.selected_entries),
+            recall.candidate_count,
+            output.fallback_reason is not None,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("context_prep_failed error=%s", exc)
         output = build_context_prep_fallback(f"context prep failed: {exc}")
         selection_source = "fallback_default"
+    normalize_started = time.monotonic()
     output, selection_source = normalize_context_prep_output(
         context,
         output,
         selection_source=selection_source,
     )
+    normalize_ms = int(round((time.monotonic() - normalize_started) * 1000.0))
     context.context_prep_output = output
     context.context_prep_selection_source = selection_source
+    bundle_started = time.monotonic()
     bundle_result = build_prepared_knowledge_bundle(context, output)
+    bundle_ms = int(round((time.monotonic() - bundle_started) * 1000.0))
     context.prepared_knowledge_bundle = tuple(bundle_result.items)
     context.context_prep_missing_card_ids = tuple(bundle_result.missing_card_ids)
     if bundle_result.missing_card_ids and output.fallback_reason is None:
@@ -222,8 +269,112 @@ def prepare_runner_context(context: RunContext) -> ContextPrepOutput:
             }
         )
         context.context_prep_output = output
+    artifact_started = time.monotonic()
     write_context_prep_artifact(context, output)
+    artifact_ms = int(round((time.monotonic() - artifact_started) * 1000.0))
+    total_ms = int(round((time.monotonic() - total_started) * 1000.0))
+    logger.info(
+        "context_prep_complete elapsed_ms=%s normalize_ms=%s bundle_ms=%s artifact_ms=%s selected_entries=%s bundle_items=%s missing_cards=%s selection_source=%s fallback=%s",
+        total_ms,
+        normalize_ms,
+        bundle_ms,
+        artifact_ms,
+        len(output.selected_entries),
+        len(bundle_result.items),
+        len(bundle_result.missing_card_ids),
+        selection_source,
+        output.fallback_reason is not None,
+    )
     return output
+
+
+def build_direct_context_prep_output(
+    context: RunContext,
+    recall: ContextPrepRecallResult,
+) -> ContextPrepOutput:
+    candidate_card_ids = list(recall.candidate_card_ids[:3])
+    if not candidate_card_ids or context.knowledge_tools is None:
+        return build_context_prep_fallback("app knowledge unavailable")
+    bundle_result = get_knowledge_card_bundle_payload(
+        knowledge_tools=context.knowledge_tools,
+        card_ids=candidate_card_ids,
+        recall_candidate_card_ids=recall.candidate_card_ids,
+    )
+    if not bundle_result.items:
+        missing = ", ".join(bundle_result.missing_card_ids) if bundle_result.missing_card_ids else "none"
+        return build_context_prep_fallback(f"context prep recall produced no readable cards: {missing}")
+    selected_entries = [
+        ContextPrepSelectionItem(
+            card_id=item.card_id,
+            reason=f"top recall candidate #{index + 1} for this case",
+        )
+        for index, item in enumerate(bundle_result.items[:3])
+    ]
+    return ContextPrepOutput(
+        selected_entries=selected_entries,
+        prep_summary=build_direct_context_prep_summary(bundle_result.items[:3]),
+        fallback_reason=None,
+    )
+
+
+def build_direct_context_prep_summary(items: list[ContextPrepKnowledgeItem]) -> str:
+    if not items:
+        return FALLBACK_PREP_SUMMARY
+    lines = ["Use these recalled knowledge hints first. Confirm them against the visible UI before acting."]
+    for item in items:
+        lines.append(_format_prepared_context_hint(item))
+    return "\n".join(lines)
+
+
+def _format_prepared_context_hint(item: ContextPrepKnowledgeItem) -> str:
+    fields = _parse_knowledge_summary_fields(item.summary_text)
+    detail_keys = _preferred_hint_keys(item.card_type)
+    detail_parts = [
+        f"{key}={_compact_text(fields[key])}"
+        for key in detail_keys
+        if key in fields and fields[key].strip()
+    ]
+    if not detail_parts:
+        detail_parts = [
+            _compact_text(value)
+            for key, value in fields.items()
+            if key not in {"card_id", "title", "card_type", "status"} and value.strip()
+        ][:2]
+    detail_text = "; ".join(detail_parts) if detail_parts else "use tool-backed evidence before assuming details"
+    return f"- {item.title} ({item.card_type}): {detail_text}"
+
+
+def _preferred_hint_keys(card_type: str) -> tuple[str, ...]:
+    if card_type == "screen":
+        return ("enter", "recognize")
+    if card_type == "flow":
+        return ("goal", "typical_steps", "completion_signals")
+    return ("goal", "recognize", "enter", "typical_steps", "completion_signals")
+
+
+def _parse_knowledge_summary_fields(summary_text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for raw_line in summary_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        normalized_key = key.strip()
+        normalized_value = value.strip()
+        if normalized_key and normalized_value:
+            fields[normalized_key] = normalized_value
+    return fields
+
+
+def _compact_text(value: str, *, limit: int = 140) -> str:
+    compact = " ".join(segment.strip() for segment in value.splitlines() if segment.strip())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
 
 
 def build_prepared_knowledge_bundle(
@@ -242,10 +393,13 @@ def normalize_context_prep_output(
     *,
     selection_source: str,
 ) -> tuple[ContextPrepOutput, str]:
-    valid_card_ids = {
-        card.card_id
-        for card in (context.knowledge_tools.list(limit=1000) if context.knowledge_tools is not None else [])
-    }
+    provider = context.knowledge_tools
+    recall = context.context_prep_recall
+    allowed_recall_ids = (
+        set(recall.candidate_card_ids)
+        if isinstance(recall, ContextPrepRecallResult) and recall.mode == "search"
+        else None
+    )
     normalized_entries: list[ContextPrepSelectionItem] = []
     seen_card_ids: set[str] = set()
     invalid_card_ids: list[str] = []
@@ -253,7 +407,10 @@ def normalize_context_prep_output(
         card_id = item.card_id.strip()
         if card_id in seen_card_ids:
             continue
-        if card_id not in valid_card_ids:
+        if allowed_recall_ids is not None and card_id not in allowed_recall_ids:
+            invalid_card_ids.append(card_id)
+            continue
+        if provider is None or provider.get(card_id) is None:
             invalid_card_ids.append(card_id)
             continue
         normalized_entries.append(item.model_copy(update={"card_id": card_id}))
@@ -286,14 +443,28 @@ def write_context_prep_artifact(context: RunContext, output: ContextPrepOutput) 
     artifact_path = context.paths.context_prep_path
     if artifact_path is None:
         return
+    recall = context.context_prep_recall
+    recall_payload = (
+        {
+            "recall_mode": recall.mode,
+            "recall_query": recall.query,
+            "recall_candidate_count": recall.candidate_count,
+            "recall_candidates": list(recall.candidate_card_ids),
+            "knowledge_recall_candidates_text": recall.candidates_text,
+        }
+        if isinstance(recall, ContextPrepRecallResult)
+        else {
+            "recall_mode": None,
+            "recall_query": None,
+            "recall_candidate_count": 0,
+            "recall_candidates": [],
+            "knowledge_recall_candidates_text": "none",
+        }
+    )
     payload = {
         "app_id": context.request.app_id,
         "introduction_present": bool(context.app_introduction and context.app_introduction.strip()),
-        "knowledge_card_catalog_text": build_knowledge_card_catalog_text(
-            context.knowledge_tools or build_knowledge_provider_from_document(
-                AppKnowledgeImportDocument(app_id=context.request.app_id, cards=[])
-            )
-        ),
+        **recall_payload,
         "selected_entries": [item.model_dump(mode="python") for item in output.selected_entries],
         "knowledge_bundle": [item.model_dump(mode="python") for item in context.prepared_knowledge_bundle],
         "prep_summary": output.prep_summary,
@@ -305,23 +476,7 @@ def write_context_prep_artifact(context: RunContext, output: ContextPrepOutput) 
 
 
 def build_run_paths_from_managed_paths(paths: RunnerManagedPaths) -> RunPaths:
-    return RunPaths(
-        run_dir=paths.root_dir,
-        log_path=paths.root_dir / "run.log",
-        raw_dir=paths.raw_dir,
-        annotated_dir=paths.annotated_dir,
-        runtime_logs_dir=paths.runtime_logs_dir,
-        observation_frames_dir=paths.observation_frames_dir,
-        observation_diffs_dir=paths.observation_diffs_dir,
-        observation_tree_dir=paths.observation_tree_dir,
-        case_path=paths.request_dump_path,
-        result_path=paths.root_dir / "result.json",
-        decision_trace_path=paths.decision_trace_path,
-        runner_history_path=paths.runner_history_path,
-        runner_memory_path=paths.runner_memory_path,
-        llm_transcript_path=paths.llm_transcript_path,
-        context_prep_path=paths.context_prep_path,
-    )
+    return paths.to_run_paths()
 
 
 def build_run_start_params(*, request: RunnerRequest, resolved_config: ResolvedConfig) -> RunStartParams:
@@ -330,34 +485,4 @@ def build_run_start_params(*, request: RunnerRequest, resolved_config: ResolvedC
         app_target=request.app_target,
         device_ref=request.device_ref,
     )
-    for key, value in request.runtime_overrides.items():
-        params = apply_runtime_override(params, key, value)
-    return params
-
-
-def apply_runtime_override(
-    params: RunStartParams,
-    key: str,
-    value: RuntimeOverrideValue,
-) -> RunStartParams:
-    if key in {"device_ref", "goal", "app_id", "plan_id", "case_id"}:
-        raise ValueError(f"{key} is managed by case context and cannot be overridden")
-    if key == "max_steps":
-        return replace(params, max_steps=require_int_override(key, value))
-    if key in {"max_seconds", "interval", "settle_timeout", "initial_ready_timeout_sec", "icon_conf", "temperature"}:
-        return replace(params, **{key: require_float_override(key, value)})
-    if key in {"max_side", "max_tokens", "vl_max_side", "runner_max_elements"}:
-        return replace(params, **{key: require_int_override(key, value)})
-    raise ValueError(f"unsupported runtime override: {key}")
-
-
-def require_int_override(key: str, value: RuntimeOverrideValue) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"runtime override '{key}' must be an integer")
-    return value
-
-
-def require_float_override(key: str, value: RuntimeOverrideValue) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError(f"runtime override '{key}' must be a number")
-    return float(value)
+    return replace(params, runtime=apply_runtime_overrides(params.runtime, request.runtime_overrides))

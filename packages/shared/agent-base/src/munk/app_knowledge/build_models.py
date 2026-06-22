@@ -8,7 +8,7 @@ def _clean_text(value: str) -> str:
 
 
 class NormalizedKnowledgeCardRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     card_id: str
@@ -70,7 +70,7 @@ class NormalizedKnowledgeCardRecord(BaseModel):
 
 
 class AppKnowledgeBuildManifest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     schema_version: str
@@ -115,7 +115,7 @@ class AppKnowledgeBuildManifest(BaseModel):
 
 
 class AppKnowledgeBuildResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     knowledge_ref: str

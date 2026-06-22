@@ -30,6 +30,9 @@ class OptimizeArtifactMaterializer:
         return {
             "root": root,
             "request": root / "optimization_request.json",
+            "prompt": root / "optimize_prompt.txt",
+            "tool_calls": root / "optimize_tool_calls.json",
+            "llm_transcript": root / "optimize_llm_transcript.jsonl",
             "result": root / "optimization_result.json",
             "diagnostics": root / "diagnostics.json",
             "field_diffs": root / "field_diffs.json",

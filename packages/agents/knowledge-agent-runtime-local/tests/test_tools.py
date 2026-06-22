@@ -60,14 +60,27 @@ def _build_deps(tmp_path: Path) -> KnowledgeToolDeps:
     decision_trace_path.write_text('{"step": 1, "decision": "retry"}\n{"step": 2, "decision": "stop"}\n', encoding="utf-8")
     manifest_path.write_text(json.dumps({"items": [{"artifact_id": "attempts"}]}), encoding="utf-8")
     judge_result_path.write_text(_build_judge_result(judge_result_path).model_dump_json(indent=2), encoding="utf-8")
+    judge_result = _build_judge_result(judge_result_path)
     request = KnowledgeAgentRequest(
         app_id="app-1",
         plan_id="plan-1",
         case_id="case-1",
         case_title="登录流程",
         run_dir=tmp_path / "run",
+        structured_evidence={
+            "attempts": json.loads(attempts_path.read_text(encoding="utf-8")),
+            "history": json.loads(history_path.read_text(encoding="utf-8")),
+            "retry_handoffs": json.loads(retry_handoffs_path.read_text(encoding="utf-8")),
+            "decision_trace": [
+                json.loads(line)
+                for line in decision_trace_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ],
+            "artifact_manifest": json.loads(manifest_path.read_text(encoding="utf-8")),
+            "judge_result": judge_result.model_dump(mode="json"),
+        },
         evidence_bundle=KnowledgeAgentEvidenceBundle(
-            judge_result=_build_judge_result(judge_result_path),
+            judge_result=judge_result,
             judge_result_path=judge_result_path,
             artifacts=[
                 KnowledgeArtifactRef(artifact_id="attempts", path=attempts_path),

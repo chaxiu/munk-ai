@@ -15,6 +15,8 @@ def test_agent_runtime_event_fields_are_stable() -> None:
     assert event.event_type == "review_retrieval_completed"
     assert event.lifecycle_state == "running"
     assert event.agent_role == "review"
+    assert event.timeline_scope is None
+    assert event.timeline_phase is None
     assert event.data == {"hit_count": 1}
 
 
@@ -29,6 +31,11 @@ def test_agent_runtime_event_emitter_emits_standard_lifecycle_events() -> None:
         agent_role="review",
         operation_id="op-1",
         event_sink=CollectingSink(),
+        timeline_scope="parent_run",
+        attempt_index=1,
+        app_id="app-1",
+        plan_id="plan-1",
+        case_id="case-1",
     )
 
     emitter.emit_started(message="started")
@@ -47,6 +54,9 @@ def test_agent_runtime_event_emitter_emits_standard_lifecycle_events() -> None:
     ]
     assert all(event.agent_role == "review" for event in events)
     assert all(event.operation_id == "op-1" for event in events)
+    assert all(event.timeline_scope == "parent_run" for event in events)
+    assert all(event.attempt_index == 1 for event in events)
+    assert all(event.app_id == "app-1" for event in events)
 
 
 def test_cancel_controller_contract_can_be_implemented_directly() -> None:

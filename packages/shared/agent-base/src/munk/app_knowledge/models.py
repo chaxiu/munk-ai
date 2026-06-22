@@ -37,7 +37,7 @@ def _clean_text_list(items: list[str]) -> list[str]:
 
 
 class KnowledgeSource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     kind: KnowledgeSourceKind
     ref: str | None = None
@@ -53,7 +53,7 @@ class KnowledgeSource(BaseModel):
 
 
 class ScreenPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     enter: str | None = None
     recognize: str | None = None
@@ -72,7 +72,7 @@ class ScreenPayload(BaseModel):
 
 
 class FlowPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     goal: str
     preconditions: list[str] = Field(default_factory=empty_strings)
@@ -91,7 +91,7 @@ class FlowPayload(BaseModel):
 
 
 class AssertionPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     when: str
     success_signals: list[str] = Field(default_factory=empty_strings)
@@ -111,7 +111,7 @@ class AssertionPayload(BaseModel):
 
 
 class IssuePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     symptoms: list[str] = Field(default_factory=empty_strings)
     trigger_conditions: list[str] = Field(default_factory=empty_strings)
@@ -130,7 +130,7 @@ class IssuePayload(BaseModel):
 
 
 class DataPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     fixtures: list[str] = Field(default_factory=empty_strings)
     accounts: list[str] = Field(default_factory=empty_strings)
@@ -147,7 +147,7 @@ class DataPayload(BaseModel):
 
 
 class PolicyPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     platform_constraints: list[str] = Field(default_factory=empty_strings)
     environment_rules: list[str] = Field(default_factory=empty_strings)
@@ -164,7 +164,7 @@ class PolicyPayload(BaseModel):
 
 
 class DomainTermPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     term: str
     aliases: list[str] = Field(default_factory=empty_strings)
@@ -188,7 +188,7 @@ class DomainTermPayload(BaseModel):
 
 
 class KnowledgeCardBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     card_id: str
     app_id: str
@@ -263,7 +263,7 @@ KnowledgeCard = Annotated[
 
 
 class KnowledgeCardInputBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     card_id: str | None = None
     app_id: str
@@ -333,7 +333,7 @@ KnowledgeCardInput = Annotated[
 
 
 class KnowledgeCandidateDraftBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     card_id: str | None = None
     app_id: str
@@ -402,7 +402,7 @@ KnowledgeCandidateDraft = Annotated[
 
 
 class AppKnowledgeImportDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     schema_version: str = KNOWLEDGE_IMPORT_SCHEMA_VERSION
     app_id: str
@@ -419,7 +419,7 @@ class AppKnowledgeImportDocument(BaseModel):
 
 
 class KnowledgeCandidateSubmission(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     candidate: KnowledgeCandidateDraft
@@ -437,7 +437,7 @@ class KnowledgeCandidateSubmission(BaseModel):
 
 
 class KnowledgeCandidateRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     candidate_id: str
     app_id: str
@@ -474,7 +474,7 @@ class KnowledgeCandidateRecord(BaseModel):
 
 
 class KnowledgeCandidateQuery(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     candidate_id: str | None = None
     status: KnowledgeCandidateStatus | None = None
@@ -488,7 +488,7 @@ class KnowledgeCandidateQuery(BaseModel):
 
 
 class KnowledgeReviewDecision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     reviewed_by: str | None = None
     review_note: str | None = None

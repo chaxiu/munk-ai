@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from munk.agent_base.llm import llm_transcript_scope
 from munk.agent_base.output_strategy import resolve_output_strategy
 from munk.agent_base.pydantic_model_factory import build_pydantic_ai_model
+from munk.agent_runtime.events import AgentRuntimeEventEmitter
 from munk.knowledge_agent import KnowledgeAgentRequest, KnowledgeAgentResult, KnowledgeAgentRuntimeContext
 
 from munk.config import resolve_role_model_config
@@ -34,11 +35,40 @@ class KnowledgeAgentRuntimeService:
         cancel_controller=None,  # noqa: ANN001
     ) -> KnowledgeAgentResult:
         del cancel_controller
+        emitter = AgentRuntimeEventEmitter(
+            agent_role="knowledge",
+            operation_id=context.operation_id,
+            event_sink=context.progress,
+            timeline_scope="child_operation",
+            attempt_index=context.attempt_index,
+            app_id=request.app_id,
+            plan_id=request.plan_id,
+            case_id=request.case_id,
+        )
         judge_result = request.evidence_bundle.judge_result
         artifacts = _build_artifacts(context)
+        emitter.emit_started(
+            event_type="knowledge_started",
+            message="knowledge runtime started",
+            summary="knowledge runtime started",
+        )
+        emitter.emit_progress(
+            event_type="knowledge_evidence_ready",
+            message="knowledge evidence ready",
+            timeline_phase="evidence_ready",
+            summary="knowledge evidence ready",
+            data={"artifact_count": len(request.evidence_bundle.artifacts)},
+        )
         if judge_result.verdict == "passed":
             _write_json(context.managed_paths.tool_calls_path, {"tool_calls": []})
             context.managed_paths.prompt_path.write_text("knowledge agent skipped: verdict=passed\n", encoding="utf-8")
+            emitter.emit_progress(
+                event_type="knowledge_skipped",
+                message="knowledge runtime skipped",
+                timeline_phase="skipped",
+                summary="knowledge runtime skipped: passed case",
+                data={"skip_reason": "verdict_passed"},
+            )
             return KnowledgeAgentResult(
                 summary="knowledge agent skipped: passed case",
                 skip_reason="verdict_passed",
@@ -51,6 +81,66 @@ class KnowledgeAgentRuntimeService:
         tool_calls = list(self._agent.last_tool_calls)
         _write_json(context.managed_paths.tool_calls_path, {"tool_calls": tool_calls})
         context.managed_paths.prompt_path.write_text(self._agent.last_prompt, encoding="utf-8")
+        emitter.emit_progress(
+            event_type="knowledge_prompt_ready",
+            message="knowledge prompt ready",
+            timeline_phase="prompt_ready",
+            summary="knowledge prompt ready",
+            data={
+                "prompt_path": str(context.managed_paths.prompt_path),
+                "tool_call_count": len(tool_calls),
+            },
+        )
+        for tool_index, tool_name in enumerate(tool_calls):
+            emitter.emit_progress(
+                event_type="knowledge_tool_called",
+                message=f"knowledge tool called: {tool_name}",
+                timeline_phase="tool_called",
+                summary=f"knowledge tool called: {tool_name}",
+                data={
+                    "tool_name": tool_name,
+                    "tool_index": tool_index,
+                },
+            )
+        emitter.emit_progress(
+            event_type="knowledge_tool_calls_completed",
+            message="knowledge tool calls completed",
+            timeline_phase="tool_calls_completed",
+            summary="knowledge tool calls completed",
+            data={
+                "tool_call_count": len(tool_calls),
+                "tool_calls": list(tool_calls),
+            },
+        )
+        primary_submission = agent_output.candidate_submissions[0] if agent_output.candidate_submissions else None
+        emitter.emit_progress(
+            event_type="knowledge_result_generated",
+            message="knowledge candidate generation completed",
+            timeline_phase="result_generated",
+            summary="knowledge candidate generation completed",
+            data={
+                "generated_candidate_count": len(agent_output.candidate_submissions),
+                "candidate_title": primary_submission.candidate.title if primary_submission is not None else None,
+                "card_type": primary_submission.candidate.card_type if primary_submission is not None else None,
+            },
+        )
+        emitter.emit_progress(
+            event_type="knowledge_candidate_generation_completed",
+            message="knowledge candidate generation completed",
+            timeline_phase="result_ready",
+            summary="knowledge candidate generation completed",
+            data={
+                "generated_candidate_count": len(agent_output.candidate_submissions),
+                "candidate_title": primary_submission.candidate.title if primary_submission is not None else None,
+                "card_type": primary_submission.candidate.card_type if primary_submission is not None else None,
+            },
+        )
+        emitter.emit_ended(
+            event_type="knowledge_completed",
+            message="knowledge runtime completed",
+            summary="knowledge runtime completed",
+            data={"generated_candidate_count": len(agent_output.candidate_submissions)},
+        )
         return agent_output.model_copy(
             update={
                 "tool_calls": tool_calls,

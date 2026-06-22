@@ -7,7 +7,15 @@ import UiField from '@/shared/ui/UiField.vue'
 import UiInput from '@/shared/ui/UiInput.vue'
 import UiSelect from '@/shared/ui/UiSelect.vue'
 import UiTextarea from '@/shared/ui/UiTextarea.vue'
-import type { GeminiSectionForm, OpenAISectionForm, ProviderKind } from '../types'
+import {
+  getProviderFieldMeta,
+  isProviderFieldRequired,
+  type GeminiProviderFieldKey,
+  type GeminiSectionForm,
+  type OpenAIProviderFieldKey,
+  type OpenAISectionForm,
+  type ProviderKind,
+} from '../types'
 
 const props = defineProps<{
   kind: ProviderKind
@@ -22,11 +30,6 @@ const showGeminiAdvanced = ref(false)
 
 const openaiSection = computed(() => props.section as OpenAISectionForm)
 const geminiSection = computed(() => props.section as GeminiSectionForm)
-const apiKeyHint = computed(() => (
-  props.section.api_key_configured
-    ? t('settings.fields.apiKeyConfigured')
-    : t('settings.fields.optional')
-))
 const providerTitle = computed(() => (
   props.kind === 'openai_compatible'
     ? t('settings.providers.openaiCompatible')
@@ -71,6 +74,39 @@ const summaryText = computed(() => {
   return details.join(' · ')
 })
 
+const providerRequirement = computed(() => (
+  props.active
+    ? t('settings.fieldDescriptions.common.providerRequiredWhenActive')
+    : t('settings.fieldDescriptions.common.providerStandbyOptional')
+))
+const apiKeyPreserveRule = computed(() => (
+  props.section.api_key_configured
+    ? t('settings.fieldDescriptions.common.secretConfiguredKeep')
+    : t('settings.fieldDescriptions.common.secretEmptySkipped')
+))
+
+function openaiDescription(field: OpenAIProviderFieldKey): string {
+  return t(getProviderFieldMeta('openai_compatible', field).descriptionKey, {
+    requirement: providerRequirement.value,
+    preserveRule: apiKeyPreserveRule.value,
+  })
+}
+
+function geminiDescription(field: GeminiProviderFieldKey): string {
+  return t(getProviderFieldMeta('gemini', field).descriptionKey, {
+    requirement: providerRequirement.value,
+    preserveRule: apiKeyPreserveRule.value,
+  })
+}
+
+function openaiRequired(field: OpenAIProviderFieldKey): boolean {
+  return isProviderFieldRequired('openai_compatible', field, props.active)
+}
+
+function geminiRequired(field: GeminiProviderFieldKey): boolean {
+  return isProviderFieldRequired('gemini', field, props.active)
+}
+
 </script>
 
 <template>
@@ -108,61 +144,70 @@ const summaryText = computed(() => {
     </button>
 
     <div v-if="isExpanded" class="mt-4 grid gap-4 border-t border-border pt-4">
-        <UiField
-          :label="t('settings.fields.enabled')"
-          :hint="active ? t('settings.fields.activeProvider') : t('settings.fields.inactiveProvider')"
-        >
-          <label class="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-muted/35 px-3.5 text-sm text-text-secondary">
-            <input
-              v-if="kind === 'openai_compatible'"
-              v-model="openaiSection.configured"
-              type="checkbox"
-              class="h-4 w-4 rounded border-border"
-            >
-            <input
-              v-else
-              v-model="geminiSection.configured"
-              type="checkbox"
-              class="h-4 w-4 rounded border-border"
-            >
-            {{ t('settings.fields.persistSection') }}
-          </label>
-        </UiField>
-
         <template v-if="kind === 'openai_compatible'">
           <div class="grid gap-4 xl:grid-cols-2">
-            <UiField :label="t('settings.fields.baseUrl')">
+            <UiField
+              :label="t('settings.fields.baseUrl')"
+              :required="openaiRequired('base_url')"
+              :optional="!openaiRequired('base_url')"
+              :description="openaiDescription('base_url')"
+            >
               <UiInput v-model="openaiSection.base_url" :placeholder="t('settings.placeholders.baseUrl')" />
             </UiField>
 
-            <UiField :label="t('settings.fields.model')">
+            <UiField
+              :label="t('settings.fields.model')"
+              :required="openaiRequired('model')"
+              :optional="!openaiRequired('model')"
+              :description="openaiDescription('model')"
+            >
               <UiInput v-model="openaiSection.model" :placeholder="t('settings.placeholders.model')" />
             </UiField>
 
-            <UiField :label="t('settings.fields.timeoutSec')" :hint="t('settings.fields.optional')">
+            <UiField
+              :label="t('settings.fields.timeoutSec')"
+              optional
+              :description="openaiDescription('timeout_sec')"
+            >
               <UiInput v-model="openaiSection.timeout_sec" :placeholder="t('settings.placeholders.timeoutSec')" />
             </UiField>
 
-            <UiField :label="t('settings.fields.outputStrategy')" :hint="t('settings.fields.outputStrategyHint')">
+            <UiField
+              :label="t('settings.fields.outputStrategy')"
+              optional
+              :description="openaiDescription('output_strategy')"
+            >
               <UiSelect
                 v-model="openaiSection.output_strategy"
                 :options="outputStrategyOptions"
               />
             </UiField>
 
-            <UiField :label="t('settings.fields.thinking')" :hint="t('settings.fields.thinkingHint')">
+            <UiField
+              :label="t('settings.fields.thinking')"
+              optional
+              :description="openaiDescription('thinking_mode')"
+            >
               <UiSelect
                 v-model="openaiSection.thinking_mode"
                 :options="thinkingModeOptions"
               />
             </UiField>
 
-            <UiField :label="t('settings.fields.apiKey')" :hint="apiKeyHint">
+            <UiField
+              :label="t('settings.fields.apiKey')"
+              optional
+              :description="openaiDescription('api_key')"
+            >
               <UiInput v-model="openaiSection.api_key" type="password" :placeholder="t('settings.placeholders.apiKey')" />
             </UiField>
           </div>
 
-          <UiField :label="t('settings.fields.extraHeaders')" :hint="t('settings.fields.jsonObjectHint')">
+          <UiField
+            :label="t('settings.fields.extraHeaders')"
+            optional
+            :description="openaiDescription('extra_headers_json')"
+          >
             <UiTextarea
               v-model="openaiSection.extra_headers_json"
               :rows="5"
@@ -173,11 +218,20 @@ const summaryText = computed(() => {
 
         <template v-else>
           <div class="grid gap-4 xl:grid-cols-2">
-            <UiField :label="t('settings.fields.model')">
+            <UiField
+              :label="t('settings.fields.model')"
+              :required="geminiRequired('model')"
+              :optional="!geminiRequired('model')"
+              :description="geminiDescription('model')"
+            >
               <UiInput v-model="geminiSection.model" :placeholder="t('settings.placeholders.model')" />
             </UiField>
 
-            <UiField :label="t('settings.fields.apiKey')" :hint="apiKeyHint">
+            <UiField
+              :label="t('settings.fields.apiKey')"
+              optional
+              :description="geminiDescription('api_key')"
+            >
               <UiInput v-model="geminiSection.api_key" type="password" :placeholder="t('settings.placeholders.apiKey')" />
             </UiField>
           </div>
@@ -198,12 +252,45 @@ const summaryText = computed(() => {
             </div>
 
             <div v-if="showGeminiAdvanced" class="grid gap-4 xl:grid-cols-2">
-              <UiField :label="t('settings.fields.timeoutSec')" :hint="t('settings.fields.optional')">
+              <UiField
+                :label="t('settings.fields.timeoutSec')"
+                optional
+                :description="geminiDescription('timeout_sec')"
+              >
                 <UiInput v-model="geminiSection.timeout_sec" :placeholder="t('settings.placeholders.timeoutSec')" />
               </UiField>
 
-              <UiField :label="t('settings.fields.baseUrl')" :hint="t('settings.fields.geminiBaseUrlHint')" class="xl:col-span-2">
+              <UiField
+                :label="t('settings.fields.credentialsPath')"
+                optional
+                :description="geminiDescription('credentials_path')"
+              >
+                <UiInput v-model="geminiSection.credentials_path" :placeholder="t('settings.placeholders.credentialsPath')" />
+              </UiField>
+
+              <UiField
+                class="xl:col-span-2"
+                :label="t('settings.fields.baseUrl')"
+                optional
+                :description="geminiDescription('base_url')"
+              >
                 <UiInput v-model="geminiSection.base_url" :placeholder="t('settings.placeholders.geminiBaseUrl')" />
+              </UiField>
+
+              <UiField
+                :label="t('settings.fields.project')"
+                optional
+                :description="geminiDescription('project')"
+              >
+                <UiInput v-model="geminiSection.project" :placeholder="t('settings.placeholders.project')" />
+              </UiField>
+
+              <UiField
+                :label="t('settings.fields.location')"
+                optional
+                :description="geminiDescription('location')"
+              >
+                <UiInput v-model="geminiSection.location" :placeholder="t('settings.placeholders.location')" />
               </UiField>
             </div>
           </div>

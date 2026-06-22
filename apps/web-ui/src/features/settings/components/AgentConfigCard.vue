@@ -52,15 +52,6 @@ watch(() => config.value.enabled, (enabled) => {
   }
 })
 
-watch(() => config.value.provider, (provider) => {
-  if (provider === 'openai_compatible') {
-    config.value.openai_compatible.configured = true
-  }
-  if (provider === 'gemini') {
-    config.value.gemini.configured = true
-  }
-})
-
 function isActive(kind: ProviderKind): boolean {
   return config.value.enabled && config.value.provider === kind
 }
@@ -85,11 +76,17 @@ function isActive(kind: ProviderKind): boolean {
         <p class="mt-1 text-sm text-text-secondary">{{ summaryText }}</p>
       </div>
 
-      <div class="flex shrink-0 items-center gap-3">
-        <label class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-muted/30 px-3.5 text-sm text-text-secondary">
-          <input v-model="config.enabled" type="checkbox" class="h-4 w-4 rounded border-border">
-          {{ t('settings.agent.enableOverride') }}
-        </label>
+      <div class="flex shrink-0 flex-col gap-3 md:min-w-[280px]">
+        <UiField
+          :label="t('settings.fields.overrideEnabled')"
+          optional
+          :description="t('settings.fieldDescriptions.overrideEnabled')"
+        >
+          <label class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-muted/30 px-3.5 text-sm text-text-secondary">
+            <input v-model="config.enabled" type="checkbox" class="h-4 w-4 rounded border-border">
+            {{ t('settings.agent.enableOverride') }}
+          </label>
+        </UiField>
         <button
           v-if="config.enabled"
           type="button"
@@ -105,7 +102,11 @@ function isActive(kind: ProviderKind): boolean {
     <template v-if="config.enabled && isExpanded">
       <div class="mt-4 grid gap-4 border-t border-border pt-4">
         <div class="max-w-sm">
-          <UiField :label="t('settings.fields.provider')">
+          <UiField
+            :label="t('settings.fields.provider')"
+            required
+            :description="t('settings.fieldDescriptions.provider')"
+          >
             <UiSelect
               v-model="config.provider"
               :options="providerOptions"

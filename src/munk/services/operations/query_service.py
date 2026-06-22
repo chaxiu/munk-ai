@@ -3,13 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from munk.adapters.shared.payload_models import (
     BatchRunAggregateData,
     OperationChildItemData,
     OperationChildrenData,
+    OperationDetailData,
+    OperationEventItemData,
     TokenUsageData,
 )
+from munk.artifacts import (
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_DIAGNOSTICS,
+)
 from munk.services.artifact_manifest_service import ArtifactManifestService
+from munk.services.artifact_manifest_models import ArtifactSchemaVersions
 from munk.services.diagnostics_service import OperationDiagnosticsService
 from munk.services.machine_contracts import MachineCommandResponse, build_error_result, build_success_result
 from munk.services.operations.models import OperationRecord
@@ -47,24 +56,36 @@ class OperationQueryService:
         except Exception as exc:
             return build_error_result(command="runs_get", exc=cast(Exception, exc))
         children = self._operation_service.registry.list_child_operations(operation_id)
-        aggregate = self._build_batch_aggregate(children) if children else None
-        children_preview = [self._build_child_item(record=item).model_dump(mode="json") for item in children]
-        current_child_operation_id = aggregate.current_child_operation_id if aggregate is not None else None
+        aggregate = self._batch_aggregate_from_owner(record)
+        if aggregate is None and children:
+            aggregate = self._build_batch_aggregate(children)
+        owner_children_preview = self._batch_children_preview_from_owner(record)
+        children_preview = (
+            owner_children_preview
+            if owner_children_preview
+            else [self._build_child_item(record=item).model_dump(mode="json") for item in children]
+        )
+        current_child_operation_id = self._current_child_operation_id_from_owner(record)
+        if current_child_operation_id is None and aggregate is not None:
+            current_child_operation_id = aggregate.current_child_operation_id
         current_child_case_id = aggregate.current_child_case_id if aggregate is not None else None
-        batch_kind = self._infer_batch_kind(record, children)
+        batch_kind = self._batch_kind_from_owner(record)
+        if batch_kind is None:
+            batch_kind = self._infer_batch_kind(record, children)
         data = build_operation_detail_payload(
             record,
             artifact_summary=self.artifact_summary(record),
-            is_batch=bool(children),
+            is_batch=bool(children) or aggregate is not None or bool(children_preview),
             batch_kind=batch_kind,
             aggregate=aggregate.model_dump(mode="json") if aggregate is not None else None,
             current_child_operation_id=current_child_operation_id,
             current_child_case_id=current_child_case_id,
             children_preview=children_preview,
         )
+        typed_data = OperationDetailData.model_validate(data)
         return build_success_result(
             command="runs_get",
-            data=data,
+            data=_dump_operation_detail_data(typed_data),
             artifacts=record.artifacts_json,
         )
 
@@ -84,7 +105,7 @@ class OperationQueryService:
             "after_seq": after_seq,
             "limit": limit,
             "next_after_seq": events[-1].seq if events else after_seq,
-            "items": [event.model_dump(mode="json") for event in events],
+            "items": [_dump_operation_event_item(OperationEventItemData.from_record(event)) for event in events],
         }
         return build_success_result(command="runs_events", data=data)
 
@@ -181,7 +202,7 @@ class OperationQueryService:
         extra_artifacts: dict[str, str] = {"repro_dir": str(result.repro_dir)}
         if result.entries:
             extra_artifacts["repro_original_request"] = str(result.entries[0].request_file)
-        manifest_path = record.artifacts_json.get("artifact_manifest")
+        manifest_path = record.artifacts_json.get(ARTIFACT_ID_ARTIFACT_MANIFEST)
         if manifest_path:
             manifest = self._artifact_manifest_service.load_manifest(Path(manifest_path))
             updated_manifest = self._artifact_manifest_service.with_reproduction(
@@ -189,20 +210,20 @@ class OperationQueryService:
                 reproduction=result.entries,
             )
             self._artifact_manifest_service.write_manifest(Path(manifest_path), updated_manifest)
-            extra_artifacts["artifact_manifest"] = str(manifest_path)
+            extra_artifacts[ARTIFACT_ID_ARTIFACT_MANIFEST] = str(manifest_path)
         tracker = self._operation_service.get_tracker(operation_id)
         tracker.update_artifacts(extra_artifacts)
         return extra_artifacts, result.entries
 
     def artifact_summary(self, record) -> dict[str, Any]:  # noqa: ANN001
-        manifest_path = cast(str | None, record.artifacts_json.get("artifact_manifest"))
+        manifest_path = cast(str | None, record.artifacts_json.get(ARTIFACT_ID_ARTIFACT_MANIFEST))
         summary: dict[str, Any] = {
             "artifact_manifest_path": manifest_path,
             "repro_dir": record.artifacts_json.get("repro_dir"),
             "primary_artifact_ids": self._primary_artifact_ids(record.artifacts_json),
             "artifact_manifest_version": None,
-            "schema_versions": {},
-            "diagnostics_path": record.artifacts_json.get("diagnostics"),
+            "schema_versions": ArtifactSchemaVersions().model_dump(mode="json", exclude_none=True),
+            "diagnostics_path": record.artifacts_json.get(ARTIFACT_ID_DIAGNOSTICS),
             "duration_ms": None,
             "failure_category": None,
             "warning_summary": [],
@@ -218,8 +239,8 @@ class OperationQueryService:
                 pass
             else:
                 summary["artifact_manifest_version"] = manifest.manifest_version
-                summary["schema_versions"] = dict(manifest.schema_versions)
-                diagnostics_ref = manifest.primary_artifacts.get("diagnostics")
+                summary["schema_versions"] = manifest.schema_versions.model_dump(mode="json", exclude_none=True)
+                diagnostics_ref = manifest.primary_artifacts.get(ARTIFACT_ID_DIAGNOSTICS)
                 if diagnostics_ref is not None:
                     summary["diagnostics_path"] = str(diagnostics_ref.path)
         diagnostics_path = cast(str | None, summary["diagnostics_path"])
@@ -245,7 +266,7 @@ class OperationQueryService:
         }
 
     def _primary_artifact_ids(self, artifacts: dict[str, str]) -> list[str]:
-        manifest_path = artifacts.get("artifact_manifest")
+        manifest_path = artifacts.get(ARTIFACT_ID_ARTIFACT_MANIFEST)
         if manifest_path:
             try:
                 manifest = self._artifact_manifest_service.load_manifest(Path(manifest_path))
@@ -257,7 +278,7 @@ class OperationQueryService:
             key
             for key in sorted(artifacts)
             if not key.startswith("case_")
-            and key not in {"artifact_manifest", "repro_dir", "repro_original_request"}
+            and key not in {ARTIFACT_ID_ARTIFACT_MANIFEST, "repro_dir", "repro_original_request"}
         ]
 
     @staticmethod
@@ -310,6 +331,49 @@ class OperationQueryService:
             return "single_plan_multi_case"
         return None
 
+    @staticmethod
+    def _batch_kind_from_owner(record: OperationRecord) -> str | None:
+        if record.kind not in {"run_plan", "run_plans"}:
+            return None
+        from munk.services.running.operation_payloads import (
+            run_plan_batch_kind_from_request_json,
+            run_plans_batch_kind_from_payloads,
+        )
+
+        if record.kind == "run_plan":
+            return run_plan_batch_kind_from_request_json(record.request_json)
+        return run_plans_batch_kind_from_payloads(record.request_json, record.result_json, record.progress_json)
+
+    @staticmethod
+    def _batch_aggregate_from_owner(record: OperationRecord) -> BatchRunAggregateData | None:
+        if record.kind != "run_plans":
+            return None
+        from munk.services.running.operation_payloads import run_plans_aggregate_from_result_json
+
+        payload = run_plans_aggregate_from_result_json(record.result_json)
+        if payload is None:
+            return None
+        try:
+            return BatchRunAggregateData.model_validate(payload)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _batch_children_preview_from_owner(record: OperationRecord) -> list[dict[str, Any]]:
+        if record.kind != "run_plans":
+            return []
+        from munk.services.running.operation_payloads import run_plans_children_preview_from_result_json
+
+        return run_plans_children_preview_from_result_json(record.result_json)
+
+    @staticmethod
+    def _current_child_operation_id_from_owner(record: OperationRecord) -> str | None:
+        if record.kind != "run_plans":
+            return None
+        from munk.services.running.operation_payloads import run_plans_current_child_operation_id_from_progress_json
+
+        return run_plans_current_child_operation_id_from_progress_json(record.progress_json)
+
 
 def token_usage_model_from_result_json(result_json: object) -> TokenUsage | None:
     payload = token_usage_from_result_json(result_json)
@@ -329,3 +393,22 @@ def token_usage_data_from_result_json(result_json: object) -> TokenUsageData | N
         return TokenUsageData.model_validate(payload)
     except Exception:
         return None
+
+
+def _dump_operation_detail_data(detail: OperationDetailData) -> dict[str, Any]:
+    payload = detail.model_dump(mode="json")
+    payload["progress"] = _dump_nested_model(detail.progress)
+    payload["result"] = _dump_nested_model(detail.result)
+    return payload
+
+
+def _dump_operation_event_item(item: OperationEventItemData) -> dict[str, Any]:
+    payload = item.model_dump(mode="json")
+    payload["data_json"] = _dump_nested_model(item.data_json)
+    return payload
+
+
+def _dump_nested_model(value: BaseModel | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return value.model_dump(mode="json", exclude_none=True)

@@ -28,6 +28,14 @@ const { pushMock, submitRunCaseMock, replaceCaseMock, resetReplaceCaseMock, rewr
         mode: 'reset',
         page_id: null,
       },
+      ai_guidance: {
+        objective_clarifications: ['The user must end on the settings root page'],
+        preflight_checks: ['Ensure the account session is active'],
+        interaction_hints: ['Prefer the gear icon in the main toolbar'],
+        disambiguation_rules: ['Ignore settings shortcuts inside debug panels'],
+        recovery_hints: ['If the page is not visible, navigate back and retry once'],
+        judge_hints: ['Pass only when the settings title is visible'],
+      },
       source_metadata: {},
     },
     source_prompt: 'make it clearer',
@@ -47,6 +55,14 @@ const caseDetailState = ref({
   expected: ['Settings is visible'],
   procedure: ['Tap settings'],
   post_action: ['Return to home'],
+  ai_guidance: {
+    objective_clarifications: ['Confirm the main settings screen is reached'],
+    preflight_checks: ['User remains signed in'],
+    interaction_hints: ['Prefer the top-right settings entry'],
+    disambiguation_rules: ['Do not treat notification settings as the main settings page'],
+    recovery_hints: ['Retry from the home page if a transient dialog blocks navigation'],
+    judge_hints: ['Require the settings header to be visible before passing'],
+  },
   is_core_case: true,
   runner_goal: 'Open settings',
   start_mode: 'reset',
@@ -280,6 +296,14 @@ describe('CaseDetailPage', () => {
       expected: ['Settings is visible'],
       procedure: ['Tap settings'],
       post_action: ['Return to home'],
+      ai_guidance: {
+        objective_clarifications: ['Confirm the main settings screen is reached'],
+        preflight_checks: ['User remains signed in'],
+        interaction_hints: ['Prefer the top-right settings entry'],
+        disambiguation_rules: ['Do not treat notification settings as the main settings page'],
+        recovery_hints: ['Retry from the home page if a transient dialog blocks navigation'],
+        judge_hints: ['Require the settings header to be visible before passing'],
+      },
       is_core_case: true,
       runner_goal: 'Open settings',
       start_mode: 'reset',
@@ -317,18 +341,23 @@ describe('CaseDetailPage', () => {
     expect(wrapper.findAll('textarea')[1]?.element.value).toContain('Logged in')
     expect(wrapper.findAll('textarea')[4]?.element.value).toContain('Return to home')
     expect(wrapper.text()).toContain('Pixel')
-    expect(wrapper.text()).toContain('This case is already bound to an App')
+    expect(wrapper.text()).toContain('This case is already bound to an App, so no manual App selection is needed.')
+    expect(wrapper.text()).toContain('The execution target is resolved automatically from the bound App asset.')
     expect(wrapper.text()).toContain('Save Changes')
     expect(wrapper.text()).toContain('case-1')
     expect(wrapper.text()).toContain('Change Verification')
     expect(wrapper.text()).toContain('Start From')
     expect(wrapper.text()).toContain('Start Fresh')
+    expect(wrapper.text()).toContain('AI Guidance')
+    expect(wrapper.text()).toContain('objective_clarifications')
+    expect(wrapper.findAll('textarea')[5]?.element.value).toContain('Confirm the main settings screen is reached')
+    expect(wrapper.findAll('textarea')[10]?.element.value).toContain('Require the settings header to be visible before passing')
     expect(wrapper.text()).toContain('AI Optimize')
     expect(wrapper.text()).toContain('Clarified judge expectations and execution hints')
     expect(wrapper.text()).toContain('judge_hints, interaction_hints')
   })
 
-  it('submits a run request with the inferred app and auto-filled package', async () => {
+  it('submits a run request with the inferred app target from the bound app asset', async () => {
     const wrapper = mount(CaseDetailPage, {
       global: {
         plugins: [i18n],
@@ -352,12 +381,21 @@ describe('CaseDetailPage', () => {
       plan_id: 'plan-1',
       case_id: 'case-1',
       device_ref: 'emulator-5554',
-      package: 'com.example.demo',
+      app_target: {
+        app_id: 'demo-app',
+        platform: 'android',
+        android: {
+          package_name: 'com.example.demo',
+          activity_name: null,
+        },
+        ios: null,
+        web: null,
+      },
     }, { wait: false, detach: false })
     expect(pushMock).toHaveBeenCalledWith('/runs/op-1')
   })
 
-  it('falls back to showing the Android Apps selector when the app cannot be inferred', async () => {
+  it('disables running when the bound app cannot be inferred', async () => {
     routeParamsState.appId = ''
     caseDetailState.value.app_id = ''
 
@@ -374,9 +412,7 @@ describe('CaseDetailPage', () => {
 
     await flushPromises()
 
-    const optionsText = wrapper.findAll('option').map((option) => option.text())
-    expect(wrapper.text()).toContain('The App cannot be inferred from the current case or route')
-    expect(optionsText.some((text) => text.includes('fallback-app'))).toBe(true)
+    expect(wrapper.text()).toContain('The App bound to this case cannot be resolved right now, so running is temporarily unavailable.')
     expect(wrapper.findAll('button').find((button) => button.text() === 'Run Case')?.attributes('disabled')).toBeDefined()
     expect(submitRunCaseMock).not.toHaveBeenCalled()
   })
@@ -407,6 +443,12 @@ describe('CaseDetailPage', () => {
     await textareas[2]?.vm.$emit('update:modelValue', 'Settings is visible')
     await textareas[3]?.vm.$emit('update:modelValue', 'Launch app\nTap settings')
     await textareas[4]?.vm.$emit('update:modelValue', 'Return to home\nClear temp state')
+    await textareas[5]?.vm.$emit('update:modelValue', 'Reach the top-level settings page')
+    await textareas[6]?.vm.$emit('update:modelValue', 'User session is valid')
+    await textareas[7]?.vm.$emit('update:modelValue', 'Use the settings icon in the top bar')
+    await textareas[8]?.vm.$emit('update:modelValue', 'Ignore debug-only settings entries')
+    await textareas[9]?.vm.$emit('update:modelValue', 'Retry from home if the page fails to open')
+    await textareas[10]?.vm.$emit('update:modelValue', 'Pass only when the settings header is visible')
     const selects = wrapper.findAllComponents({ name: 'UiSelect' })
     await selects[0]?.vm.$emit('update:modelValue', 'resume')
     await wrapper.find('input[type="checkbox"]').setValue(false)
@@ -431,6 +473,14 @@ describe('CaseDetailPage', () => {
         start_state: {
           mode: 'resume',
           page_id: 'landing',
+        },
+        ai_guidance: {
+          objective_clarifications: ['Reach the top-level settings page'],
+          preflight_checks: ['User session is valid'],
+          interaction_hints: ['Use the settings icon in the top bar'],
+          disambiguation_rules: ['Ignore debug-only settings entries'],
+          recovery_hints: ['Retry from home if the page fails to open'],
+          judge_hints: ['Pass only when the settings header is visible'],
         },
       },
     })
@@ -477,6 +527,8 @@ describe('CaseDetailPage', () => {
     expect(inputs[1]?.props('modelValue')).toBe('Reach the settings screen reliably')
     expect(wrapper.findAllComponents({ name: 'UiTextarea' })[1]?.props('modelValue')).toBe('User is logged in')
     expect(wrapper.findAllComponents({ name: 'UiTextarea' })[4]?.props('modelValue')).toBe('Return to home')
+    expect(wrapper.findAllComponents({ name: 'UiTextarea' })[5]?.props('modelValue')).toBe('The user must end on the settings root page')
+    expect(wrapper.findAllComponents({ name: 'UiTextarea' })[10]?.props('modelValue')).toBe('Pass only when the settings title is visible')
   })
 
   it('serializes empty numeric fields to null and validates required fields', async () => {

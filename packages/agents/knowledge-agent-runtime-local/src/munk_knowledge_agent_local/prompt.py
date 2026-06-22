@@ -35,6 +35,7 @@ def build_knowledge_agent_prompt_payload(request: KnowledgeAgentRequest) -> str:
             "run_dir": str(request.run_dir),
         },
         "judge_result_summary": request.evidence_bundle.judge_result.model_dump(mode="json"),
+        "structured_evidence": request.structured_evidence,
         "available_artifacts": [
             {"artifact_id": artifact.artifact_id, "path": str(artifact.path)}
             for artifact in request.evidence_bundle.artifacts

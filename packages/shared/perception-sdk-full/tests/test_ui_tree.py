@@ -86,3 +86,18 @@ def test_filter_ui_tree_nodes_excludes_system_ui_and_external_packages_by_defaul
     filtered = filter_ui_tree_nodes(nodes, (1080, 1920), current_package="test.package")
 
     assert [node.text for node in filtered] == ["Save"]
+
+
+def test_filter_ui_tree_nodes_excludes_nodes_outside_viewport() -> None:
+    xml_text = """
+    <hierarchy>
+      <node class="android.widget.Button" text="Visible" package="test.package" clickable="true" bounds="[20,20][220,120]" />
+      <node class="android.widget.Button" text="Right Offscreen" package="test.package" clickable="true" bounds="[1200,20][1400,120]" />
+      <node class="android.widget.Button" text="Bottom Offscreen" package="test.package" clickable="true" bounds="[20,2000][220,2100]" />
+    </hierarchy>
+    """
+
+    nodes = parse_ui_hierarchy(xml_text)
+    filtered = filter_ui_tree_nodes(nodes, (1080, 1920), current_package="test.package")
+
+    assert [node.text for node in filtered] == ["Visible"]

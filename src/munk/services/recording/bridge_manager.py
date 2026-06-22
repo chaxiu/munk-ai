@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
+import signal
 import socket
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, sleep
-from typing import Any
+from typing import Any, cast
+from uuid import uuid4
 
 import httpx
 
@@ -56,6 +59,7 @@ class RecordingBridgeManager:
         self._startup_timeout_seconds = startup_timeout_seconds
         self._process: subprocess.Popen[str] | None = None
         self._active_port: int | None = None
+        self._manager_token = uuid4().hex
         self._last_startup_error_excerpt: str | None = None
         self._last_startup_attempts: list[str] = []
 
@@ -106,7 +110,16 @@ class RecordingBridgeManager:
         layout = resolve_runtime_layout()
         if layout.sidecars_root is None:
             return Path("")
-        return layout.sidecars_root / "node" / "bin" / "node"
+        manifest = getattr(layout, "manifest", None)
+        if layout.layout_mode == "distribution" and manifest is not None:
+            node_sidecar = manifest.sidecars.get("node")
+            if node_sidecar is not None:
+                return layout.runtime_root / node_sidecar.path
+        node_executable = "node.exe" if platform.system() == "Windows" else "node"
+        node_dir = layout.sidecars_root / "node"
+        if node_executable == "node.exe":
+            return node_dir / node_executable
+        return node_dir / "bin" / node_executable
 
     def ensure_running(self) -> None:
         if self._process is not None and self._process.poll() is not None:
@@ -164,13 +177,12 @@ class RecordingBridgeManager:
         if self._process is None:
             self._active_port = None
             return
-        if self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=2)
+        self._terminate_process_group(self._process, signal.SIGTERM)
+        try:
+            self._process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._terminate_process_group(self._process, signal.SIGKILL)
+            self._process.wait(timeout=2)
         self._last_startup_error_excerpt = self._consume_process_output(self._process)
         self._process = None
         self._active_port = None
@@ -182,8 +194,14 @@ class RecordingBridgeManager:
         try:
             with httpx.Client(timeout=1.0, trust_env=False) as client:
                 response = client.get(f"{self._build_http_url(port=resolved_port)}/healthz")
-                return response.status_code == 200
-        except httpx.HTTPError:
+                if response.status_code != 200:
+                    return False
+                payload = cast(object, response.json())
+                if not isinstance(payload, dict):
+                    return False
+                payload_dict = cast(dict[str, object], payload)
+                return payload_dict.get("managerToken") == self._manager_token
+        except (httpx.HTTPError, ValueError):
             return False
 
     def create_bridge_session(self, *, recording_id: str, device_ref: str | None = None) -> RecordingBridgeSession:
@@ -295,6 +313,8 @@ class RecordingBridgeManager:
         env["PORT"] = str(port)
         env["HOST"] = self._host
         env["NODE_ENV"] = env.get("NODE_ENV", "development")
+        env["MUNK_BRIDGE_MANAGER_TOKEN"] = self._manager_token
+        env["MUNK_PARENT_PID"] = str(os.getpid())
         return subprocess.Popen(  # noqa: S603
             command,
             cwd=self.bridge_runtime_dir,
@@ -302,6 +322,7 @@ class RecordingBridgeManager:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            start_new_session=True,
         )
 
     def _build_command(self, *, port: int) -> list[str]:
@@ -379,6 +400,15 @@ class RecordingBridgeManager:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.bind((self._host, 0))
             return int(sock.getsockname()[1])
+
+    @staticmethod
+    def _terminate_process_group(process: subprocess.Popen[str], sig: signal.Signals) -> None:
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            return
 
     @staticmethod
     def _consume_process_output(process: subprocess.Popen[str]) -> str | None:

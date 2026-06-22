@@ -32,7 +32,7 @@ def normalize_app_id(app_id: str) -> str:
 
 
 class AppProfile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     app_id: str
     app_name: str | None = None
@@ -48,7 +48,7 @@ class AppProfile(BaseModel):
         self.app_id = normalize_app_id(self.app_id)
         if self.app_name is not None:
             self.app_name = self.app_name.strip() or None
-        identities = {
+        identities: dict[str, AndroidAppIdentity | IOSAppIdentity | WebAppIdentity | None] = {
             "android": self.android,
             "ios": self.ios,
             "web": self.web,
@@ -83,9 +83,17 @@ class AppProfile(BaseModel):
         return "Entry Identity: none"
 
     def to_app_target(self) -> AppTarget:
+        launch_context: dict[str, str] = {}
+        if self.platform == "ios" and self.ios is not None:
+            raw_wda_bundle_id = self.ios.wda_bundle_id
+            if isinstance(raw_wda_bundle_id, str):
+                wda_bundle_id = raw_wda_bundle_id.strip()
+                if wda_bundle_id:
+                    launch_context["wda_bundle_id"] = wda_bundle_id
         return AppTarget(
             app_id=self.app_id,
             platform=self.platform,
+            launch_context=launch_context,
             android=self.android,
             ios=self.ios,
             web=self.web,

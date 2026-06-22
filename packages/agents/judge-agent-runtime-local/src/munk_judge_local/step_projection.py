@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from munk.judging.models import JudgeEvidence
+from munk.judging.models import JudgeEvidence, is_screen_diff_evidence
 
 from .tool_models import JudgeRunDeps
 
@@ -89,14 +89,11 @@ def _known_step_indexes(deps: JudgeRunDeps) -> set[int]:
 
 
 def _screen_change_status(item: JudgeEvidence | None) -> str:
-    if item is None:
+    if item is None or not is_screen_diff_evidence(item):
         return "unknown"
-    excerpt = item.payload.get("excerpt")
     summary_parts = [item.summary]
-    if isinstance(excerpt, dict):
-        excerpt_summary = excerpt.get("summary")
-        if isinstance(excerpt_summary, str):
-            summary_parts.append(excerpt_summary)
+    if item.payload.summary:
+        summary_parts.append(item.payload.summary)
     summary_text = " ".join(summary_parts).lower()
     if "screen_changed=yes" in summary_text:
         return "changed"

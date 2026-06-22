@@ -23,6 +23,8 @@ ReproductionTargetKind = Literal[
     "run_plans",
     "verify_change",
     "review",
+    "optimize_case",
+    "knowledge_post_action",
 ]
 
 
@@ -38,12 +40,16 @@ def empty_reproduction_entries() -> list["ReproductionEntry"]:
     return []
 
 
+def empty_summary() -> "ArtifactManifestSummary":
+    return ArtifactManifestSummary()
+
+
 def empty_metadata() -> dict[str, Any]:
     return {}
 
 
-def empty_schema_versions() -> dict[str, str]:
-    return {}
+def empty_schema_versions() -> "ArtifactSchemaVersions":
+    return ArtifactSchemaVersions()
 
 
 class ArtifactRef(BaseModel):
@@ -83,6 +89,27 @@ class UpstreamReviewArtifacts(BaseModel):
     contract_version: str | None = None
 
 
+class ArtifactSchemaVersions(BaseModel):
+    review_result: str | None = None
+    review_orchestration: str | None = None
+    plan_repair_report: str | None = None
+    operation_diagnostics: str | None = None
+
+    def to_mapping(self) -> dict[str, str]:
+        payload = self.model_dump(exclude_none=True)
+        return {key: value for key, value in payload.items() if isinstance(value, str)}
+
+    @classmethod
+    def from_mapping(cls, versions: dict[str, str] | None = None) -> "ArtifactSchemaVersions":
+        if not versions:
+            return cls()
+        return cls.model_validate(versions)
+
+
+class ArtifactManifestSummary(BaseModel):
+    case_count: int = 0
+
+
 class ArtifactManifest(BaseModel):
     manifest_version: int = 2
     operation_id: str | None = None
@@ -92,6 +119,6 @@ class ArtifactManifest(BaseModel):
     primary_artifacts: dict[str, ArtifactRef] = Field(default_factory=empty_artifact_ref_map)
     case_runs: list[CaseArtifactEntry] = Field(default_factory=empty_case_entries)
     reproduction: list[ReproductionEntry] = Field(default_factory=empty_reproduction_entries)
-    schema_versions: dict[str, str] = Field(default_factory=empty_schema_versions)
+    schema_versions: ArtifactSchemaVersions = Field(default_factory=empty_schema_versions)
     upstream_review: UpstreamReviewArtifacts | None = None
-    metadata: dict[str, Any] = Field(default_factory=empty_metadata)
+    summary: ArtifactManifestSummary = Field(default_factory=empty_summary)

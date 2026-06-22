@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from munk.agent_base.llm import llm_transcript_observer_scope
 from munk.config import ResolvedConfig, resolve_orchestration_policy
 from munk.device import SupportsClose
 from munk.execution.models import CaseExecutionRequest, CaseExecutionResult, ExecutionOutcome
@@ -15,9 +16,17 @@ from munk.services.events import (
     RunEventType,
     RunFailedEvent,
     RunStartedEvent,
+    build_run_failed_event_payload,
+    build_run_started_event_payload,
+    with_run_event_context,
 )
 from munk.services.judge_runtime import resolve_judge_runtime
 from munk.services.logging_service import setup_logging
+from munk.artifacts import (
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_DIAGNOSTICS,
+)
+from munk.services.operations.llm_timeline import build_llm_timeline_observer
 from munk.services.models import RunPaths, RunStatus
 from munk.services.operations.service import OperationTracker
 from munk.services.orchestration import CaseOrchestrationRequest, DeterministicOrchestrationEngine
@@ -38,6 +47,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class PreparedRunnerExecution:
     request: CaseExecutionRequest
+    attempt_index: int
     paths: RunPaths
     host_paths: RunnerHostManagedPaths
     execution: ExecutionOutcome
@@ -116,7 +126,12 @@ class RunService:
         )
         return materialized.result
 
-    def execute_case_runtime_stage(self, request: CaseExecutionRequest) -> PreparedRunnerExecution:
+    def execute_case_runtime_stage(
+        self,
+        request: CaseExecutionRequest,
+        *,
+        attempt_index: int = 0,
+    ) -> PreparedRunnerExecution:
         session = RunExecutionSession(request=request)
         tracker = self._default_operation_tracker
         host_paths: RunnerHostManagedPaths | None = None
@@ -133,7 +148,7 @@ class RunService:
             session.status = RunStatus(running=True, run_dir=paths.run_dir)
 
             def event_sink(event: RunEvent) -> None:
-                self._publish(session, event)
+                self._publish(session, event, attempt_index=attempt_index)
 
 
             setup_logging(paths.log_path, event_sink=cast(RunEventSink, event_sink))
@@ -142,11 +157,12 @@ class RunService:
                 session,
                 RunStartedEvent(
                     message="run started",
-                    data={
-                        "run_dir": str(paths.run_dir),
-                        "case_title": request.case.title,
-                    },
+                    data=build_run_started_event_payload(
+                        run_dir=str(paths.run_dir),
+                        case_title=request.case.title,
+                    ),
                 ),
+                attempt_index=attempt_index,
             )
             host_bundle = build_runner_host_bundle(
                 request=request,
@@ -154,17 +170,31 @@ class RunService:
                 paths=paths,
                 tracker=tracker,
                 event_sink=event_sink,
+                attempt_index=attempt_index,
             )
             session.context = host_bundle.runtime_context
             runtime = create_runner_runtime(
                 resolved_config=self._resolved_config,
                 event_sink=event_sink,
             )
-            runtime_output = runtime.run(
-                host_bundle.runner_request,
-                context=host_bundle.runtime_context,
-                cancel_controller=build_runner_cancel_controller(tracker=tracker),
+            llm_observer = (
+                build_llm_timeline_observer(
+                    tracker=tracker,
+                    agent_role="runner",
+                    attempt_index=attempt_index,
+                    app_id=request.app_id,
+                    plan_id=request.plan_id,
+                    case_id=request.case.case_id,
+                )
+                if tracker is not None
+                else None
             )
+            with llm_transcript_observer_scope(llm_observer):
+                runtime_output = runtime.run(
+                    host_bundle.runner_request,
+                    context=host_bundle.runtime_context,
+                    cancel_controller=build_runner_cancel_controller(tracker=tracker),
+                )
             session.status = RunStatus(
                 running=False,
                 run_dir=paths.run_dir,
@@ -199,8 +229,9 @@ class RunService:
                 session,
                 RunFailedEvent(
                     message=str(exc),
-                    data={"run_dir": str(run_dir)},
-                )
+                    data=build_run_failed_event_payload(run_dir=str(run_dir)),
+                ),
+                attempt_index=attempt_index,
             )
             execution = ExecutionOutcome(
                 status="failed",
@@ -222,6 +253,7 @@ class RunService:
             raise RuntimeError("runner execution finished without an execution outcome")
         return PreparedRunnerExecution(
             request=request,
+            attempt_index=attempt_index,
             paths=session.paths,
             host_paths=effective_host_paths,
             execution=execution,
@@ -237,11 +269,14 @@ class RunService:
             runtime_context_available=session.context is not None,
         )
 
-    def _publish(self, session: RunExecutionSession, event: RunEvent) -> None:
-        event.data["app_id"] = session.request.app_id
-        event.data["plan_id"] = session.request.plan_id
-        event.data["case_id"] = session.request.case.case_id
-
+    def _publish(self, session: RunExecutionSession, event: RunEvent, *, attempt_index: int) -> None:
+        event = with_run_event_context(
+            event,
+            app_id=session.request.app_id,
+            plan_id=session.request.plan_id,
+            case_id=session.request.case.case_id,
+            attempt_index=attempt_index,
+        )
         session.events.append(event)
         session.status = RunStatus(
             running=session.status.running,
@@ -286,28 +321,21 @@ class RunService:
     ) -> dict[str, str]:
         effective_run_dir = run_dir or host_paths.root_dir
         artifacts: dict[str, str] = {
-            "case": str(paths.case_path if paths.case_path is not None else effective_run_dir / "case.json"),
-            "result": str(host_paths.result_path),
-            "artifact_manifest": str(host_paths.artifact_manifest_path),
-            "diagnostics": str(host_paths.diagnostics_path),
-            "log": str(paths.log_path),
+            ARTIFACT_ID_ARTIFACT_MANIFEST: str(host_paths.artifact_manifest_path),
+            ARTIFACT_ID_DIAGNOSTICS: str(host_paths.diagnostics_path),
         }
-        optional_paths: dict[str, Path | None] = {
-            "decision_trace": paths.decision_trace_path,
-            "runner_history": paths.runner_history_path,
-            "runner_memory": paths.runner_memory_path,
-            "context_prep": paths.context_prep_path,
-            "runtime_logs": paths.runtime_logs_dir,
-            "raw_screenshots": paths.raw_dir,
-            "annotated_screenshots": paths.annotated_dir,
-            "observation_frames": paths.observation_frames_dir,
-            "observation_diffs": paths.observation_diffs_dir,
-            "observation_tree": paths.observation_tree_dir,
-            "llm_transcript": paths.llm_transcript_path if paths.llm_transcript_path and paths.llm_transcript_path.exists() else None,
-        }
-        for artifact_id, path in optional_paths.items():
-            if path is not None:
-                artifacts[artifact_id] = str(path)
+        for artifact_id, path in paths.publishable_artifacts().items():
+            artifacts[artifact_id] = str(path)
+        ios_bridge_dir = effective_run_dir / "ios_bridge"
+        if ios_bridge_dir.exists():
+            artifacts["ios_bridge"] = str(ios_bridge_dir)
+            for artifact_id, path in {
+                "ios_bridge_session": ios_bridge_dir / "session.json",
+                "ios_bridge_events": ios_bridge_dir / "events.jsonl",
+                "ios_bridge_summary": ios_bridge_dir / "summary.json",
+            }.items():
+                if path.exists():
+                    artifacts[artifact_id] = str(path)
         if request.artifact_path is not None:
             artifacts["input_artifact"] = str(request.artifact_path)
         return artifacts

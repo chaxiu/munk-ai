@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, cast
 
-DEFAULT_WDA_VERSION = "v12.2.2"
+DEFAULT_WDA_VERSION = "v13.0.0"
 DEFAULT_WDA_REPO = "appium/WebDriverAgent"
 DEFAULT_WDA_URL = "http://127.0.0.1:8100"
 DEFAULT_HEALTHCHECK_TIMEOUT_SEC = 20.0

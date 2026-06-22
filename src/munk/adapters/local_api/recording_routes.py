@@ -29,7 +29,7 @@ from munk.recording import (
     RecordingSessionNotFoundError,
     RecordingSessionStateError,
 )
-from munk.services.errors import DeviceConflictError
+from munk.services.errors import DeviceConflictError, InvalidCaseDefinitionError
 from munk.services.machine_contracts import MachineCommandResponse, build_error_result, build_success_result
 from munk.services.recording.bridge_manager import RecordingBridgeError
 from munk.services.recording.session_service import RecordingSessionService
@@ -364,6 +364,18 @@ def _error_response(command: str, exc: Exception) -> JSONResponse:
                 "command": command,
                 "error": {
                     "code": "invalid_recording_interaction_contract",
+                    "message": str(exc),
+                },
+            },
+        )
+    if isinstance(exc, InvalidCaseDefinitionError):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "ok": False,
+                "command": command,
+                "error": {
+                    "code": "invalid_case_definition",
                     "message": str(exc),
                 },
             },

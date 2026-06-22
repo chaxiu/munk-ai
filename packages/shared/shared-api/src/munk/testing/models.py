@@ -62,6 +62,7 @@ class TestCase(BaseModel):
     post_action: list[str] = Field(default_factory=empty_post_action)
     is_core_case: bool = False
     runner_goal: str
+    acceptance_criteria_indices: list[int] = Field(default_factory=empty_strings)
     budget: CaseBudget | None = None
     start_state: CaseStartState = Field(default_factory=CaseStartState)
     ai_guidance: AiGuidance | None = None

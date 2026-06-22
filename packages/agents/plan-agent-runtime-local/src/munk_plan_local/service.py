@@ -2,17 +2,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
 from munk.agent_base.llm import llm_transcript_scope, summarize_llm_transcript_usage
 from munk.agent_runtime.events import AgentRuntimeEventEmitter
+from munk.planning.acceptance_criteria_mapping import (
+    find_duplicate_outline_titles,
+    find_uncovered_acceptance_criteria_indices,
+    normalize_case_acceptance_criteria_indices,
+    validate_change_outline_ac_indices,
+    validate_plan_case_outlines,
+)
 from munk.planning.runtime import PlanRuntimeContext, PlanRuntimeOutput, PlanRuntimeResultData
 from munk.reviewing.orchestration_models import ReviewOrchestrationContract
 from munk.running import validate_case_for_runner
 from munk.testing import CaseStartState, TestCase
 
-from munk.config import ResolvedConfig, ResolvedModelConfig, resolve_role_model_config
+from munk.config import ResolvedConfig, ResolvedModelConfig, MUNK_CODE_DEFAULTS, resolve_role_model_config
 from munk.planning.models import ChangePlanInput, RequirementInput
 from munk.services.errors import (
     ConfigValidationError,
@@ -22,7 +30,7 @@ from munk.services.errors import (
 )
 
 from .agent import PydanticAiPlanAgent
-from .draft_models import GeneratedCaseAppendDraft
+from .draft_models import GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft, GeneratedPlanSkeletonDraft
 from .workflow import PlannerWorkflowService
 
 
@@ -107,18 +115,21 @@ class PlanRuntimeService:
             app_id=request.app_id,
             source=request.source_metadata.get("source", "pydantic_plan_agent"),
             version="v1.0",
-            build_test_case=self._build_test_case,
-            create_plan_skeleton=lambda: self._plan_agent.create_plan_skeleton(
-                requirement_input=request,
-                app_id=runtime_context.app_id,
-                platform=runtime_context.platform,
-                identity_label=runtime_context.identity_label,
-                app_introduction=runtime_context.introduction,
-                knowledge_tools=runtime_context.knowledge_tools,
-                requirement_doc=requirement_doc,
-                technical_doc=technical_doc,
+            build_test_case=partial(self._build_test_case, ac_count=0),
+            create_plan_skeleton=lambda: self._validate_requirement_skeleton(
+                self._plan_agent.create_plan_skeleton(
+                    requirement_input=request,
+                    app_id=runtime_context.app_id,
+                    platform=runtime_context.platform,
+                    identity_label=runtime_context.identity_label,
+                    app_introduction=runtime_context.introduction,
+                    knowledge_tools=runtime_context.knowledge_tools,
+                    requirement_doc=requirement_doc,
+                    technical_doc=technical_doc,
+                ),
+                event_emitter=event_emitter,
             ),
-            append_case=lambda skeleton, case_index, existing_cases: self._plan_agent.append_case(
+            append_case=lambda skeleton, case_index, existing_cases, outline: self._plan_agent.append_case(
                 requirement_input=request,
                 app_id=runtime_context.app_id,
                 platform=runtime_context.platform,
@@ -130,6 +141,7 @@ class PlanRuntimeService:
                 skeleton=skeleton,
                 case_index=case_index,
                 existing_cases=existing_cases,
+                outline=outline,
             ),
             finalize_plan=lambda skeleton, cases: self._plan_agent.finalize_plan(skeleton=skeleton, cases=cases),
             event_callback=lambda et, msg, data: self._emit_progress(event_emitter, et, msg, data),
@@ -148,8 +160,6 @@ class PlanRuntimeService:
         self._raise_if_cancelled(cancel_checker)
         requirement_doc = self._read_optional_text_document(request.requirement_doc_path, kind="requirement document")
         technical_doc = self._read_optional_text_document(request.technical_doc_path, kind="technical document")
-        previous_report = self._read_optional_text_document(request.previous_report_path, kind="previous report")
-        previous_results = [self._read_text_document(path, kind="previous result") for path in request.previous_result_paths]
         review_contract = self._load_review_contract(request)
         self._emit_progress(
             event_emitter,
@@ -159,33 +169,34 @@ class PlanRuntimeService:
                 "app_id": request.app_id,
                 "has_requirement_doc": requirement_doc is not None,
                 "has_technical_doc": technical_doc is not None,
-                "has_previous_report": previous_report is not None,
-                "previous_result_count": len(previous_results),
                 "has_review_contract": review_contract is not None,
             },
         )
         self._emit_progress(event_emitter, "plan_agent_ready", "plan agent ready", {"app_id": request.app_id})
         runtime_context = context.app_context
+        ac_count = len(request.acceptance_criteria)
         plan = self._build_workflow_service().generate_plan(
             plan_id=self._plan_id_factory(),
             app_id=request.app_id,
             source="change_driven_plan_agent",
             version="v1.0",
-            build_test_case=self._build_test_case,
-            create_plan_skeleton=lambda: self._plan_agent.create_change_plan_skeleton(
-                change_input=request,
-                app_id=runtime_context.app_id,
-                platform=runtime_context.platform,
-                identity_label=runtime_context.identity_label,
-                app_introduction=runtime_context.introduction,
-                knowledge_tools=runtime_context.knowledge_tools,
-                requirement_doc=requirement_doc,
-                technical_doc=technical_doc,
-                previous_report=previous_report,
-                previous_results=previous_results,
-                review_contract=review_contract,
+            build_test_case=partial(self._build_test_case, ac_count=ac_count),
+            create_plan_skeleton=lambda: self._validate_change_skeleton(
+                self._plan_agent.create_change_plan_skeleton(
+                    change_input=request,
+                    app_id=runtime_context.app_id,
+                    platform=runtime_context.platform,
+                    identity_label=runtime_context.identity_label,
+                    app_introduction=runtime_context.introduction,
+                    knowledge_tools=runtime_context.knowledge_tools,
+                    requirement_doc=requirement_doc,
+                    technical_doc=technical_doc,
+                    review_contract=review_contract,
+                ),
+                acceptance_criteria=request.acceptance_criteria,
+                event_emitter=event_emitter,
             ),
-            append_case=lambda skeleton, case_index, existing_cases: self._plan_agent.append_change_case(
+            append_case=lambda skeleton, case_index, existing_cases, outline: self._plan_agent.append_change_case(
                 change_input=request,
                 app_id=runtime_context.app_id,
                 platform=runtime_context.platform,
@@ -194,18 +205,17 @@ class PlanRuntimeService:
                 knowledge_tools=runtime_context.knowledge_tools,
                 requirement_doc=requirement_doc,
                 technical_doc=technical_doc,
-                previous_report=previous_report,
-                previous_results=previous_results,
                 review_contract=review_contract,
                 skeleton=skeleton,
                 case_index=case_index,
                 existing_cases=existing_cases,
+                outline=outline,
             ),
             finalize_plan=lambda skeleton, cases: self._plan_agent.finalize_plan(skeleton=skeleton, cases=cases),
             event_callback=lambda et, msg, data: self._emit_progress(event_emitter, et, msg, data),
         )
         self._write_request_dump(context.managed_paths.request_dump_path, request)
-        return plan
+        return plan.model_copy(update={"acceptance_criteria": list(request.acceptance_criteria)})
 
     def _build_plan_agent(self, *, resolved_config: ResolvedConfig):
         plan_config = self._resolve_plan_section(resolved_config)
@@ -255,17 +265,92 @@ class PlanRuntimeService:
         if cancel_checker is not None and cancel_checker():
             raise OperationCancelledError("operation cancelled cooperatively")
 
-    def _build_test_case(self, append_draft: GeneratedCaseAppendDraft) -> TestCase:
+    def _plan_agent_max_cases(self) -> int:
+        return getattr(self._plan_agent, "max_cases", MUNK_CODE_DEFAULTS.plan.max_cases)
+
+    def _validate_requirement_skeleton(
+        self,
+        skeleton: GeneratedPlanSkeletonDraft,
+        *,
+        event_emitter: AgentRuntimeEventEmitter,
+    ) -> GeneratedPlanSkeletonDraft:
+        try:
+            validate_plan_case_outlines(
+                skeleton.case_outlines,
+                max_cases=self._plan_agent_max_cases(),
+            )
+        except ValueError as exc:
+            raise PlanGenerationError(str(exc)) from exc
+        duplicates = find_duplicate_outline_titles(skeleton.case_outlines)
+        if duplicates:
+            self._emit_progress(
+                event_emitter,
+                "plan_skeleton_outline_warning",
+                "duplicate case outline titles detected",
+                {"duplicate_titles": duplicates},
+            )
+        return skeleton
+
+    def _validate_change_skeleton(
+        self,
+        skeleton: GeneratedPlanSkeletonDraft,
+        *,
+        acceptance_criteria: list[str],
+        event_emitter: AgentRuntimeEventEmitter,
+    ) -> GeneratedPlanSkeletonDraft:
+        try:
+            validate_plan_case_outlines(
+                skeleton.case_outlines,
+                max_cases=self._plan_agent_max_cases(),
+            )
+            validate_change_outline_ac_indices(
+                skeleton.case_outlines,
+                ac_count=len(acceptance_criteria),
+            )
+        except ValueError as exc:
+            raise PlanGenerationError(str(exc)) from exc
+        duplicates = find_duplicate_outline_titles(skeleton.case_outlines)
+        if duplicates:
+            self._emit_progress(
+                event_emitter,
+                "plan_skeleton_outline_warning",
+                "duplicate case outline titles detected",
+                {"duplicate_titles": duplicates},
+            )
+        uncovered = find_uncovered_acceptance_criteria_indices(
+            skeleton.case_outlines,
+            ac_count=len(acceptance_criteria),
+        )
+        if uncovered:
+            self._emit_progress(
+                event_emitter,
+                "plan_skeleton_ac_coverage_warning",
+                "acceptance criteria not covered by case outlines",
+                {"uncovered_indices": uncovered},
+            )
+        return skeleton
+
+    def _build_test_case(
+        self,
+        append_draft: GeneratedCaseAppendDraft,
+        outline: GeneratedCaseOutlineDraft,
+        *,
+        ac_count: int = 0,
+    ) -> TestCase:
         case_draft = append_draft.case
         case = TestCase(
             case_id=self._case_id_factory(),
-            title=_require_text(case_draft.title, field_name="title"),
+            title=_require_text(outline.title, field_name="title"),
             intent=_require_text(case_draft.intent, field_name="intent"),
             preconditions=_clean_text_list(case_draft.preconditions),
             expected=_clean_text_list(case_draft.expected),
             procedure=_clean_text_list(case_draft.procedure),
             runner_goal=_require_text(case_draft.runner_goal, field_name="runner_goal"),
             start_state=CaseStartState(mode=case_draft.start_mode, page_id=_clean_optional_text(case_draft.page_id)),
+            acceptance_criteria_indices=normalize_case_acceptance_criteria_indices(
+                outline.acceptance_criteria_indices,
+                ac_count=ac_count,
+            ),
         )
         try:
             validate_case_for_runner(case)

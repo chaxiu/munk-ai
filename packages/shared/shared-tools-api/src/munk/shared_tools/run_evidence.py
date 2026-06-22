@@ -15,7 +15,7 @@ class RunEvidenceToolProvider(Protocol):
 
     def read_step_transition(self, step_index: int) -> str: ...
 
-    def read_step_screen_raw_image(self, step_index: int) -> str | ToolReturn: ...
+    def read_step_screenshot(self, step_index: int | None = None, annotated: bool = True) -> str | ToolReturn: ...
 
 
 def register_run_evidence_tools(
@@ -39,6 +39,11 @@ def register_run_evidence_tools(
         return provider_getter(ctx.deps).read_step_transition(step_index)
 
     @agent.tool
-    def read_step_screen_raw_image(ctx: PydanticRunContext[Any], step_index: int) -> str | ToolReturn:
-        """Read the compressed raw screenshot image for a single step."""
-        return provider_getter(ctx.deps).read_step_screen_raw_image(step_index)
+    def read_step_screenshot(
+        ctx: PydanticRunContext[Any],
+        step_index: int | None = None,
+        annotated: bool = True,
+    ) -> str | ToolReturn:
+        """Read the compressed screenshot image for a step; annotated screenshots align target ids with prompt text."""
+        return provider_getter(ctx.deps).read_step_screenshot(step_index, annotated)
+

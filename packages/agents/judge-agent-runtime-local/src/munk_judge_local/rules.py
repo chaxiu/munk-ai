@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from munk.judging.models import JudgeEventRecord, JudgeExecutionSummary, JudgeVerdict
+from munk.judging.models import (
+    JudgeEventRecord,
+    JudgeExecutionSummary,
+    JudgeVerdict,
+    is_decision_trace_evidence,
+    is_runner_history_evidence,
+    is_screen_frame_evidence,
+)
 
 from .focus_terms import extract_focus_terms
 from .models import JudgeEvidencePack
@@ -89,19 +96,13 @@ def _recent_terminal_actions(evidence_pack: JudgeEvidencePack) -> list[str]:
 
 def _recent_terminal_actions_from_history(evidence_pack: JudgeEvidencePack) -> list[str]:
     for item in evidence_pack.evidence:
-        if item.kind != "runner_history":
-            continue
-        excerpt = item.payload.get("excerpt")
-        if not isinstance(excerpt, list):
+        if not is_runner_history_evidence(item):
             continue
         actions: list[str] = []
-        for raw_entry in excerpt:
-            if not isinstance(raw_entry, dict):
-                continue
-            entry = raw_entry
-            action_type = str(entry.get("action_type", "")).strip()
-            summary = str(entry.get("summary", "")).strip()
-            detail = str(entry.get("detail", "")).strip()
+        for entry in item.payload.excerpt:
+            action_type = str(entry.action_type or "").strip()
+            summary = str(entry.summary or "").strip()
+            detail = ""
             parts = [part for part in (action_type, summary, detail) if part]
             if parts:
                 actions.append(" ".join(parts))
@@ -119,25 +120,13 @@ def _recent_element_lists(evidence_pack: JudgeEvidencePack) -> list[str]:
 
 def _recent_element_lists_from_frame(evidence_pack: JudgeEvidencePack) -> list[str]:
     for item in reversed(evidence_pack.evidence):
-        if item.kind != "screen_frame":
-            continue
-        excerpt = item.payload.get("excerpt")
-        if not isinstance(excerpt, dict):
-            continue
-        compact_tree = excerpt.get("compact_tree")
-        if not isinstance(compact_tree, dict):
-            continue
-        nodes = compact_tree.get("nodes")
-        if not isinstance(nodes, list):
+        if not is_screen_frame_evidence(item):
             continue
         labels: list[str] = []
-        for raw_node in nodes:
-            if not isinstance(raw_node, dict):
-                continue
-            node = raw_node
-            label = node.get("txt") or node.get("cd") or node.get("rid")
+        for node in item.payload.compact_tree.nodes:
+            label = node.text or node.content_desc or node.resource_id
             if label:
-                labels.append(str(label))
+                labels.append(label)
         if labels:
             return labels
     return []
@@ -146,9 +135,9 @@ def _recent_element_lists_from_frame(evidence_pack: JudgeEvidencePack) -> list[s
 def _recent_terminal_actions_from_trace(evidence_pack: JudgeEvidencePack) -> list[str]:
     actions: list[str] = []
     for item in evidence_pack.evidence:
-        if item.kind != "decision_trace":
+        if not is_decision_trace_evidence(item):
             continue
-        tool_name = str(item.payload.get("tool_name", "")).strip()
+        tool_name = str(item.payload.tool_name or "").strip()
         if tool_name not in {"click", "scroll", "back", "home", "wait", "redetect", "stop"}:
             continue
         summary = item.summary.strip()
@@ -160,12 +149,12 @@ def _recent_terminal_actions_from_trace(evidence_pack: JudgeEvidencePack) -> lis
 def _recent_element_lists_from_trace(evidence_pack: JudgeEvidencePack) -> list[str]:
     entries: list[str] = []
     for item in evidence_pack.evidence:
-        if item.kind != "decision_trace":
+        if not is_decision_trace_evidence(item):
             continue
-        tool_name = str(item.payload.get("tool_name", "")).strip()
+        tool_name = str(item.payload.tool_name or "").strip()
         if tool_name != "list_clickable_elements":
             continue
-        summary = item.summary.strip()
+        summary = (item.payload.ui_elements_summary or item.payload.result_summary or item.summary).strip()
         if summary:
             entries.append(summary)
     return entries[-3:]

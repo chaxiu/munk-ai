@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from munk.artifacts import (
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_CASE,
+    ARTIFACT_ID_DIAGNOSTICS,
+    ARTIFACT_ID_RESULT,
+)
 from munk.config import ResolvedConfig
 from munk.execution.models import (
     CASE_EXECUTION_RESULT_SCHEMA_VERSION,
@@ -201,14 +207,14 @@ class OrchestrationArtifactMaterializer:
     ) -> dict[str, str]:
         artifacts: "OrderedDict[str, str]" = OrderedDict(
             [
-                ("case", str(case_request_path)),
-                ("result", str(result_path)),
+                (ARTIFACT_ID_CASE, str(case_request_path)),
+                (ARTIFACT_ID_RESULT, str(result_path)),
                 ("attempts", str(attempts_path)),
                 ("history", str(history_path)),
                 ("retry_handoffs", str(retry_handoffs_path)),
                 ("orchestration_result", str(orchestration_result_path)),
-                ("diagnostics", str(diagnostics_path)),
-                ("artifact_manifest", str(manifest_path)),
+                (ARTIFACT_ID_DIAGNOSTICS, str(diagnostics_path)),
+                (ARTIFACT_ID_ARTIFACT_MANIFEST, str(manifest_path)),
                 ("orchestration_run_dir", str(run_dir)),
             ]
         )
@@ -254,8 +260,8 @@ class OrchestrationArtifactMaterializer:
         )
         artifact_checks = [
             self._diagnostics_service.build_json_artifact_check(
-                artifact_id="result",
-                path=Path(result.artifacts["result"]),
+                artifact_id=ARTIFACT_ID_RESULT,
+                path=Path(result.artifacts[ARTIFACT_ID_RESULT]),
                 required_fields=("schema_version", "plan_id", "case_id", "attempt_count", "verdict"),
                 expected_schema_version=CASE_EXECUTION_RESULT_SCHEMA_VERSION,
             ),
@@ -280,11 +286,11 @@ class OrchestrationArtifactMaterializer:
                 required=False,
             ),
             self._diagnostics_service.build_path_artifact_check(
-                artifact_id="artifact_manifest",
+                artifact_id=ARTIFACT_ID_ARTIFACT_MANIFEST,
                 path=manifest_path,
             ),
             self._diagnostics_service.build_path_artifact_check(
-                artifact_id="diagnostics",
+                artifact_id=ARTIFACT_ID_DIAGNOSTICS,
                 path=diagnostics_path,
             ),
         ]

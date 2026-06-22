@@ -14,35 +14,54 @@ from munk.judging.models import (
     JudgeRequest,
     JudgeRuntimeContext,
 )
-from munk.services.events import RunEvent
+from munk.artifacts import (
+    ARTIFACT_ID_ANNOTATED_SCREENSHOTS,
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_DECISION_TRACE,
+    ARTIFACT_ID_LLM_TRANSCRIPT,
+    ARTIFACT_ID_OBSERVATION_DIFFS,
+    ARTIFACT_ID_OBSERVATION_FRAMES,
+    ARTIFACT_ID_OBSERVATION_TREE,
+    ARTIFACT_ID_RAW_SCREENSHOTS,
+    ARTIFACT_ID_RUNNER_HISTORY,
+    ARTIFACT_ID_RUNNER_ISSUES,
+    ARTIFACT_ID_RUNNER_MEMORY,
+    ARTIFACT_ID_RUNTIME_LOGS,
+)
+from munk.services.events import RunEvent, serialize_run_event_payload
+from munk.services.operations.runtime_event_sinks import TrackerAgentRuntimeTimelineSink
 
 
 class JudgeTrackerLike(Protocol):
     @property
     def operation_id(self) -> str | None: ...
 
+    def append_agent_runtime_event(self, event: AgentRuntimeEvent) -> None: ...
+
+    def append_timeline_event(
+        self,
+        *,
+        event_type: str,
+        message: str | None,
+        agent_role: str,
+        timeline_scope: str,
+        timeline_phase: str,
+        summary: str | None = None,
+        attempt_index: int | None = None,
+        timestamp: str | None = None,
+        parent_operation_id: str | None = None,
+        child_operation_id: str | None = None,
+        app_id: str | None = None,
+        plan_id: str | None = None,
+        case_id: str | None = None,
+        data: dict[str, object] | None = None,
+    ) -> None: ...
+
     def append_event(self, *, event_type: str, message: str | None, data: dict[str, object] | None = None) -> None: ...
 
     def update_progress(self, **progress: object) -> None: ...
 
     def should_cancel(self) -> bool: ...
-
-
-class TrackerJudgeProgressSink:
-    def __init__(self, tracker: JudgeTrackerLike) -> None:
-        self._tracker = tracker
-
-    def emit(self, event: AgentRuntimeEvent) -> None:
-        data = dict(event.data)
-        data["lifecycle_state"] = event.lifecycle_state
-        data["agent_role"] = event.agent_role
-        data["timestamp"] = event.timestamp
-        self._tracker.append_event(event_type=event.event_type, message=event.message, data=data)
-        self._tracker.update_progress(
-            lifecycle_state=event.lifecycle_state,
-            agent_role=event.agent_role,
-            event_timestamp=event.timestamp,
-        )
 
 
 class TrackerCancelController(CancelController):
@@ -89,22 +108,23 @@ def build_judge_request(
                 event_type=event.type.value,
                 timestamp=event.timestamp,
                 message=event.message,
-                data=dict(event.data),
+                data=serialize_run_event_payload(event),
             )
             for event in events
         ],
         evidence_bundle=JudgeEvidenceBundle(
-            runner_history_path=_path_or_none(artifacts.get("runner_history")),
-            runner_memory_path=_path_or_none(artifacts.get("runner_memory")),
-            decision_trace_path=_path_or_none(artifacts.get("decision_trace")),
-            runtime_logs_path=_path_or_none(artifacts.get("runtime_logs")),
-            observation_frames_path=_path_or_none(artifacts.get("observation_frames")),
-            observation_diffs_path=_path_or_none(artifacts.get("observation_diffs")),
-            observation_tree_path=_path_or_none(artifacts.get("observation_tree")),
-            raw_screenshots_path=_path_or_none(artifacts.get("raw_screenshots")),
-            annotated_screenshots_path=_path_or_none(artifacts.get("annotated_screenshots")),
-            llm_transcript_path=_path_or_none(artifacts.get("llm_transcript")),
-            artifact_manifest_path=_path_or_none(artifacts.get("artifact_manifest")),
+            runner_history_path=_path_or_none(artifacts.get(ARTIFACT_ID_RUNNER_HISTORY)),
+            runner_memory_path=_path_or_none(artifacts.get(ARTIFACT_ID_RUNNER_MEMORY)),
+            runner_issues_path=_path_or_none(artifacts.get(ARTIFACT_ID_RUNNER_ISSUES)),
+            decision_trace_path=_path_or_none(artifacts.get(ARTIFACT_ID_DECISION_TRACE)),
+            runtime_logs_path=_path_or_none(artifacts.get(ARTIFACT_ID_RUNTIME_LOGS)),
+            observation_frames_path=_path_or_none(artifacts.get(ARTIFACT_ID_OBSERVATION_FRAMES)),
+            observation_diffs_path=_path_or_none(artifacts.get(ARTIFACT_ID_OBSERVATION_DIFFS)),
+            observation_tree_path=_path_or_none(artifacts.get(ARTIFACT_ID_OBSERVATION_TREE)),
+            raw_screenshots_path=_path_or_none(artifacts.get(ARTIFACT_ID_RAW_SCREENSHOTS)),
+            annotated_screenshots_path=_path_or_none(artifacts.get(ARTIFACT_ID_ANNOTATED_SCREENSHOTS)),
+            llm_transcript_path=_path_or_none(artifacts.get(ARTIFACT_ID_LLM_TRANSCRIPT)),
+            artifact_manifest_path=_path_or_none(artifacts.get(ARTIFACT_ID_ARTIFACT_MANIFEST)),
         ),
     )
 
@@ -113,12 +133,14 @@ def build_judge_runtime_context(
     *,
     run_dir: Path,
     tracker: JudgeTrackerLike | None,
+    attempt_index: int,
 ) -> BuiltJudgeRuntimeContext:
     run_dir.mkdir(parents=True, exist_ok=True)
-    progress = TrackerJudgeProgressSink(tracker) if tracker is not None else None
+    progress = TrackerAgentRuntimeTimelineSink(tracker) if tracker is not None else None
     return BuiltJudgeRuntimeContext(
         runtime_context=JudgeRuntimeContext(
             operation_id=tracker.operation_id if tracker is not None else None,
+            attempt_index=attempt_index,
             managed_paths=JudgeManagedPaths(
                 root_dir=run_dir,
                 judge_request_path=run_dir / "judge_request.json",

@@ -86,11 +86,11 @@ class FinalizeCaseSubmission(BaseModel):
         )
     )
     expected: list[str] = Field(
-        default_factory=empty_strings,
         description=(
-            "List of user-observable expected outcomes for the case. "
-            "Each item should be a natural-language weak assertion visible from the UI, not internal state, "
-            "page metadata, or implementation details."
+            "Required. List of user-observable expected outcomes for the case. "
+            "Each item should be a natural-language weak assertion visible from the UI, "
+            "not internal state, page metadata, or implementation details. "
+            "Must contain at least one non-empty item."
         ),
     )
     runner_goal: str = Field(
