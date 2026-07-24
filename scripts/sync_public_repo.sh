@@ -1,64 +1,61 @@
 #!/usr/bin/env bash
+# Sync the public open-source subset into public/munk-ai (or --target).
+#
+# Filter layers (rsync first-match wins):
+#   1) Policy denylist  — private-only paths (open-source boundary)
+#   2) .gitignore       — local noise / large resources (single source of truth)
+#   3) Allowlist        — root build manifests + public source trees
+#   4) exclude *        — drop every other top-level path (cloud/, dawnchat/, …)
+#
+# Default uses --delete only (destination .git is preserved because it is
+# excluded). Optional --delete-excluded temporarily moves destination .git
+# aside, then restores it, so leaked noise can be cleaned safely.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 DEFAULT_TARGET_ROOT="${SOURCE_ROOT}/public/munk-ai"
+GITIGNORE_PATH="${SOURCE_ROOT}/.gitignore"
 
 TARGET_ROOT="${DEFAULT_TARGET_ROOT}"
 DRY_RUN=0
+DELETE_EXCLUDED=0
 
 REQUIRED_FILES=(
   ".gitignore"
+  ".pre-commit-config.yaml"
+  "CONTRIBUTING.md"
   "LICENSE.txt"
   "README.md"
+  "package.json"
+  "pnpm-lock.yaml"
+  "pnpm-workspace.yaml"
+  "pyproject.toml"
+  "tsconfig.base.json"
+  "uv.lock"
 )
 
-SYNC_DIRS=(
+REQUIRED_DIRS=(
   "apps"
   "assets"
-  "config"
   "packages"
   "scripts"
   "sidecars"
   "src"
 )
 
-RSYNC_EXCLUDES=(
-  "--exclude=.DS_Store"
-  "--exclude=.idea/"
-  "--exclude=.vscode/"
-  "--exclude=.trae/"
-  "--exclude=__pycache__/"
-  "--exclude=*.pyc"
-  "--exclude=*.pyo"
-  "--exclude=*.egg-info/"
-  "--exclude=.eggs/"
-  "--exclude=.pytest_cache/"
-  "--exclude=.mypy_cache/"
-  "--exclude=.ruff_cache/"
-  "--exclude=.coverage"
-  "--exclude=.venv/"
-  "--exclude=venv/"
-  "--exclude=node_modules/"
-  "--exclude=.pnpm-store/"
-  "--exclude=.cache/"
-  "--exclude=build/"
-  "--exclude=dist/"
-  "--exclude=tmp/"
-  "--exclude=.tmp/"
-  "--exclude=.dbg/"
-  "--exclude=development-log/"
-  "--exclude=public/"
-  "--exclude=.munk/"
-  "--exclude=.review-runtime-local/"
-  "--exclude=internal/"
-  "--exclude=runs/"
-  "--exclude=operations.sqlite3"
-  "--exclude=*.sqlite3-wal"
-  "--exclude=*.sqlite3-shm"
-  "--exclude=models/"
-  "--exclude=logo/"
+# Optional trees: sync when present; missing is not an error.
+OPTIONAL_DIRS=(
+  "config"
+  "examples"
+)
+
+# Open-source policy denylist (Layer B). Paths are relative to SOURCE_ROOT.
+# Top-level private trees such as cloud/ are also dropped by the final --exclude=*;
+# keep explicit entries so the boundary stays visible.
+POLICY_EXCLUDES=(
+  "--exclude=/cloud/"
+  "--exclude=/scripts/generate_loop_local_api_openapi.py"
 )
 
 print_help() {
@@ -66,12 +63,17 @@ print_help() {
 Sync the public repository subset from the private workspace.
 
 Usage:
-  ./scripts/sync_public_repo.sh [--target PATH] [--dry-run]
+  ./scripts/sync_public_repo.sh [--target PATH] [--dry-run] [--delete-excluded]
 
 Options:
-  --target PATH  Override the target repository path.
-  --dry-run      Show the rsync plan without writing changes.
-  --help         Show this help message.
+  --target PATH        Override the target repository path.
+  --dry-run            Show the rsync plan without writing changes.
+  --delete-excluded    Also delete destination paths matching exclude rules
+                       (safe for .git: it is moved aside and restored).
+  --help               Show this help message.
+
+Filter model:
+  policy denylist  ->  .gitignore  ->  public allowlist  ->  exclude *
 EOF
 }
 
@@ -87,6 +89,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --delete-excluded)
+      DELETE_EXCLUDED=1
       shift
       ;;
     --help)
@@ -106,12 +112,34 @@ if ! command -v rsync >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ ! -f "${GITIGNORE_PATH}" ]]; then
+  echo "Missing .gitignore at ${GITIGNORE_PATH}" >&2
+  exit 1
+fi
+
+if [[ "${TARGET_ROOT}" != /* ]]; then
+  TARGET_ROOT="${SOURCE_ROOT}/${TARGET_ROOT}"
+fi
 TARGET_ROOT="$(cd -- "$(dirname -- "${TARGET_ROOT}")" && pwd)/$(basename -- "${TARGET_ROOT}")"
 
 if [[ "${TARGET_ROOT}" == "${SOURCE_ROOT}" ]]; then
   echo "Target path must not be the same as the source repository root" >&2
   exit 1
 fi
+
+for file_path in "${REQUIRED_FILES[@]}"; do
+  if [[ ! -f "${SOURCE_ROOT}/${file_path}" ]]; then
+    echo "Missing required file: ${file_path}" >&2
+    exit 1
+  fi
+done
+
+for dir_path in "${REQUIRED_DIRS[@]}"; do
+  if [[ ! -d "${SOURCE_ROOT}/${dir_path}" ]]; then
+    echo "Missing required directory: ${dir_path}" >&2
+    exit 1
+  fi
+done
 
 mkdir -p "${TARGET_ROOT}"
 
@@ -120,66 +148,71 @@ RSYNC_COMMON=(
   -a
   --human-readable
   --itemize-changes
+  --delete
+  --prune-empty-dirs
 )
+
+if [[ ${DELETE_EXCLUDED} -eq 1 ]]; then
+  RSYNC_COMMON+=("--delete-excluded")
+fi
 
 if [[ ${DRY_RUN} -eq 1 ]]; then
   RSYNC_COMMON+=("--dry-run")
 fi
 
-sync_file() {
-  local relative_path="$1"
-  local source_path="${SOURCE_ROOT}/${relative_path}"
-  local target_path="${TARGET_ROOT}/${relative_path}"
+RSYNC_FILTERS=(
+  "${POLICY_EXCLUDES[@]}"
+  "--exclude-from=${GITIGNORE_PATH}"
+)
 
-  if [[ ! -f "${source_path}" ]]; then
-    echo "Missing required file: ${relative_path}" >&2
-    exit 1
-  fi
+for file_path in "${REQUIRED_FILES[@]}"; do
+  RSYNC_FILTERS+=("--include=/${file_path}")
+done
 
-  mkdir -p "$(dirname -- "${target_path}")"
-  echo "Sync file: ${relative_path}"
-  "${RSYNC_COMMON[@]}" "${source_path}" "${target_path}"
-}
+for dir_path in "${REQUIRED_DIRS[@]}" "${OPTIONAL_DIRS[@]}"; do
+  RSYNC_FILTERS+=("--include=/${dir_path}/")
+  RSYNC_FILTERS+=("--include=/${dir_path}/***")
+done
 
-sync_dir() {
-  local relative_path="$1"
-  local source_path="${SOURCE_ROOT}/${relative_path}"
-  local target_path="${TARGET_ROOT}/${relative_path}"
-
-  if [[ ! -d "${source_path}" ]]; then
-    echo "Missing required directory: ${relative_path}" >&2
-    exit 1
-  fi
-
-  mkdir -p "${target_path}"
-  echo "Sync dir: ${relative_path}/"
-  "${RSYNC_COMMON[@]}" --delete "${RSYNC_EXCLUDES[@]}" "${source_path}/" "${target_path}/"
-}
-
-sync_dir_if_present() {
-  local relative_path="$1"
-  local source_path="${SOURCE_ROOT}/${relative_path}"
-
-  if [[ ! -d "${source_path}" ]]; then
-    echo "Skip dir: ${relative_path}/ (not found in source)"
-    return
-  fi
-
-  sync_dir "${relative_path}"
-}
+# Drop every other top-level path (cloud/, dawnchat/, munk-auto/, docs/, …).
+RSYNC_FILTERS+=("--exclude=*")
 
 echo "Source: ${SOURCE_ROOT}"
 echo "Target: ${TARGET_ROOT}"
+echo "Noise filter: ${GITIGNORE_PATH}"
 if [[ ${DRY_RUN} -eq 1 ]]; then
   echo "Mode: dry-run"
 fi
+if [[ ${DELETE_EXCLUDED} -eq 1 ]]; then
+  echo "Delete excluded destination paths: yes"
+else
+  echo "Delete excluded destination paths: no"
+fi
 
-for file_path in "${REQUIRED_FILES[@]}"; do
-  sync_file "${file_path}"
-done
+GIT_SIDE_DIR=""
+restore_target_git() {
+  if [[ -n "${GIT_SIDE_DIR}" && -d "${GIT_SIDE_DIR}/.git" ]]; then
+    if [[ -e "${TARGET_ROOT}/.git" ]]; then
+      echo "Refusing to restore .git over an existing ${TARGET_ROOT}/.git" >&2
+      exit 1
+    fi
+    mv -- "${GIT_SIDE_DIR}/.git" "${TARGET_ROOT}/.git"
+    rmdir -- "${GIT_SIDE_DIR}" 2>/dev/null || rm -rf -- "${GIT_SIDE_DIR}"
+    GIT_SIDE_DIR=""
+  fi
+}
+trap restore_target_git EXIT
 
-for dir_path in "${SYNC_DIRS[@]}"; do
-  sync_dir_if_present "${dir_path}"
-done
+if [[ ${DELETE_EXCLUDED} -eq 1 && ${DRY_RUN} -eq 0 && -d "${TARGET_ROOT}/.git" ]]; then
+  GIT_SIDE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/munk-public-git.XXXXXX")"
+  echo "Parking destination .git at ${GIT_SIDE_DIR}/.git"
+  mv -- "${TARGET_ROOT}/.git" "${GIT_SIDE_DIR}/.git"
+fi
+
+echo "Sync public allowlist (rooted at repository root)"
+"${RSYNC_COMMON[@]}" "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/" "${TARGET_ROOT}/"
+
+restore_target_git
+trap - EXIT
 
 echo "Public repository sync completed."

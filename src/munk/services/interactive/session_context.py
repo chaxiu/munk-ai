@@ -13,6 +13,7 @@ from munk.paths import export_adb_env
 from munk.perception import PerceptionProvider
 from munk.runtime_defaults import DEFAULT_ICON_CONF, DEFAULT_MAX_SIDE
 from munk.services.perception_runtime import build_perception_provider_for_runtime
+from munk.services.playwright_browser_env import ensure_chromium, export_playwright_env
 
 INTERACTIVE_SETTLE_TIMEOUT_SEC = 6.0
 
@@ -45,6 +46,9 @@ def build_interactive_session_context(
 ) -> InteractiveSessionContext:
     runtime = resolve_runtime_config(resolved_config.config)
     export_adb_env()
+    if app_target.platform == "web":
+        export_playwright_env()
+        ensure_chromium()
     factory = resolve_device_runtime_factory(platform=app_target.platform)
     device = factory.create_device(device_ref=device_ref, app_target=app_target)
     perception = build_perception_provider_for_runtime(

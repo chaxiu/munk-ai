@@ -200,6 +200,7 @@ class _FakeKnowledgeAgent:
         self._result = result
         self.last_tool_calls = list(last_tool_calls or [])
         self.last_prompt = last_prompt
+        self.last_prompt_diagnostics = {"prompt_chars": len(last_prompt), "degraded": False}
 
     def generate_candidates(self, request: KnowledgeAgentRequest, *, deps) -> KnowledgeAgentResult:  # noqa: ANN001
         del request, deps

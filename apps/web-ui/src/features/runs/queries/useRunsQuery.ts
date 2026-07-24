@@ -23,7 +23,7 @@ export function runsRefetchInterval(data?: {
 export function useRunsQuery(input: MaybeRefOrGetter<{
   limit?: number
   offset?: number
-  status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+  status?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted'
   kind?: 'plan' | 'run_case' | 'run_plan' | 'run_plans' | 'verify_change' | 'review' | 'record_case'
   deviceRef?: string
   surface?: string

@@ -37,6 +37,7 @@ class TargetParts:
     tree_targets: list[ActionTarget]
     vision_total: int
     tree_total: int
+    is_canonical_snapshot: bool = False
 
 
 @dataclass(frozen=True)

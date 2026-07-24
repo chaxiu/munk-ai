@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import RunArtifactPreviewModal from '@/features/runs/components/RunArtifactPreviewModal.vue'
 import RunArtifactsPanel from '@/features/runs/components/RunArtifactsPanel.vue'
 import RunEvidencePanel from '@/features/runs/components/RunEvidencePanel.vue'
+import RunKnowledgePostActionSummary from '@/features/runs/components/RunKnowledgePostActionSummary.vue'
 import RunSummaryPanel from '@/features/runs/components/RunSummaryPanel.vue'
 import RunTimelinePanel from '@/features/runs/components/RunTimelinePanel.vue'
 import {
@@ -12,6 +13,7 @@ import {
   rawPayload,
   type RunOrchestrationSummaryView,
 } from '@/features/runs/lib/runMappers'
+import { knowledgePostActionResult } from '@/features/runs/lib/runSummaryMappers'
 import type {
   OperationArtifactsData,
   OperationDetailData,
@@ -73,6 +75,7 @@ type OptimizeFieldDiffView = {
 }
 
 const allArtifacts = computed(() => flattenArtifacts(props.artifacts))
+const knowledgePostActionView = computed(() => knowledgePostActionResult(props.detail))
 const optimizeResult = computed<Record<string, unknown> | null>(() => {
   if (props.detail.run_type !== 'optimize_case') {
     return null
@@ -168,6 +171,12 @@ function formatList(items: string[]) {
   </div>
 
   <div v-if="activeTab === 'summary'" class="summary-tab">
+    <RunKnowledgePostActionSummary
+      v-if="knowledgePostActionView"
+      :app-id="detail.app_id"
+      :result="knowledgePostActionView"
+    />
+
     <section v-if="optimizeResult" class="optimize-card">
       <div class="optimize-head">
         <strong>{{ t('runDetail.optimize.title') }}</strong>

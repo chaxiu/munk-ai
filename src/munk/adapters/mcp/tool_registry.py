@@ -389,7 +389,7 @@ def register_mcp_tools(mcp: Any, handlers: McpToolHandlers) -> None:
         limit: Annotated[int, Field(description="Maximum number of operations to return.", ge=1, le=100)] = 20,
         status: Annotated[
             OperationStatus | None,
-            Field(description="Optional operation status filter: queued, running, succeeded, failed, or cancelled."),
+            Field(description="Optional operation status filter: queued, running, succeeded, failed, cancelled, or interrupted."),
         ] = None,
         kind: Annotated[
             OperationKind | None,

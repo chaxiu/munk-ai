@@ -18,8 +18,9 @@ OperationKind = Literal[
     "record_case",
     "recording_analysis",
     "interactive_session",
+    "app_install",
 ]
-OperationStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+OperationStatus = Literal["queued", "running", "succeeded", "failed", "cancelled", "interrupted"]
 VerificationVerdict = Literal["passed", "failed", "inconclusive"] | None
 ResourceScope = Literal["none", "device_ref", "device_unspecified"]
 OPERATION_ID_ENV = "MUNK_OPERATION_ID"
@@ -61,6 +62,7 @@ class OperationRecord(BaseModel):
     projected_platform: str | None = None
     projected_title: str | None = None
     projected_source_recording_id: str | None = None
+    result_path: str | None = None
     pid: int | None = None
     cancel_requested: bool = False
     device_ref: str | None = None
@@ -115,3 +117,11 @@ class CleanupClaimResult(BaseModel):
     resource_key: str
     action: Literal["released_missing_owner", "released_terminal_owner", "released_dead_owner", "released_start_timeout"]
     detail: str
+
+
+class ReconcileOperationResult(BaseModel):
+    operation_id: str
+    status: OperationStatus
+    error_code: str
+    detail: str
+    finalized_operation_ids: list[str] = Field(default_factory=list)

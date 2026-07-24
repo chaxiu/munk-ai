@@ -12,6 +12,7 @@ from munk.adapters.local_api.config_models import (
     ProxyConfigEditor,
     RuntimeConfigEditor,
     SettingsAgentsEditor,
+    TestEnvConfigEditor,
 )
 from munk.adapters.local_api.plan_models import TestCasePayload
 from munk.adapters.shared.payload_models import AttemptTokenUsageData, TokenUsageData
@@ -183,6 +184,7 @@ class SettingsConfigData(BaseModel):
     agents: SettingsAgentsEditor = Field(default_factory=SettingsAgentsEditor)
     proxy: ProxyConfigEditor = Field(default_factory=ProxyConfigEditor)
     ios_bridge: IOSBridgeConfigEditor = Field(default_factory=IOSBridgeConfigEditor)
+    test_env: TestEnvConfigEditor = Field(default_factory=TestEnvConfigEditor)
     runtime: RuntimeConfigEditor = Field(default_factory=RuntimeConfigEditor)
     orchestration: OrchestrationConfigEditor = Field(default_factory=OrchestrationConfigEditor)
 

@@ -88,6 +88,22 @@ class PlanStore:
         self._resolve_index_store().upsert_plan(plan, plan_path=plan_path)
         return plan_path
 
+    def delete(self, app_id: str, plan_id: str) -> None:
+        plan_path = self.plans_dir / app_id / f"{plan_id}.json"
+        if plan_path.exists():
+            plan_path.unlink()
+        self._resolve_index_store().remove_plan(app_id=app_id, plan_id=plan_id)
+
+    def list_plan_ids(self, app_id: str) -> list[str]:
+        app_dir = self.plans_dir / app_id
+        if not app_dir.exists():
+            return []
+        return sorted(
+            path.stem
+            for path in app_dir.glob("*.json")
+            if path.is_file() and path.parent.name != "snapshots"
+        )
+
     def load(self, app_id: str, plan_id: str) -> RequirementPlan:
         plan_path = self.plans_dir / app_id / f"{plan_id}.json"
         if not plan_path.exists():

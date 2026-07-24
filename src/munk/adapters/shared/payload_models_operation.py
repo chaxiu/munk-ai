@@ -187,6 +187,7 @@ class BatchRunAggregateData(BaseModel):
     succeeded_children: int = 0
     failed_children: int = 0
     cancelled_children: int = 0
+    interrupted_children: int = 0
     completed_children: int = 0
     current_child_operation_id: str | None = None
     current_child_plan_id: str | None = None

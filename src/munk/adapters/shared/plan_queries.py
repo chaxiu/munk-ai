@@ -14,8 +14,8 @@ from munk.adapters.shared.payload_models import (
 from munk.planning.index_store import IndexedCaseRecord, IndexedPlanRecord, PlanCaseIndexStore
 from munk.planning.models import RequirementPlan
 from munk.planning.storage import PlanStore
-from munk.services.optimization.operation_payloads import parse_optimize_case_operation_result_payload
 from munk.services.operations.registry import OperationRegistry
+from munk.services.optimization.operation_payloads import parse_optimize_case_operation_result_payload
 from munk.testing import TestCase
 
 
@@ -144,6 +144,7 @@ def build_case_detail_data(
         expected=list(case.expected),
         procedure=list(case.procedure),
         post_action=list(case.post_action),
+        setup=list(case.setup),
         is_core_case=case.is_core_case,
         runner_goal=case.runner_goal,
         start_mode=case.start_state.mode,
@@ -193,11 +194,16 @@ def enrich_plan_items_with_latest_runs(items: list[PlanListItemData]) -> None:
             started_at=record.started_at,
             finished_at=record.finished_at,
         )
+
+
 def _find_latest_optimize_operation(app_id: str, plan_id: str, case_id: str) -> LatestOptimizeOperationData | None:
-    records = OperationRegistry().list_operations(limit=50, kind="optimize_case")
-    for record in records:
-        if record.app_id != app_id or record.plan_id != plan_id or record.case_id != case_id:
+    registry = OperationRegistry()
+    records = registry.list_operations(limit=50, kind="optimize_case")
+    for summary in records:
+        if summary.app_id != app_id or summary.plan_id != plan_id or summary.case_id != case_id:
             continue
+        # List queries omit large JSON blobs; hydrate the matched operation for result fields.
+        record = registry.get_operation(summary.operation_id)
         payload = parse_optimize_case_operation_result_payload(record.result_json)
         return LatestOptimizeOperationData(
             operation_id=record.operation_id,

@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from munk.adapters.local_api.app_context import LocalApiAppContext
 from munk.adapters.local_api.app_lifespan import build_local_api_lifespan
 from munk.adapters.local_api.app_routes import build_app_router
+from munk.adapters.local_api.cloud_auth_routes import build_cloud_auth_router
+from munk.adapters.local_api.cloud_sync_routes import build_cloud_sync_router
 from munk.adapters.local_api.config_routes import build_config_router
 from munk.adapters.local_api.device_routes import build_device_router
 from munk.adapters.local_api.knowledge_routes import build_knowledge_router
@@ -102,6 +104,8 @@ def create_local_api_app(
         )
 
     app.include_router(build_app_router())
+    app.include_router(build_cloud_auth_router())
+    app.include_router(build_cloud_sync_router())
     app.include_router(build_config_router())
     app.include_router(build_device_router())
     app.include_router(build_knowledge_router())
@@ -111,6 +115,7 @@ def create_local_api_app(
     app.include_router(build_operation_router(context))
     if enable_mcp:
         mount_local_api_mcp(app, mcp_servers)
+    # UI catch-all must stay last so /v1/* API routes win.
     app.include_router(
         build_ui_router(
             index_response_factory=_recording_ui_index_response,

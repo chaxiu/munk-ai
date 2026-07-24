@@ -15,7 +15,11 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 - `assemble_standalone_runtime.py`: assemble the release runtime; generates Local API OpenAPI and frontend contracts before build assembly
 - `bootstrap_standalone_dev.py`: bootstrap the dev runtime; generates Local API OpenAPI and frontend contracts before runtime bootstrap
 - `publish_release_artifacts.py`: publish release artifacts
-- `sync_public_repo.sh`: sync the current public-repo tree into `public/munk-ai`
+- `sync_public_repo.sh`: sync the public-repo allowlist into `public/munk-ai`
+  - Reuses root `.gitignore` for local noise / large resources
+  - Policy denylist for private paths (explicitly includes top-level `cloud/`)
+  - Allowlist: build manifests + `apps` / `assets` / `packages` / `scripts` / `sidecars` / `src`
+  - Default `--delete` preserves destination `.git`; pass `--delete-excluded` to also clean excluded junk
 - `update_uv_locks.py`: refresh workspace locks
 - `verify_standalone_runtime.py`: verify assembled runtime
 - `build_review_knowledge.py`: build review knowledge assets

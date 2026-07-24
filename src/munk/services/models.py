@@ -39,6 +39,7 @@ from munk.artifacts import (
 
 if TYPE_CHECKING:
     from munk.running import RunnerManagedPaths
+    from munk.services.playwright_browser_env import PlaywrightBrowserDiagnostics
 
 
 def empty_missing_items() -> list[str]:
@@ -177,6 +178,7 @@ class RunStatus:
 class DoctorResult:
     adb_path: Path
     perception_diagnostics: PerceptionProviderDiagnostics | None = None
+    playwright_diagnostics: PlaywrightBrowserDiagnostics | None = None
     missing_items: list[str] = field(default_factory=empty_missing_items)
 
     @property

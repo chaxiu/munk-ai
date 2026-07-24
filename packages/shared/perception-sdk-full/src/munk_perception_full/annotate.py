@@ -7,6 +7,8 @@ import cv2
 from munk.perception.image import BgrImage
 from munk.perception.types import ClickableElement
 
+_MAX_INSIDE_LABEL_AREA_RATIO = 0.22
+
 
 @dataclass(frozen=True)
 class LabelStyle:
@@ -152,6 +154,10 @@ def _choose_text_label_position(
 ) -> tuple[int, int]:
     x1, y1, x2, y2 = box
     height, width = image_shape
+    inside_rect = _inside_label_rect(box, label_w, label_h, style)
+    if inside_rect is not None:
+        rect = _clamp_rect(inside_rect, width, height)
+        return rect[0], rect[1]
     candidates = [
         (x1 - style.margin, y1 - style.margin - label_h),
         (x2 + style.margin - label_w, y1 - style.margin - label_h),
@@ -169,6 +175,27 @@ def _choose_text_label_position(
             if hits == 0:
                 break
     return best
+
+
+def _inside_label_rect(
+    box: tuple[int, int, int, int],
+    label_w: int,
+    label_h: int,
+    style: LabelStyle,
+) -> tuple[int, int, int, int] | None:
+    x1, y1, x2, y2 = box
+    box_width = max(0, x2 - x1)
+    box_height = max(0, y2 - y1)
+    box_area = box_width * box_height
+    label_area = label_w * label_h
+    if (
+        box_width < label_w + style.margin * 2
+        or box_height < label_h + style.margin * 2
+        or box_area <= 0
+        or label_area / box_area > _MAX_INSIDE_LABEL_AREA_RATIO
+    ):
+        return None
+    return (x1 + style.margin, y1 + style.margin, label_w, label_h)
 
 
 def _clamp_rect(

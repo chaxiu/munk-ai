@@ -37,21 +37,41 @@ def build_action_targets(screen: ScreenState, *, max_elements: int) -> list[Acti
 def build_target_parts(screen: ScreenState, *, vision_limit: int, tree_limit: int) -> TargetParts:
     normalized_vision_limit = max(vision_limit, 0)
     normalized_tree_limit = max(tree_limit, 0)
-    cached_parts = _cached_target_parts(
-        screen,
-        vision_limit=normalized_vision_limit,
-        tree_limit=normalized_tree_limit,
+    canonical_parts = build_canonical_target_parts(screen)
+    return TargetParts(
+        vision_targets=canonical_parts.vision_targets[:normalized_vision_limit],
+        tree_targets=canonical_parts.tree_targets[:normalized_tree_limit],
+        vision_total=canonical_parts.vision_total,
+        tree_total=canonical_parts.tree_total,
+        is_canonical_snapshot=False,
     )
-    if cached_parts is not None:
+
+
+def build_canonical_target_parts(screen: ScreenState) -> TargetParts:
+    cached_parts = screen.action_target_parts
+    if cached_parts is not None and cached_parts.is_canonical_snapshot:
         return cached_parts
+    return _build_canonical_target_parts_uncached(screen)
+
+
+def _build_canonical_target_parts_uncached(screen: ScreenState) -> TargetParts:
+    raw_tree_nodes = screen.screen_frame.tree_nodes if screen.screen_frame is not None else []
+    tree_limit = len(raw_tree_nodes)
     return _build_target_parts_uncached(
         screen,
-        vision_limit=normalized_vision_limit,
-        tree_limit=normalized_tree_limit,
+        vision_limit=len(screen.elements),
+        tree_limit=tree_limit,
+        is_canonical_snapshot=True,
     )
 
 
-def _build_target_parts_uncached(screen: ScreenState, *, vision_limit: int, tree_limit: int) -> TargetParts:
+def _build_target_parts_uncached(
+    screen: ScreenState,
+    *,
+    vision_limit: int,
+    tree_limit: int,
+    is_canonical_snapshot: bool,
+) -> TargetParts:
     compact_tree = build_compact_tree(
         screen.screen_frame.tree_nodes if screen.screen_frame is not None else [],
         platform=screen.platform,
@@ -77,22 +97,7 @@ def _build_target_parts_uncached(screen: ScreenState, *, vision_limit: int, tree
         tree_targets=numbered_tree_targets,
         vision_total=len(screen.elements),
         tree_total=_compact_tree_node_count(compact_tree, uncapped=True),
-    )
-
-
-def _cached_target_parts(screen: ScreenState, *, vision_limit: int, tree_limit: int) -> TargetParts | None:
-    cached_parts = screen.action_target_parts
-    if cached_parts is None:
-        return None
-    if vision_limit > len(cached_parts.vision_targets):
-        return None
-    if tree_limit > len(cached_parts.tree_targets):
-        return None
-    return TargetParts(
-        vision_targets=cached_parts.vision_targets[:vision_limit],
-        tree_targets=cached_parts.tree_targets[:tree_limit],
-        vision_total=cached_parts.vision_total,
-        tree_total=cached_parts.tree_total,
+        is_canonical_snapshot=is_canonical_snapshot,
     )
 
 

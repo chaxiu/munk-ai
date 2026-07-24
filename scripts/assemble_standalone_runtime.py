@@ -14,7 +14,6 @@ if str(SCRIPTS_DIR) not in sys.path:
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from munk.runtime_distribution import ensure_pnpm_available, ensure_supported_platform  # noqa: E402
 from runtime_release.assembly import (  # noqa: E402
     DEFAULT_BUILD_CONFIG,
     DEFAULT_DOWNLOAD_DIR,
@@ -23,9 +22,18 @@ from runtime_release.assembly import (  # noqa: E402
     DEFAULT_SIGNING_ENV_FILE,
     DEFAULT_WHEEL_BUILD_DIR,
     _assemble_release_target,
+    _notarize_release_target,
     _resolve_release_build_targets,
+    _should_run_notarization_recovery,
     _validate_release_args,
 )
+from runtime_release.signing import (  # noqa: E402
+    DEFAULT_NOTARIZE_POLL_INTERVAL_SECONDS,
+    DEFAULT_NOTARIZE_UPLOAD_ATTEMPTS,
+    DEFAULT_NOTARIZE_WAIT_SECONDS,
+)
+
+from munk.runtime_distribution import ensure_pnpm_available, ensure_supported_platform  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,17 +62,49 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-sign", action="store_true")
     parser.add_argument("--skip-archive", action="store_true")
     parser.add_argument("--skip-notarize", action="store_true")
+    parser.add_argument(
+        "--notarize-only",
+        action="store_true",
+        help="Skip rebuild/sign/archive and notarize an existing release archive.",
+    )
+    parser.add_argument(
+        "--resume-submission",
+        default=None,
+        help="Resume polling an existing notarytool submission id without re-uploading.",
+    )
+    parser.add_argument(
+        "--notarize-wait-seconds",
+        type=float,
+        default=DEFAULT_NOTARIZE_WAIT_SECONDS,
+        help="Soft timeout while polling Apple notarization status. The submission keeps processing.",
+    )
+    parser.add_argument(
+        "--notarize-poll-interval-seconds",
+        type=float,
+        default=DEFAULT_NOTARIZE_POLL_INTERVAL_SECONDS,
+        help="How often to poll notarytool info while waiting.",
+    )
+    parser.add_argument(
+        "--notarize-upload-attempts",
+        type=int,
+        default=DEFAULT_NOTARIZE_UPLOAD_ATTEMPTS,
+        help="Retry count for transient notarytool upload failures such as abortedUpload.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     host_target = ensure_supported_platform()
-    pnpm_bin = ensure_pnpm_available()
     _validate_release_args(args, platform_name=host_target.platform)
-    if not args.skip_build:
-        _generate_contracts(pnpm_bin=pnpm_bin)
     targets = _resolve_release_build_targets(args)
+    if _should_run_notarization_recovery(args):
+        for target in targets:
+            _notarize_release_target(args=args, target=target, host_target=host_target)
+        return 0
+    if not args.skip_build:
+        pnpm_bin = ensure_pnpm_available()
+        _generate_contracts(pnpm_bin=pnpm_bin)
     for target in targets:
         _assemble_release_target(args=args, target=target, host_target=host_target)
     return 0

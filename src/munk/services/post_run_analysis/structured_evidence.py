@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+from munk.shared_tools.case_run_evidence import normalize_history_entries
 
 from .evidence import load_artifact_payload
 from .models import CaseRunEvidence
@@ -17,10 +17,10 @@ def build_case_run_structured_evidence(evidence: CaseRunEvidence) -> dict[str, o
     if attempts:
         structured["attempts"] = attempts
 
-    history = _load_canonical_artifact(evidence, "history")
-    if not isinstance(history, list):
-        history = _load_canonical_artifact(evidence, "runner_history")
-    if isinstance(history, list):
+    history = normalize_history_entries(_load_canonical_artifact(evidence, "history"))
+    if not history:
+        history = normalize_history_entries(_load_canonical_artifact(evidence, "runner_history"))
+    if history:
         structured["history"] = history
 
     retry_handoffs = _load_canonical_artifact(evidence, "retry_handoffs")

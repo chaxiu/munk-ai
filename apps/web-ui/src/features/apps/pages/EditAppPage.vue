@@ -4,6 +4,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import CloudBoundAppBadges from '@/features/cloud/components/CloudBoundAppBadges.vue'
+import { useCloudBoundAppMarker } from '@/features/cloud/queries/useCloudBoundAppMarker'
 import AppCard from '@/shared/components/AppCard.vue'
 import AppEmptyState from '@/shared/components/AppEmptyState.vue'
 import { LocalApiClientError } from '@/shared/api/client'
@@ -28,6 +30,7 @@ const appId = computed(() => {
 const form = reactive(createAppFormModel())
 
 const appDetailQuery = useAppDetailQuery(appId)
+const { isBound, isDirty } = useCloudBoundAppMarker(appId)
 const detail = computed(() => appDetailQuery.data.value)
 const isBusy = computed(() => (
   mutations.updateApp.isPending.value
@@ -103,9 +106,15 @@ async function handleDelete() {
 <template>
   <section class="app-page">
     <AppCard class="grid gap-5">
-      <div>
-        <h2 class="text-base font-semibold text-text-primary">{{ t('apps.editor.editTitle') }}</h2>
+      <div class="grid gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-base font-semibold text-text-primary">{{ t('apps.editor.editTitle') }}</h2>
+          <CloudBoundAppBadges :bound="isBound" :dirty="isDirty" />
+        </div>
         <p class="text-sm text-text-secondary">{{ t('apps.editor.description') }}</p>
+        <p v-if="isBound" class="text-sm text-text-secondary">
+          {{ isDirty ? t('cloud.marker.editHintDirty') : t('cloud.marker.editHint') }}
+        </p>
       </div>
 
       <AppEmptyState

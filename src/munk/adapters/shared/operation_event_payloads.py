@@ -21,8 +21,15 @@ from munk.services.knowledge.event_payloads import KnowledgeTimelineEventPayload
 from munk.services.operations.lifecycle_event_payloads import (
     AgentRuntimeLifecycleEventPayload,
     ContextPrepareDeviceReadyEventPayload,
+    ContextPrepareFailedEventPayload,
     ContextPrepareParamsResolvedEventPayload,
     ContextPreparePerceptionReadyEventPayload,
+    ContextPrepareSetupReadyEventPayload,
+    ContextPrepareSetupStartedEventPayload,
+    ContextPrepareSetupStepEventPayload,
+    ContextPrepareStartStateReadyEventPayload,
+    ContextPrepareStartStateStartedEventPayload,
+    ContextPrepareStartStateStepEventPayload,
     JudgeRuntimeEventPayload,
     OperationInterruptedEventPayload,
     OperationStartedEventPayload,
@@ -101,6 +108,13 @@ OperationEventPayloadData = (
     | ContextPrepareParamsResolvedEventPayload
     | ContextPrepareDeviceReadyEventPayload
     | ContextPreparePerceptionReadyEventPayload
+    | ContextPrepareSetupStartedEventPayload
+    | ContextPrepareSetupStepEventPayload
+    | ContextPrepareSetupReadyEventPayload
+    | ContextPrepareStartStateStartedEventPayload
+    | ContextPrepareStartStateStepEventPayload
+    | ContextPrepareStartStateReadyEventPayload
+    | ContextPrepareFailedEventPayload
     | RunnerRuntimeEventPayload
     | JudgeRuntimeEventPayload
     | PostRunChildOperationEventPayload

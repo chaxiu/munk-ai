@@ -10,6 +10,9 @@ export function statusTone(status?: string | null): BadgeTone {
   if (status === 'failed' || status === 'cancelled') {
     return 'error'
   }
+  if (status === 'interrupted') {
+    return 'warning'
+  }
   if (status === 'queued' || status === 'running') {
     return 'warning'
   }
@@ -43,7 +46,11 @@ export function formatVerdictLabel(
 }
 
 export function isTerminalStatus(status?: string | null): boolean {
-  return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+  return status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
+}
+
+export function isCancelInProgress(detail?: Pick<OperationDetailData, 'status' | 'cancel_requested'> | null): boolean {
+  return Boolean(detail && !isTerminalStatus(detail.status) && detail.cancel_requested)
 }
 
 export function describePhase(item: Pick<OperationSummaryData, 'phase'>): string | null {

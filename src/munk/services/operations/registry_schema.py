@@ -26,6 +26,7 @@ def initialize_registry_schema(connection: sqlite3.Connection) -> None:
             projected_platform TEXT NULL,
             projected_title TEXT NULL,
             projected_source_recording_id TEXT NULL,
+            result_path TEXT NULL,
             pid INTEGER NULL,
             cancel_requested INTEGER NOT NULL DEFAULT 0,
             device_ref TEXT NULL,
@@ -70,6 +71,7 @@ def initialize_registry_schema(connection: sqlite3.Connection) -> None:
     ensure_column(connection, "operations", "projected_platform", "TEXT NULL")
     ensure_column(connection, "operations", "projected_title", "TEXT NULL")
     ensure_column(connection, "operations", "projected_source_recording_id", "TEXT NULL")
+    ensure_column(connection, "operations", "result_path", "TEXT NULL")
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_operation_events_operation_id_seq
@@ -92,6 +94,31 @@ def initialize_registry_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_operations_parent_position
         ON operations(parent_operation_id, position_index)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operations_created_at
+        ON operations(created_at DESC, operation_id DESC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operations_kind_created_at
+        ON operations(kind, created_at DESC, operation_id DESC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operations_run_center
+        ON operations(projected_run_type, created_at DESC, operation_id DESC)
+        WHERE projected_run_type IS NOT NULL
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operations_app_plan_kind_created
+        ON operations(app_id, plan_id, kind, created_at DESC, operation_id DESC)
         """
     )
     connection.execute(

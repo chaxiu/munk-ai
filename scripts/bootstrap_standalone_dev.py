@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -263,9 +264,16 @@ def main() -> int:
 
 
 def _install_playwright_browser(*, runtime_python: Path) -> None:
+    from munk.services.playwright_browser_env import browsers_dir as playwright_browsers_dir
+
+    browsers_path = playwright_browsers_dir()
+    browsers_path.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_path)
     subprocess.run(  # noqa: S603
         [str(runtime_python), "-m", "playwright", "install", "chromium"],
         cwd=ROOT_DIR,
+        env=env,
         check=True,
     )
 

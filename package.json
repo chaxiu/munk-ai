@@ -1,0 +1,21 @@
+{
+  "name": "munk-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "generate:local-api-openapi": "uv run --project . python scripts/generate_local_api_openapi.py write",
+    "check:local-api-openapi": "uv run --project . python scripts/generate_local_api_openapi.py check",
+    "generate:loop-local-api-openapi": "uv run --project . python scripts/generate_loop_local_api_openapi.py write",
+    "check:loop-local-api-openapi": "uv run --project . python scripts/generate_loop_local_api_openapi.py check",
+    "generate:contracts": "pnpm run generate:local-api-openapi && pnpm --dir apps/web-ui run generate:local-api-types",
+    "check:contracts": "pnpm run check:local-api-openapi && pnpm --dir apps/web-ui run check:local-api-types",
+    "dev:web": "pnpm --dir apps/web-ui dev",
+    "dev:bridge": "pnpm --dir sidecars/recording-bridge-local dev",
+    "dev:ios-bridge": "pnpm --dir sidecars/ios-device-bridge dev"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

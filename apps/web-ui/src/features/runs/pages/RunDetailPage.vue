@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import AppBadge from '@/shared/components/AppBadge.vue'
@@ -19,6 +19,7 @@ import {
 import { translateErrorCode } from '@/shared/i18n/errorMessages'
 import {
   displayRunTitle,
+  isCancelInProgress,
   isTerminalStatus,
   planRunProgress,
   runCaseResult,
@@ -31,6 +32,7 @@ import { useRunDetailQuery } from '@/features/runs/queries/useRunDetailQuery'
 import { useRunEventsQuery } from '@/features/runs/queries/useRunEventsQuery'
 
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const time = useTime({ relative: true })
 
@@ -41,7 +43,7 @@ const devicesQuery = useDevicesQuery('all')
 
 const detailQuery = useRunDetailQuery(operationId)
 const artifactsQuery = useRunArtifactsQuery(operationId)
-const eventsQuery = useRunEventsQuery(operationId, computed(() => !isTerminalStatus(detailQuery.data.value?.status)))
+const eventsQuery = useRunEventsQuery(operationId)
 
 const detail = computed(() => detailQuery.data.value)
 const resultData = computed(() => runCaseResult(detail.value))
@@ -70,6 +72,33 @@ const supportingEvidenceIds = computed(() => (
 ))
 const primaryEvidenceId = computed(() => supportingEvidenceIds.value[0] ?? null)
 const canReproduceFromSummary = computed(() => !isBatchRun.value)
+const caseDetailLink = computed(() => {
+  const data = detail.value
+  if (!data || data.run_type !== 'case_run') {
+    return null
+  }
+  const appId = data.app_id
+  const planId = data.plan_id
+  const caseId = data.case_id
+  if (!appId || !planId || !caseId) {
+    return null
+  }
+  return {
+    name: 'tests-case-detail',
+    params: {
+      appId,
+      planId,
+      caseId,
+    },
+  } as const
+})
+
+function handleViewCase() {
+  if (!caseDetailLink.value) {
+    return
+  }
+  void router.push(caseDetailLink.value)
+}
 const deviceLabel = computed(() => (
   formatDeviceLabel(detail.value?.device_ref, devicesQuery.data.value ?? [], '-')
 ))
@@ -121,7 +150,15 @@ async function handleCancel() {
   actionError.value = null
   try {
     const response = await cancelOperation(operationId.value)
-    actionMessage.value = t('runDetail.messages.cancelRequested', { status: response.status })
+    if (response.status === 'cancelled') {
+      actionMessage.value = t('runDetail.messages.cancelCompleted')
+    } else if (response.status === 'interrupted') {
+      actionMessage.value = t('runDetail.messages.interruptCompleted')
+    } else if (response.cancel_requested) {
+      actionMessage.value = t('runDetail.messages.cancelInProgress')
+    } else {
+      actionMessage.value = t('runDetail.messages.cancelRequested', { status: response.status })
+    }
     await handleRefresh()
   } catch (error) {
     if (error instanceof LocalApiClientError) {
@@ -161,6 +198,14 @@ async function handleReproduce() {
           <h2>{{ detail ? displayRunTitle(detail) : operationId }}</h2>
         </div>
         <div class="actions">
+          <button
+            v-if="caseDetailLink"
+            type="button"
+            class="secondary-button"
+            @click="handleViewCase"
+          >
+            {{ t('runDetail.actions.viewCase') }}
+          </button>
           <button type="button" class="secondary-button" @click="handleRefresh">{{ t('common.refresh') }}</button>
           <button
             v-if="!isBatchRun"
@@ -188,6 +233,7 @@ async function handleReproduce() {
         <div class="badge-row">
           <AppBadge>{{ detail.run_type ? t(`runs.types.${detail.run_type}`) : detail.kind }}</AppBadge>
           <AppBadge :tone="statusTone(detail.status)">{{ t(`runs.status.${detail.status}`) }}</AppBadge>
+          <AppBadge v-if="isCancelInProgress(detail)" tone="warning">{{ t('runs.status.cancelling') }}</AppBadge>
           <AppBadge v-if="detail.verification_verdict" :tone="verdictTone(detail.verification_verdict)">
             {{ t(`runs.verdict.${detail.verification_verdict}`) }}
           </AppBadge>

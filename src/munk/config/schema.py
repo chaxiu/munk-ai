@@ -75,6 +75,16 @@ class IOSBridgeConfig(BaseModel):
     sudo_password: str | None = None
 
 
+class HttpBaseConfig(BaseModel):
+    url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class TestEnvConfig(BaseModel):
+    bases: dict[str, HttpBaseConfig] = Field(default_factory=dict)
+    allowed_exec: list[str] = Field(default_factory=list)
+
+
 class RuntimeConfig(BaseModel):
     max_tokens: int | None = None
     temperature: float | None = None
@@ -113,5 +123,6 @@ class MunkConfig(BaseModel):
     perception: PerceptionConfig | None = None
     proxy: ProxyConfig | None = None
     ios_bridge: IOSBridgeConfig | None = None
+    test_env: TestEnvConfig | None = None
     runtime: RuntimeConfig | None = None
     orchestration: OrchestrationConfig | None = None

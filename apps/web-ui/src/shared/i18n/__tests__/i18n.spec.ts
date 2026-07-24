@@ -10,6 +10,7 @@ describe('i18n', () => {
 
   it('translates known error codes and falls back for unknown ones', () => {
     expect(translateErrorCode('recording_ui_unavailable', '')).toBe('Recording UI build output is missing.')
+    expect(translateErrorCode('session_expired', '')).toBe('Cloud session expired. Sign in again.')
     expect(
       translateErrorCode(
         'app_validation_failed',

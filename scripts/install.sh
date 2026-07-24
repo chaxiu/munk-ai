@@ -552,6 +552,9 @@ main() {
   echo "verify with:"
   echo "  ${VERIFY_COMMAND_PREFIX} --help"
   echo "  ${VERIFY_COMMAND_PREFIX} version"
+  echo "  ${VERIFY_COMMAND_PREFIX} doctor"
+  echo "for web testing, prepare Playwright Chromium with:"
+  echo "  ${VERIFY_COMMAND_PREFIX} doctor --fix"
+  echo "or run a web case once; Chromium is downloaded on first use."
 }
-
 main "$@"

@@ -39,7 +39,6 @@ class RunnerStepDeps:
     runner_memory_path: Path | None = None
     runner_issues_path: Path | None = None
     step_index: int | None = None
-    target_part_limit_override: int | None = None
     seed_context_recorded: bool = False
     attempt_index: int = 0
     attempt_tool_names: list[str] = field(default_factory=list)
@@ -236,8 +235,25 @@ class RunnerToolTraceEntry(BaseModel):
 
 
 class ListClickableElementsToolArgs(BaseModel):
-    max: int | None = None
+    offset: int = 0
+    limit: int | None = None
     source: Literal["vision", "tree", "all"] = "all"
+
+    @field_validator("offset")
+    @classmethod
+    def validate_offset(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("offset must be non-negative")
+        return value
+
+    @field_validator("limit")
+    @classmethod
+    def validate_limit(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("limit must be positive")
+        return value
 
     @field_validator("source", mode="before")
     @classmethod

@@ -9,7 +9,7 @@ from munk.planning.models import RequirementPlan
 from munk.planning.plan_mutation_service import PlanMutationService
 from munk.planning.service import PLAN_VERSION, default_plan_id
 from munk.planning.storage import PlanStore
-from munk.testing import AiGuidance, CaseBudget, CaseStartState, TestCase
+from munk.testing import AiGuidance, CaseBudget, CaseStartState, CommandSetupStep, HttpSetupStep, SetupStep, TestCase
 
 PLAN_IMPORT_SOURCE = "plan_import"
 
@@ -78,6 +78,7 @@ class PlanImportService:
                 expected=self._coerce_text_list(raw_case.get("expected"), field_name=f"cases[{index - 1}].expected"),
                 procedure=self._coerce_text_list(raw_case.get("procedure"), field_name=f"cases[{index - 1}].procedure"),
                 post_action=self._coerce_text_list(raw_case.get("post_action"), field_name=f"cases[{index - 1}].post_action"),
+                setup=self._coerce_setup(raw_case.get("setup"), field_name=f"cases[{index - 1}].setup"),
                 is_core_case=bool(raw_case.get("is_core_case", False)),
                 runner_goal=self._require_case_text(raw_case.get("runner_goal"), field_name=f"cases[{index - 1}].runner_goal"),
                 budget=self._coerce_budget(raw_case.get("budget"), field_name=f"cases[{index - 1}].budget"),
@@ -130,6 +131,31 @@ class PlanImportService:
                 raise ValueError(f"{field_name} must not contain empty items")
             normalized.append(cleaned)
         return normalized
+
+    @classmethod
+    def _coerce_setup(cls, value: Any, *, field_name: str) -> list[SetupStep]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError(f"{field_name} must be a list")
+        normalized: list[SetupStep] = []
+        for index, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise ValueError(f"{field_name}[{index}] must be an object")
+            try:
+                normalized.append(cls._parse_setup_step(item))
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(f"{field_name}[{index}] is invalid: {exc}") from exc
+        return normalized
+
+    @staticmethod
+    def _parse_setup_step(raw_step: dict[str, Any]) -> SetupStep:
+        kind = raw_step.get("kind")
+        if kind == "http":
+            return HttpSetupStep.model_validate(raw_step)
+        if kind == "command":
+            return CommandSetupStep.model_validate(raw_step)
+        raise ValueError("setup step kind must be 'http' or 'command'")
 
     @classmethod
     def _coerce_budget(cls, value: Any, *, field_name: str) -> CaseBudget | None:

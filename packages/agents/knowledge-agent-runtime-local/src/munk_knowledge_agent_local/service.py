@@ -18,6 +18,7 @@ from .tool_models import KnowledgeToolDeps
 class KnowledgeAgentLike(Protocol):
     last_tool_calls: list[str]
     last_prompt: str
+    last_prompt_diagnostics: dict[str, object]
 
     def generate_candidates(self, request: KnowledgeAgentRequest, *, deps: KnowledgeToolDeps) -> KnowledgeAgentResult: ...
 
@@ -81,6 +82,8 @@ class KnowledgeAgentRuntimeService:
         tool_calls = list(self._agent.last_tool_calls)
         _write_json(context.managed_paths.tool_calls_path, {"tool_calls": tool_calls})
         context.managed_paths.prompt_path.write_text(self._agent.last_prompt, encoding="utf-8")
+        prompt_diagnostics = getattr(self._agent, "last_prompt_diagnostics", {})
+        _write_json(context.managed_paths.root_dir / "prompt_diagnostics.json", prompt_diagnostics)
         emitter.emit_progress(
             event_type="knowledge_prompt_ready",
             message="knowledge prompt ready",
@@ -89,6 +92,7 @@ class KnowledgeAgentRuntimeService:
             data={
                 "prompt_path": str(context.managed_paths.prompt_path),
                 "tool_call_count": len(tool_calls),
+                "prompt_chars": prompt_diagnostics.get("prompt_chars") if isinstance(prompt_diagnostics, dict) else None,
             },
         )
         for tool_index, tool_name in enumerate(tool_calls):

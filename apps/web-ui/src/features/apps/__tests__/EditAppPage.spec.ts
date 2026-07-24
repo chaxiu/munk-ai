@@ -78,6 +78,16 @@ vi.mock('@/features/apps/queries/useAppMutations', () => ({
   }),
 }))
 
+vi.mock('@/features/cloud/queries/useCloudBoundAppMarker', () => ({
+  useCloudBoundAppMarker: () => ({
+    boundAppId: computed(() => 'demo-app'),
+    isBound: computed(() => true),
+    isDirty: computed(() => false),
+    role: computed(() => 'admin'),
+    isBoundApp: (appId: string | null | undefined) => appId === 'demo-app',
+  }),
+}))
+
 describe('EditAppPage', () => {
   beforeEach(() => {
     setLocale('en-US')

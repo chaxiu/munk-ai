@@ -1165,6 +1165,11 @@
             "title": "Failed Children",
             "type": "integer"
           },
+          "interrupted_children": {
+            "default": 0,
+            "title": "Interrupted Children",
+            "type": "integer"
+          },
           "queued_children": {
             "default": 0,
             "title": "Queued Children",
@@ -1532,6 +1537,27 @@
           "runner_goal": {
             "title": "Runner Goal",
             "type": "string"
+          },
+          "setup": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "command": "#/components/schemas/CommandSetupStep",
+                  "http": "#/components/schemas/HttpSetupStep"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HttpSetupStep"
+                },
+                {
+                  "$ref": "#/components/schemas/CommandSetupStep"
+                }
+              ]
+            },
+            "title": "Setup",
+            "type": "array"
           },
           "start_mode": {
             "title": "Start Mode",
@@ -2272,6 +2298,827 @@
         "title": "ChangeVerificationReviewContractLoadedPayload",
         "type": "object"
       },
+      "CloudAppSummaryData": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Name"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "app_id",
+          "platform"
+        ],
+        "title": "CloudAppSummaryData",
+        "type": "object"
+      },
+      "CloudAppsData": {
+        "properties": {
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/CloudAppSummaryData"
+            },
+            "title": "Apps",
+            "type": "array"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id"
+        ],
+        "title": "CloudAppsData",
+        "type": "object"
+      },
+      "CloudLinkActiveRequest": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app_id"
+        ],
+        "title": "CloudLinkActiveRequest",
+        "type": "object"
+      },
+      "CloudLinkData": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "bound_at": {
+            "format": "date-time",
+            "title": "Bound At",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Name"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "bound_at"
+        ],
+        "title": "CloudLinkData",
+        "type": "object"
+      },
+      "CloudLinkItemData": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "bound_at": {
+            "format": "date-time",
+            "title": "Bound At",
+            "type": "string"
+          },
+          "dirty": {
+            "default": false,
+            "title": "Dirty",
+            "type": "boolean"
+          },
+          "last_action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pull",
+                  "push",
+                  "force_push"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Action"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Name"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "bound_at"
+        ],
+        "title": "CloudLinkItemData",
+        "type": "object"
+      },
+      "CloudLinkUpsertRequest": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Name"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id"
+        ],
+        "title": "CloudLinkUpsertRequest",
+        "type": "object"
+      },
+      "CloudLinksData": {
+        "properties": {
+          "active_app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active App Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CloudLinkItemData"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "CloudLinksData",
+        "type": "object"
+      },
+      "CloudLoginStartData": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "state",
+          "redirect_uri"
+        ],
+        "title": "CloudLoginStartData",
+        "type": "object"
+      },
+      "CloudSessionSummaryData": {
+        "properties": {
+          "authenticated": {
+            "default": false,
+            "title": "Authenticated",
+            "type": "boolean"
+          },
+          "can_refresh": {
+            "default": false,
+            "title": "Can Refresh",
+            "type": "boolean"
+          },
+          "cloud_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Base Url"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CloudUserSummaryData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CloudSessionSummaryData",
+        "type": "object"
+      },
+      "CloudSyncPublishRequest": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Name"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id"
+        ],
+        "title": "CloudSyncPublishRequest",
+        "type": "object"
+      },
+      "CloudSyncPublishResultData": {
+        "properties": {
+          "action": {
+            "default": "push",
+            "enum": [
+              "push",
+              "force_push"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "forced": {
+            "default": false,
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "shell_created": {
+            "default": false,
+            "title": "Shell Created",
+            "type": "boolean"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "revision"
+        ],
+        "title": "CloudSyncPublishResultData",
+        "type": "object"
+      },
+      "CloudSyncPullRequest": {
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "CloudSyncPullRequest",
+        "type": "object"
+      },
+      "CloudSyncPullResultData": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "dirty": {
+            "default": false,
+            "title": "Dirty",
+            "type": "boolean"
+          },
+          "forced": {
+            "default": false,
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "plans_deleted": {
+            "default": 0,
+            "title": "Plans Deleted",
+            "type": "integer"
+          },
+          "plans_written": {
+            "default": 0,
+            "title": "Plans Written",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "revision"
+        ],
+        "title": "CloudSyncPullResultData",
+        "type": "object"
+      },
+      "CloudSyncPushRequest": {
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "CloudSyncPushRequest",
+        "type": "object"
+      },
+      "CloudSyncPushResultData": {
+        "properties": {
+          "action": {
+            "default": "push",
+            "enum": [
+              "push",
+              "force_push"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "forced": {
+            "default": false,
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "revision"
+        ],
+        "title": "CloudSyncPushResultData",
+        "type": "object"
+      },
+      "CloudSyncStatusData": {
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "bound": {
+            "default": false,
+            "title": "Bound",
+            "type": "boolean"
+          },
+          "can_force_push": {
+            "default": false,
+            "title": "Can Force Push",
+            "type": "boolean"
+          },
+          "can_pull": {
+            "default": true,
+            "title": "Can Pull",
+            "type": "boolean"
+          },
+          "can_push": {
+            "default": false,
+            "title": "Can Push",
+            "type": "boolean"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "dirty": {
+            "default": false,
+            "title": "Dirty",
+            "type": "boolean"
+          },
+          "last_action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pull",
+                  "push",
+                  "force_push"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Action"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "local_content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Content Hash"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "app_id",
+          "role"
+        ],
+        "title": "CloudSyncStatusData",
+        "type": "object"
+      },
+      "CloudUserSummaryData": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "CloudUserSummaryData",
+        "type": "object"
+      },
+      "CloudWorkspaceSummaryData": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "role"
+        ],
+        "title": "CloudWorkspaceSummaryData",
+        "type": "object"
+      },
+      "CloudWorkspacesData": {
+        "properties": {
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/CloudWorkspaceSummaryData"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "title": "CloudWorkspacesData",
+        "type": "object"
+      },
+      "CommandSetupStep": {
+        "properties": {
+          "args": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Args",
+            "type": "array"
+          },
+          "exec": {
+            "title": "Exec",
+            "type": "string"
+          },
+          "expected_exit_code": {
+            "default": 0,
+            "title": "Expected Exit Code",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "command",
+            "default": "command",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exec"
+        ],
+        "title": "CommandSetupStep",
+        "type": "object"
+      },
       "ContextPrepareDeviceReadyEventPayload": {
         "additionalProperties": true,
         "properties": {
@@ -2344,6 +3191,102 @@
           "agent_role"
         ],
         "title": "ContextPrepareDeviceReadyEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareFailedEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "failed_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Phase"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "step_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Index"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareFailedEventPayload",
         "type": "object"
       },
       "ContextPrepareParamsResolvedEventPayload": {
@@ -2591,6 +3534,740 @@
           "agent_role"
         ],
         "title": "ContextPreparePerceptionReadyEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareSetupReadyEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "step_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Count"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareSetupReadyEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareSetupStartedEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "step_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Count"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareSetupStartedEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareSetupStepEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "args": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Args"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "exec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exec"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "expected_exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Exit Code"
+          },
+          "expected_status": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Status"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "request_body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Body"
+          },
+          "request_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Url"
+          },
+          "response_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Body"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          },
+          "stderr_tail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stderr Tail"
+          },
+          "stdout_tail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stdout Tail"
+          },
+          "step_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Index"
+          },
+          "step_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Kind"
+          },
+          "step_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Total"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareSetupStepEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareStartStateReadyEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "step_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Count"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareStartStateReadyEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareStartStateStartedEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "step_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Count"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareStartStateStartedEventPayload",
+        "type": "object"
+      },
+      "ContextPrepareStartStateStepEventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_role": {
+            "title": "Agent Role",
+            "type": "string"
+          },
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "entry_identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Identity"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "lifecycle_state": {
+            "title": "Lifecycle State",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
+          },
+          "runner_event_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runner Event Type"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "start_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Mode"
+          },
+          "step_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Index"
+          },
+          "step_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Kind"
+          },
+          "step_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Total"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "was_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Was Locked"
+          }
+        },
+        "required": [
+          "lifecycle_state",
+          "agent_role"
+        ],
+        "title": "ContextPrepareStartStateStepEventPayload",
         "type": "object"
       },
       "CreateRecordingRequest": {
@@ -2911,6 +4588,78 @@
           "availability"
         ],
         "title": "DeviceDescriptorData",
+        "type": "object"
+      },
+      "DeviceInstallData": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "artifact_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Path"
+          },
+          "device_ref": {
+            "title": "Device Ref",
+            "type": "string"
+          },
+          "entry_identity": {
+            "title": "Entry Identity",
+            "type": "string"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "action",
+          "app_id",
+          "platform",
+          "device_ref",
+          "entry_identity"
+        ],
+        "title": "DeviceInstallData",
+        "type": "object"
+      },
+      "DeviceInstallRequest": {
+        "properties": {
+          "app_target": {
+            "$ref": "#/components/schemas/AppTarget"
+          },
+          "artifact_path": {
+            "format": "path",
+            "title": "Artifact Path",
+            "type": "string"
+          },
+          "device_ref": {
+            "title": "Device Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_ref",
+          "artifact_path",
+          "app_target"
+        ],
+        "title": "DeviceInstallRequest",
         "type": "object"
       },
       "DeviceListData": {
@@ -4062,6 +5811,96 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HttpBaseConfigEditor": {
+        "properties": {
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "HttpBaseConfigEditor",
+        "type": "object"
+      },
+      "HttpSetupStep": {
+        "properties": {
+          "base": {
+            "title": "Base",
+            "type": "string"
+          },
+          "body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "expected_status": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Expected Status",
+            "type": "array"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "kind": {
+            "const": "http",
+            "default": "http",
+            "title": "Kind",
+            "type": "string"
+          },
+          "method": {
+            "default": "GET",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "default": "/",
+            "title": "Path",
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Query",
+            "type": "object"
+          }
+        },
+        "required": [
+          "base"
+        ],
+        "title": "HttpSetupStep",
+        "type": "object"
+      },
       "IOSAppIdentity": {
         "properties": {
           "bundle_id": {
@@ -4103,6 +5942,11 @@
               }
             ],
             "title": "Sudo Password"
+          },
+          "sudo_password_configured": {
+            "default": false,
+            "title": "Sudo Password Configured",
+            "type": "boolean"
           }
         },
         "title": "IOSBridgeConfigEditor",
@@ -8475,6 +10319,27 @@
               },
               {
                 "$ref": "#/components/schemas/ContextPreparePerceptionReadyEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareSetupStartedEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareSetupStepEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareSetupReadyEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareStartStateStartedEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareStartStateStepEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareStartStateReadyEventPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ContextPrepareFailedEventPayload"
               },
               {
                 "$ref": "#/components/schemas/RunnerRuntimeEventPayload"
@@ -15250,6 +17115,11 @@
             "title": "Failed Children",
             "type": "integer"
           },
+          "interrupted_children": {
+            "default": 0,
+            "title": "Interrupted Children",
+            "type": "integer"
+          },
           "queued_children": {
             "title": "Queued Children",
             "type": "integer"
@@ -15382,7 +17252,8 @@
               "running",
               "succeeded",
               "failed",
-              "cancelled"
+              "cancelled",
+              "interrupted"
             ],
             "title": "Status",
             "type": "string"
@@ -16896,6 +18767,9 @@
           },
           "runtime": {
             "$ref": "#/components/schemas/RuntimeConfigEditor"
+          },
+          "test_env": {
+            "$ref": "#/components/schemas/TestEnvConfigEditor"
           }
         },
         "required": [
@@ -16936,6 +18810,9 @@
           },
           "runtime": {
             "$ref": "#/components/schemas/RuntimeConfigEditor"
+          },
+          "test_env": {
+            "$ref": "#/components/schemas/TestEnvConfigEditor"
           }
         },
         "title": "SettingsConfigUpsertRequest",
@@ -17214,6 +19091,376 @@
         "title": "SuccessResponse[CaseSearchData]",
         "type": "object"
       },
+      "SuccessResponse_CloudAppsData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudAppsData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudAppsData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudLinkData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudLinkData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudLinkData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudLinksData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudLinksData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudLinksData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudLoginStartData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudLoginStartData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudLoginStartData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudSessionSummaryData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudSessionSummaryData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudSessionSummaryData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudSyncPublishResultData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudSyncPublishResultData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudSyncPublishResultData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudSyncPullResultData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudSyncPullResultData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudSyncPullResultData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudSyncPushResultData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudSyncPushResultData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudSyncPushResultData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudSyncStatusData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudSyncStatusData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudSyncStatusData]",
+        "type": "object"
+      },
+      "SuccessResponse_CloudWorkspacesData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CloudWorkspacesData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[CloudWorkspacesData]",
+        "type": "object"
+      },
       "SuccessResponse_DashboardSummaryData_": {
         "properties": {
           "artifacts": {
@@ -17286,6 +19533,43 @@
           "data"
         ],
         "title": "SuccessResponse[DeleteAppData]",
+        "type": "object"
+      },
+      "SuccessResponse_DeviceInstallData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeviceInstallData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[DeviceInstallData]",
         "type": "object"
       },
       "SuccessResponse_DeviceListData_": {
@@ -18768,6 +21052,27 @@
             "title": "Runner Goal",
             "type": "string"
           },
+          "setup": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "command": "#/components/schemas/CommandSetupStep",
+                  "http": "#/components/schemas/HttpSetupStep"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HttpSetupStep"
+                },
+                {
+                  "$ref": "#/components/schemas/CommandSetupStep"
+                }
+              ]
+            },
+            "title": "Setup",
+            "type": "array"
+          },
           "source_metadata": {
             "additionalProperties": {
               "type": "string"
@@ -18860,6 +21165,27 @@
             "title": "Runner Goal",
             "type": "string"
           },
+          "setup": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "command": "#/components/schemas/CommandSetupStep",
+                  "http": "#/components/schemas/HttpSetupStep"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HttpSetupStep"
+                },
+                {
+                  "$ref": "#/components/schemas/CommandSetupStep"
+                }
+              ]
+            },
+            "title": "Setup",
+            "type": "array"
+          },
           "source_metadata": {
             "additionalProperties": {
               "type": "string"
@@ -18882,6 +21208,26 @@
           "runner_goal"
         ],
         "title": "TestCasePayload",
+        "type": "object"
+      },
+      "TestEnvConfigEditor": {
+        "properties": {
+          "allowed_exec": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Exec",
+            "type": "array"
+          },
+          "bases": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/HttpBaseConfigEditor"
+            },
+            "title": "Bases",
+            "type": "object"
+          }
+        },
+        "title": "TestEnvConfigEditor",
         "type": "object"
       },
       "TextInjectStepPayload": {
@@ -20795,6 +23141,1133 @@
         "summary": "Update Card"
       }
     },
+    "/v1/cloud/apps": {
+      "get": {
+        "operationId": "list_cloud_apps_v1_cloud_apps_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudAppsData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "List Cloud Apps"
+      }
+    },
+    "/v1/cloud/auth/login": {
+      "post": {
+        "operationId": "start_cloud_login_v1_cloud_auth_login_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudLoginStartData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Start Cloud Login"
+      }
+    },
+    "/v1/cloud/auth/logout": {
+      "post": {
+        "operationId": "logout_cloud_session_v1_cloud_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSessionSummaryData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Logout Cloud Session"
+      }
+    },
+    "/v1/cloud/auth/session": {
+      "get": {
+        "operationId": "get_cloud_session_v1_cloud_auth_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSessionSummaryData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Cloud Session"
+      }
+    },
+    "/v1/cloud/auth/workspaces": {
+      "get": {
+        "operationId": "list_cloud_workspaces_v1_cloud_auth_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudWorkspacesData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "List Cloud Workspaces"
+      }
+    },
+    "/v1/cloud/links": {
+      "get": {
+        "operationId": "get_cloud_links_v1_cloud_links_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudLinksData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Cloud Links"
+      },
+      "put": {
+        "operationId": "put_cloud_link_v1_cloud_links_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudLinkUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudLinkData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Put Cloud Link"
+      }
+    },
+    "/v1/cloud/links/active": {
+      "put": {
+        "operationId": "put_cloud_link_active_v1_cloud_links_active_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudLinkActiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudLinksData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Put Cloud Link Active"
+      }
+    },
+    "/v1/cloud/links/{app_id}": {
+      "delete": {
+        "operationId": "delete_cloud_link_v1_cloud_links__app_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudLinksData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Delete Cloud Link"
+      }
+    },
+    "/v1/cloud/sync/publish": {
+      "post": {
+        "operationId": "post_cloud_sync_publish_v1_cloud_sync_publish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudSyncPublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSyncPublishResultData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Post Cloud Sync Publish"
+      }
+    },
+    "/v1/cloud/sync/pull": {
+      "post": {
+        "operationId": "post_cloud_sync_pull_v1_cloud_sync_pull_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CloudSyncPullRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSyncPullResultData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Post Cloud Sync Pull"
+      }
+    },
+    "/v1/cloud/sync/push": {
+      "post": {
+        "operationId": "post_cloud_sync_push_v1_cloud_sync_push_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CloudSyncPushRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSyncPushResultData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Post Cloud Sync Push"
+      }
+    },
+    "/v1/cloud/sync/status": {
+      "get": {
+        "operationId": "get_cloud_sync_status_v1_cloud_sync_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "app_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CloudSyncStatusData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Cloud Sync Status"
+      }
+    },
     "/v1/dashboard/summary": {
       "get": {
         "operationId": "dashboard_summary_v1_dashboard_summary_get",
@@ -20873,6 +24346,16 @@
               }
             },
             "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -20959,6 +24442,16 @@
             },
             "description": "Bad Request"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -21025,6 +24518,16 @@
             },
             "description": "Bad Request"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -21047,6 +24550,74 @@
           }
         },
         "summary": "List Devices"
+      }
+    },
+    "/v1/devices/install": {
+      "post": {
+        "operationId": "install_app_v1_devices_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_DeviceInstallData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Install App"
       }
     },
     "/v1/plan": {
@@ -23584,7 +27155,8 @@
                     "running",
                     "succeeded",
                     "failed",
-                    "cancelled"
+                    "cancelled",
+                    "interrupted"
                   ],
                   "type": "string"
                 },
@@ -23613,7 +27185,8 @@
                     "knowledge_post_action",
                     "record_case",
                     "recording_analysis",
-                    "interactive_session"
+                    "interactive_session",
+                    "app_install"
                   ],
                   "type": "string"
                 },

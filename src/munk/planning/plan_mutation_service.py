@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from munk.planning.models import RequirementPlan
 from munk.planning.storage import PlanStore
 from munk.running import validate_case_for_runner
-from munk.testing import AiGuidance, TestCase
+from munk.testing import AiGuidance, CommandSetupStep, HttpSetupStep, SetupStep, TestCase
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,21 @@ class PlanMutationService:
         self._validate_text_items(case.expected, field_name="expected")
         self._validate_text_items(case.procedure, field_name="procedure")
         self._validate_text_items(case.post_action, field_name="post_action")
+        self._validate_setup_items(case.setup)
         self._validate_guidance_items(case.ai_guidance)
+
+    @staticmethod
+    def _validate_setup_items(items: list[SetupStep]) -> None:
+        for index, step in enumerate(items):
+            if isinstance(step, HttpSetupStep):
+                if not step.base.strip():
+                    raise ValueError(f"setup[{index}].base must not be empty")
+                continue
+            if isinstance(step, CommandSetupStep):
+                if not step.exec.strip():
+                    raise ValueError(f"setup[{index}].exec must not be empty")
+                continue
+            raise ValueError(f"setup[{index}] has unsupported kind")
 
     @staticmethod
     def _validate_text_items(items: list[str], *, field_name: str) -> None:

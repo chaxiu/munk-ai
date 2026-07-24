@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from munk.app import AppTarget
 from munk.app_assets.models import AppProfile
-from munk.testing import AiGuidance
+from munk.testing import AiGuidance, SetupStep
 
 
 class AppListItemData(BaseModel):
@@ -107,6 +107,7 @@ class CaseDetailData(BaseModel):
     expected: list[str] = Field(default_factory=list)
     procedure: list[str] = Field(default_factory=list)
     post_action: list[str] = Field(default_factory=list)
+    setup: list[SetupStep] = Field(default_factory=list)
     is_core_case: bool
     runner_goal: str
     start_mode: str

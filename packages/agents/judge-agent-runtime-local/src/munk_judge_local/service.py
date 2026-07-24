@@ -135,6 +135,8 @@ class JudgeRuntimeService:
             )
             self._write_json(context.managed_paths.tool_calls_path, {"tool_calls": tool_calls})
             context.managed_paths.judge_prompt_path.write_text(self._judge_agent.last_prompt, encoding="utf-8")
+            prompt_diagnostics = getattr(self._judge_agent, "last_prompt_diagnostics", {})
+            self._write_json(context.managed_paths.root_dir / "prompt_diagnostics.json", prompt_diagnostics)
             emitter.emit_progress(
                 event_type="judge_prompt_ready",
                 message="judge prompt ready",
@@ -142,6 +144,9 @@ class JudgeRuntimeService:
                 summary="judge prompt ready",
                 data={
                     "prompt_path": str(context.managed_paths.judge_prompt_path),
+                    "prompt_chars": prompt_diagnostics.get("prompt_chars")
+                    if isinstance(prompt_diagnostics, dict)
+                    else None,
                 },
             )
             emitter.emit_progress(

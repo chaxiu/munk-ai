@@ -196,6 +196,7 @@ function currentChildIdentity() {
         <div class="min-w-0 grid gap-2">
           <div class="flex flex-wrap items-center gap-2">
             <AppBadge>{{ item.position_label || item.position_index }}</AppBadge>
+            <AppBadge v-if="item.run_type">{{ t(`runs.types.${item.run_type}`) }}</AppBadge>
             <AppBadge :tone="statusTone(item.status)">{{ t(`runs.status.${item.status}`) }}</AppBadge>
             <AppBadge v-if="item.verification_verdict" :tone="verdictTone(item.verification_verdict)">
               {{ t(`runs.verdict.${item.verification_verdict}`) }}

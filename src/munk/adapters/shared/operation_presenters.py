@@ -17,13 +17,15 @@ def include_in_run_center(record: OperationRecord) -> bool:
 
 
 def build_operation_summary(record: OperationRecord) -> OperationSummaryData:
+    # List paths load summary columns only; prefer projected_* and avoid blob-dependent
+    # inference when projections are already populated.
     return OperationSummaryData(
         operation_id=record.operation_id,
         kind=record.kind,
         run_type=infer_run_type(record),
         title=infer_title(record),
         platform=infer_platform(record),
-        phase=infer_phase(record),
+        phase=infer_phase(record) if record.result_json or record.progress_json else None,
         target_label=infer_target_label(record),
         source_recording_id=source_recording_id(record),
         status=record.status,

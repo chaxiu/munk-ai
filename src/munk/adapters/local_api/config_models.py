@@ -94,6 +94,21 @@ class IOSBridgeConfigEditor(BaseModel):
 
     sudo_enabled: bool = False
     sudo_password: str | None = None
+    sudo_password_configured: bool = False
+
+
+class HttpBaseConfigEditor(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    url: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
+class TestEnvConfigEditor(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    bases: dict[str, HttpBaseConfigEditor] = Field(default_factory=dict)
+    allowed_exec: list[str] = Field(default_factory=list)
 
 
 class SettingsConfigUpsertRequest(BaseModel):
@@ -105,5 +120,6 @@ class SettingsConfigUpsertRequest(BaseModel):
     agents: SettingsAgentsEditor = Field(default_factory=SettingsAgentsEditor)
     proxy: ProxyConfigEditor = Field(default_factory=ProxyConfigEditor)
     ios_bridge: IOSBridgeConfigEditor = Field(default_factory=IOSBridgeConfigEditor)
+    test_env: TestEnvConfigEditor = Field(default_factory=TestEnvConfigEditor)
     runtime: RuntimeConfigEditor = Field(default_factory=RuntimeConfigEditor)
     orchestration: OrchestrationConfigEditor = Field(default_factory=OrchestrationConfigEditor)

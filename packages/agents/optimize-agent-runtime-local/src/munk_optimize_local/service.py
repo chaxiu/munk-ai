@@ -20,6 +20,7 @@ from .tools import OptimizeToolDeps
 class OptimizeAgentLike(Protocol):
     last_tool_calls: list[str]
     last_prompt: str
+    last_prompt_diagnostics: dict[str, object]
 
     def optimize(self, request: OptimizeRequest, *, deps: OptimizeToolDeps) -> OptimizeAgentOutput: ...
 
@@ -98,6 +99,7 @@ class OptimizeRuntimeService:
             context=context,
             prompt=self._agent.last_prompt,
             tool_calls=self._agent.last_tool_calls,
+            prompt_diagnostics=getattr(self._agent, "last_prompt_diagnostics", {}),
         )
         for tool_index, tool_name in enumerate(self._agent.last_tool_calls):
             emitter.emit_progress(
@@ -187,12 +189,18 @@ def _write_runtime_artifacts(
     context: OptimizeRuntimeContext | None,
     prompt: str,
     tool_calls: list[str],
+    prompt_diagnostics: dict[str, object] | None = None,
 ) -> None:
     if context is None:
         return
     context.managed_paths.prompt_path.write_text(prompt or "", encoding="utf-8")
     context.managed_paths.tool_calls_path.write_text(
         json.dumps({"tool_calls": tool_calls}, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    diagnostics_path = context.managed_paths.root_dir / "prompt_diagnostics.json"
+    diagnostics_path.write_text(
+        json.dumps(prompt_diagnostics or {}, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
 

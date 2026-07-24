@@ -12,7 +12,7 @@ dependencies = [
   "munk-shared-api>=0.1.0",
   "numpy>=1.24.0",
   "opencv-python-headless>=4.9.0.80",
-  "playwright>=1.55.0",
+  "playwright==1.59.0",
 ]
 
 [project.optional-dependencies]

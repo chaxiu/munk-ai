@@ -1,5 +1,7 @@
 import type { CaseDetailData, CaseUpsertRequest, TestCasePayload } from '@/shared/api/tests'
 
+import { buildSetupStepsPayload, createSetupStepForm, type SetupStepForm } from './setupStepForm'
+
 export type CaseEditorFormModel = {
   title: string
   intent: string
@@ -8,6 +10,7 @@ export type CaseEditorFormModel = {
   expectedText: string
   procedureText: string
   postActionText: string
+  setupSteps: SetupStepForm[]
   objectiveClarificationsText: string
   preflightChecksText: string
   interactionHintsText: string
@@ -31,6 +34,7 @@ export function createCaseEditorForm(detail: CaseDetailData): CaseEditorFormMode
     expectedText: formatList(detail.expected ?? []),
     procedureText: formatList(detail.procedure ?? []),
     postActionText: formatList(detail.post_action ?? []),
+    setupSteps: (detail.setup ?? []).map(createSetupStepForm),
     objectiveClarificationsText: formatList(aiGuidance?.objective_clarifications ?? []),
     preflightChecksText: formatList(aiGuidance?.preflight_checks ?? []),
     interactionHintsText: formatList(aiGuidance?.interaction_hints ?? []),
@@ -56,6 +60,7 @@ export function createCaseEditorFormFromPayload(payload: TestCasePayload): CaseE
     expectedText: formatList(payload.expected ?? []),
     procedureText: formatList(payload.procedure ?? []),
     postActionText: formatList(payload.post_action ?? []),
+    setupSteps: (payload.setup ?? []).map(createSetupStepForm),
     objectiveClarificationsText: formatList(aiGuidance?.objective_clarifications ?? []),
     preflightChecksText: formatList(aiGuidance?.preflight_checks ?? []),
     interactionHintsText: formatList(aiGuidance?.interaction_hints ?? []),
@@ -81,6 +86,7 @@ export function buildCaseUpsertRequest(form: CaseEditorFormModel, caseId: string
       expected: parseListText(form.expectedText),
       procedure: parseListText(form.procedureText),
       post_action: parseListText(form.postActionText),
+      setup: buildSetupStepsPayload(form.setupSteps),
       is_core_case: form.isCoreCase,
       budget: {
         max_steps: parseOptionalInteger(form.maxSteps, 'max_steps'),
@@ -111,6 +117,7 @@ export function createCaseRequest(input: {
       expected: [],
       procedure: [],
       post_action: [],
+      setup: [],
       is_core_case: false,
       budget: {
         max_steps: null,

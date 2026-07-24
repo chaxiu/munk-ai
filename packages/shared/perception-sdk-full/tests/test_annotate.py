@@ -1,6 +1,11 @@
 import numpy as np
 from munk.perception.types import ClickableElement
-from munk_perception_full.annotate import _build_label_style, _measure_label, annotate_image
+from munk_perception_full.annotate import (
+    _build_label_style,
+    _choose_text_label_position,
+    _measure_label,
+    annotate_image,
+)
 
 
 def test_build_label_style_scales_with_canvas_size() -> None:
@@ -37,3 +42,25 @@ def test_annotate_image_draws_scaled_label_without_changing_shape() -> None:
 
     assert annotated.shape == image.shape
     assert np.count_nonzero(annotated) > 0
+
+
+def test_choose_text_label_position_prefers_inside_top_left_for_large_box() -> None:
+    image_shape = (900, 1440)
+    box = (100, 120, 300, 280)
+    style = _build_label_style(image_shape, box)
+    label_w, label_h, _ = _measure_label("12", style)
+
+    position = _choose_text_label_position(box, [box], label_w, label_h, image_shape, style)
+
+    assert position == (box[0] + style.margin, box[1] + style.margin)
+
+
+def test_choose_text_label_position_falls_back_outside_for_small_box() -> None:
+    image_shape = (900, 1440)
+    box = (100, 120, 130, 150)
+    style = _build_label_style(image_shape, box)
+    label_w, label_h, _ = _measure_label("12", style)
+
+    position = _choose_text_label_position(box, [box], label_w, label_h, image_shape, style)
+
+    assert position != (box[0] + style.margin, box[1] + style.margin)

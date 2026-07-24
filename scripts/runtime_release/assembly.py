@@ -5,11 +5,39 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from runtime_release.archive import (
+    _finalize_notarization_only,
+    _finalize_release_artifacts,
+    resolve_runtime_python_for_recovery,
+)
+from runtime_release.python_runtime import (
+    RuntimeInspectionPayload,
+    format_subprocess_failure,
+    run_subprocess,
+)
+from runtime_release.python_runtime import (
+    build_installed_distribution_descriptors as _build_installed_distribution_descriptors,
+)
+from runtime_release.python_runtime import (
+    collect_wheel_files as _collect_wheel_files,
+)
+from runtime_release.python_runtime import (
+    has_all_wheels as _has_all_wheels,
+)
+from runtime_release.python_runtime import (
+    inspect_runtime_state as _inspect_runtime_state,
+)
+from runtime_release.signing import (
+    DEFAULT_NOTARIZE_POLL_INTERVAL_SECONDS,
+    DEFAULT_NOTARIZE_UPLOAD_ATTEMPTS,
+    DEFAULT_NOTARIZE_WAIT_SECONDS,
+)
+
 from munk.runtime_distribution import (
-    AndroidPlatformToolsPin,
     DEFAULT_DOWNLOAD_DIR,
     PROJECT_ROOT,
     RUNTIME_VERSION_CONFIG,
+    AndroidPlatformToolsPin,
     DependencyProject,
     RuntimeBuildTarget,
     RuntimeVersionDefaults,
@@ -43,17 +71,6 @@ from munk.runtime_distribution import (
     write_launcher,
     write_runtime_manifest,
     write_state,
-)
-
-from runtime_release.archive import _finalize_release_artifacts
-from runtime_release.python_runtime import (
-    RuntimeInspectionPayload,
-    build_installed_distribution_descriptors as _build_installed_distribution_descriptors,
-    collect_wheel_files as _collect_wheel_files,
-    format_subprocess_failure,
-    has_all_wheels as _has_all_wheels,
-    inspect_runtime_state as _inspect_runtime_state,
-    run_subprocess,
 )
 
 ROOT_DIR = PROJECT_ROOT
@@ -109,12 +126,12 @@ class ReleaseRuntimeState:
 
 
 def _validate_release_args(args: argparse.Namespace, *, platform_name: str) -> None:
-    if args.all:
-        if args.variant != "full":
-            raise RuntimeError("--all cannot be combined with a custom --variant; keep --variant as 'full'")
-        if args.build_config.resolve() != DEFAULT_BUILD_CONFIG.resolve():
-            raise RuntimeError("--all cannot be combined with --build-config; use the default config set")
+    _validate_all_target_args(args)
+    _validate_notarization_recovery_args(args, platform_name=platform_name)
+    _validate_notarization_timing_args(args)
     if platform_name != "macos":
+        return
+    if _should_run_notarization_recovery(args):
         return
     if args.skip_notarize and args.skip_archive:
         return
@@ -122,6 +139,95 @@ def _validate_release_args(args: argparse.Namespace, *, platform_name: str) -> N
         raise RuntimeError("cannot notarize an unsigned runtime; remove --skip-sign or add --skip-notarize")
     if not args.skip_notarize and args.skip_archive:
         raise RuntimeError("cannot notarize without an archive; remove --skip-archive or add --skip-notarize")
+
+
+def _validate_all_target_args(args: argparse.Namespace) -> None:
+    if not args.all:
+        return
+    if args.variant != "full":
+        raise RuntimeError("--all cannot be combined with a custom --variant; keep --variant as 'full'")
+    if args.build_config.resolve() != DEFAULT_BUILD_CONFIG.resolve():
+        raise RuntimeError("--all cannot be combined with --build-config; use the default config set")
+
+
+def _validate_notarization_recovery_args(args: argparse.Namespace, *, platform_name: str) -> None:
+    notarize_only = bool(getattr(args, "notarize_only", False))
+    has_resume = _has_resume_submission(args)
+    if notarize_only and args.skip_notarize:
+        raise RuntimeError("cannot combine --notarize-only with --skip-notarize")
+    if has_resume and args.skip_notarize:
+        raise RuntimeError("cannot combine --resume-submission with --skip-notarize")
+    if platform_name != "macos" and (notarize_only or has_resume):
+        raise RuntimeError("--notarize-only/--resume-submission are only supported on macOS")
+
+
+def _validate_notarization_timing_args(args: argparse.Namespace) -> None:
+    if _float_arg(args, "notarize_wait_seconds", DEFAULT_NOTARIZE_WAIT_SECONDS) <= 0:
+        raise RuntimeError("--notarize-wait-seconds must be > 0")
+    if _float_arg(args, "notarize_poll_interval_seconds", DEFAULT_NOTARIZE_POLL_INTERVAL_SECONDS) <= 0:
+        raise RuntimeError("--notarize-poll-interval-seconds must be > 0")
+    if _int_arg(args, "notarize_upload_attempts", DEFAULT_NOTARIZE_UPLOAD_ATTEMPTS) < 1:
+        raise RuntimeError("--notarize-upload-attempts must be >= 1")
+
+
+def _has_resume_submission(args: argparse.Namespace) -> bool:
+    resume_submission = getattr(args, "resume_submission", None)
+    return isinstance(resume_submission, str) and bool(resume_submission.strip())
+
+
+def _int_arg(args: argparse.Namespace, name: str, default: int) -> int:
+    value = getattr(args, name, default)
+    if value is None:
+        return default
+    return int(value)
+
+
+def _float_arg(args: argparse.Namespace, name: str, default: float) -> float:
+    value = getattr(args, name, default)
+    if value is None:
+        return default
+    return float(value)
+
+
+def _should_run_notarization_recovery(args: argparse.Namespace) -> bool:
+    if bool(getattr(args, "notarize_only", False)):
+        return True
+    return _has_resume_submission(args)
+
+
+def _notarize_release_target(
+    *,
+    args: argparse.Namespace,
+    target: ReleaseBuildTarget,
+    host_target: RuntimeBuildTarget,
+) -> None:
+    runtime_defaults = load_runtime_version_defaults(RUNTIME_VERSION_CONFIG)
+    runtime_root = target.runtime_root.resolve()
+    if not runtime_root.exists():
+        raise RuntimeError(f"runtime root does not exist for notarization recovery: {runtime_root}")
+    runtime_python = resolve_runtime_python_for_recovery(runtime_root)
+    adb_path = runtime_root / _release_adb_relpath(host_target.platform)
+    manifest_path = runtime_root / "manifest.lock"
+    release_metadata = _finalize_notarization_only(
+        runtime_root=runtime_root,
+        runtime_python=runtime_python,
+        adb_path=adb_path,
+        manifest_path=manifest_path,
+        runtime_defaults=runtime_defaults,
+        args=args,
+        variant=target.variant,
+        target_platform=host_target.platform,
+        target_arch=host_target.arch,
+        archive_name_override=target.archive_name,
+    )
+    print(f"runtime root: {runtime_root}")
+    if release_metadata["archive_path"]:
+        print(f"archive: {release_metadata['archive_path']}")
+    print(f"release metadata: {release_metadata['metadata_path']}")
+    if release_metadata.get("notarization_status"):
+        print(f"notarization: {release_metadata['notarization_status']}")
+    if release_metadata.get("notarization_submission_id"):
+        print(f"submission_id: {release_metadata['notarization_submission_id']}")
 
 
 def _resolve_release_build_targets(args: argparse.Namespace) -> list[ReleaseBuildTarget]:
@@ -135,7 +241,9 @@ def _resolve_release_build_targets(args: argparse.Namespace) -> list[ReleaseBuil
             )
         ]
     base_runtime_root = args.runtime_root.resolve()
-    archive_name = args.archive_name.strip() if isinstance(args.archive_name, str) and args.archive_name.strip() else None
+    archive_name = (
+        args.archive_name.strip() if isinstance(args.archive_name, str) and args.archive_name.strip() else None
+    )
     return [
         ReleaseBuildTarget(
             variant="full",
@@ -226,8 +334,10 @@ def _assemble_release_target(
         print(f"archive: {release_metadata['archive_path']}")
     print(f"release metadata: {release_metadata['metadata_path']}")
     print(f"signed targets: {release_metadata['signed_target_count']}")
-    if release_metadata["notarization_status"]:
+    if release_metadata.get("notarization_status"):
         print(f"notarization: {release_metadata['notarization_status']}")
+    if release_metadata.get("notarization_submission_id"):
+        print(f"submission_id: {release_metadata['notarization_submission_id']}")
 
 
 def _build_release_assembly_context(
@@ -314,14 +424,11 @@ def _prepare_release_runtime_state(*, context: ReleaseAssemblyContext) -> Releas
     runtime_python = runtime_python_state.runtime_python
     needs_runtime_refresh = runtime_python_state.needs_runtime_refresh
     wheel_dir = context.args.wheel_dir.resolve()
-    needs_wheel_build = (
-        not context.args.skip_build
-        and (
-            context.args.force
-            or context.previous_state is None
-            or context.previous_state.get("wheel_build_fingerprint") != context.wheel_build_fingerprint
-            or not _has_all_wheels(wheel_dir, projects=context.selected_projects)
-        )
+    needs_wheel_build = not context.args.skip_build and (
+        context.args.force
+        or context.previous_state is None
+        or context.previous_state.get("wheel_build_fingerprint") != context.wheel_build_fingerprint
+        or not _has_all_wheels(wheel_dir, projects=context.selected_projects)
     )
     if needs_wheel_build:
         build_project_wheels(
@@ -364,11 +471,7 @@ def _sync_release_python_environment(
                 runtime_python=runtime_state.runtime_python,
                 cwd=ROOT_DIR,
             )
-    if (
-        runtime_state.needs_dependency_sync
-        or runtime_state.needs_wheel_build
-        or runtime_state.needs_runtime_refresh
-    ):
+    if runtime_state.needs_dependency_sync or runtime_state.needs_wheel_build or runtime_state.needs_runtime_refresh:
         install_wheel_files(
             uv_bin=uv_bin,
             runtime_python=runtime_state.runtime_python,
@@ -439,13 +542,9 @@ def _prepare_release_ios_bridge_assets(
 ) -> dict[str, str] | None:
     if not context.ios_bridge_enabled:
         return None
-    needs_source_prepare = (
-        context.args.force
-        or (
-            context.previous_state is not None
-            and context.previous_state.get("ios_bridge_asset_fingerprint")
-            != context.runtime_ios_bridge_asset_fingerprint
-        )
+    needs_source_prepare = context.args.force or (
+        context.previous_state is not None
+        and context.previous_state.get("ios_bridge_asset_fingerprint") != context.runtime_ios_bridge_asset_fingerprint
     )
     prepare_ios_bridge_source_assets(
         project_root=ROOT_DIR,
@@ -468,7 +567,10 @@ def _prepare_release_ios_bridge_assets(
             runtime_root=context.runtime_root,
             download_dir=context.args.download_dir.resolve(),
         )
-    return {"ios_bridge_relpath": "sidecars/ios-device-bridge", "node_relpath": _release_node_relpath(context.target_platform)}
+    return {
+        "ios_bridge_relpath": "sidecars/ios-device-bridge",
+        "node_relpath": _release_node_relpath(context.target_platform),
+    }
 
 
 def _release_launcher_relpath(platform_name: str) -> str:

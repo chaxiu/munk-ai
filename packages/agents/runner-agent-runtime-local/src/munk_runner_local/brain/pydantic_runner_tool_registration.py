@@ -55,30 +55,31 @@ def register_common_runner_tools(agent: Agent[RunnerStepDeps, RunnerActionOutput
     @agent.tool
     def list_clickable_elements(
         ctx: PydanticRunContext[RunnerStepDeps],
-        max: int | None = None,
+        offset: int = 0,
+        limit: int | None = None,
         source: Literal["vision", "tree", "all"] = "all",
     ) -> str:
-        """Read the numbered clickable elements again when the initial prompt context is insufficient."""
-        args = ListClickableElementsToolArgs(max=max, source=source)
-        part_limit = resolve_target_part_limit(ctx.deps, override=args.max, remember=bool(args.max is not None))
-        payload = build_clickable_elements_text(ctx.deps.screen, part_limit, source=args.source)
-        arguments: dict[str, object] = {"source": args.source}
-        if args.max is not None:
-            arguments["max"] = part_limit
+        """Read one page of numbered clickable elements with source/offset/limit; use offset=0 for the first page and advance with next_offset."""
+        args = ListClickableElementsToolArgs(offset=offset, limit=limit, source=source)
+        page_limit = resolve_target_part_limit(args.limit)
+        payload = build_clickable_elements_text(
+            ctx.deps.screen,
+            page_limit,
+            source=args.source,
+            offset=args.offset,
+        )
+        arguments: dict[str, object] = {
+            "source": args.source,
+            "offset": args.offset,
+            "limit": page_limit,
+        }
         return record_read_tool(ctx.deps, "list_clickable_elements", arguments, payload)
 
     @agent.tool
-    def inspect_element(ctx: PydanticRunContext[RunnerStepDeps], target_id: int, max: int | None = None) -> str:
-        """Read details for one numbered clickable element."""
-        part_limit, detail = build_target_detail_payload(
-            ctx.deps,
-            target_id=target_id,
-            override=max,
-            remember=bool(max is not None),
-        )
+    def inspect_element(ctx: PydanticRunContext[RunnerStepDeps], target_id: int) -> str:
+        """Read details for one numbered clickable element by stable global target_id."""
+        detail = build_target_detail_payload(ctx.deps, target_id=target_id)
         arguments: dict[str, object] = {"target_id": target_id}
-        if max is not None:
-            arguments["max"] = part_limit
         return record_read_tool(ctx.deps, "inspect_element", arguments, detail)
 
     @agent.tool

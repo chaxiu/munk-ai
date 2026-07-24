@@ -100,7 +100,7 @@ function statusTone(status?: string): 'neutral' | 'success' | 'error' | 'warning
   if (status === 'failed' || status === 'cancelled') {
     return 'error'
   }
-  if (status === 'running' || status === 'queued') {
+  if (status === 'running' || status === 'queued' || status === 'interrupted') {
     return 'warning'
   }
   return 'neutral'

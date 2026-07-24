@@ -1,0 +1,305 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "munk"
+version = "0.31.0"
+description = "Local-first AI testing runtime for multi-platform validation workflows"
+requires-python = ">=3.10"
+keywords = [
+  "ai-testing",
+  "ui-automation",
+  "mcp",
+  "android",
+  "ios",
+  "web",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "typer>=0.12.3",
+  "pydantic>=2.7.0",
+  "pydantic-ai-slim[openai,google]>=1.86.1",
+  "posthog>=3.6.0",
+  "pyyaml>=6.0.1",
+  "httpx[socks]>=0.28.1",
+  "fastapi>=0.115.0",
+  "croniter>=2.0.0",
+  "numpy>=1.24.0",
+  "opencv-python-headless>=4.9.0.80",
+  "munk-device-api>=0.1.0",
+  "munk-device-android-runtime>=0.1.0",
+  "munk-device-ios-runtime>=0.1.0",
+  "munk-device-web-runtime>=0.1.0",
+  "munk-perception-api>=0.1.0",
+  "munk-agent-base>=0.1.0",
+  "munk-runner-agent-api>=0.1.0",
+  "munk-runner-agent-runtime-local>=0.1.0",
+  "munk-judge-agent-api>=0.1.0",
+  "munk-knowledge-agent-api>=0.1.0",
+  "munk-optimize-agent-api>=0.1.0",
+  "munk-plan-agent-api>=0.1.0",
+  "munk-review-agent-api>=0.1.0",
+  "munk-knowledge-api>=0.1.0",
+  "munk-knowledge-runtime-local>=0.1.0",
+  "munk-shared-api>=0.1.0",
+  "munk-shared-tools-api>=0.1.0",
+  "mcp[cli]>=1.0.0",
+  "uvicorn>=0.34.0",
+]
+[project.optional-dependencies]
+build = ["build>=1.2.2"]
+export = ["onnx<2.0.0", "onnxslim>=0.1.71", "ultralytics>=8.2.0"]
+lint = [
+  "pylint>=3.3.0",
+  "pyright>=1.1.389",
+  "ruff>=0.6.8",
+  "pre-commit>=3.8.0",
+]
+test = [
+  "munk-judge-agent-runtime-local>=0.1.0",
+  "munk-agent-base>=0.1.0",
+  "pytest>=8.0.0",
+  "munk-plan-agent-runtime-local>=0.1.0",
+  "munk-perception-full-sdk>=0.1.0",
+  "munk-review-agent-runtime-local>=0.1.0",
+  "munk-recording-agent-runtime-local>=0.1.0",
+  "munk-optimize-agent-runtime-local>=0.1.0",
+  "munk-knowledge-agent-runtime-local>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://www.munk.sh/"
+Documentation = "https://www.munk.sh/"
+Repository = "https://github.com/chaxiu/munk-ai"
+Issues = "https://github.com/chaxiu/munk-ai/issues"
+
+[project.scripts]
+munk = "munk.cli:app"
+
+[tool.uv.sources]
+munk-judge-agent-api = { path = "packages/agents/judge-agent-api", editable = true }
+munk-judge-agent-runtime-local = { path = "packages/agents/judge-agent-runtime-local", editable = true }
+munk-knowledge-agent-api = { path = "packages/agents/knowledge-agent-api", editable = true }
+munk-knowledge-agent-runtime-local = { path = "packages/agents/knowledge-agent-runtime-local", editable = true }
+munk-optimize-agent-api = { path = "packages/agents/optimize-agent-api", editable = true }
+munk-optimize-agent-runtime-local = { path = "packages/agents/optimize-agent-runtime-local", editable = true }
+munk-device-api = { path = "packages/devices/device-api", editable = true }
+munk-device-android-runtime = { path = "packages/devices/device-runtime-android", editable = true }
+munk-device-ios-runtime = { path = "packages/devices/device-runtime-ios", editable = true }
+munk-device-web-runtime = { path = "packages/devices/device-runtime-web", editable = true }
+munk-agent-base = { path = "packages/shared/agent-base", editable = true }
+munk-plan-agent-api = { path = "packages/agents/plan-agent-api", editable = true }
+munk-plan-agent-runtime-local = { path = "packages/agents/plan-agent-runtime-local", editable = true }
+munk-perception-api = { path = "packages/shared/perception-api", editable = true }
+munk-runner-agent-api = { path = "packages/agents/runner-agent-api", editable = true }
+munk-runner-agent-runtime-local = { path = "packages/agents/runner-agent-runtime-local", editable = true }
+munk-perception-full-sdk = { path = "packages/shared/perception-sdk-full", editable = true }
+munk-review-agent-api = { path = "packages/agents/review-agent-api", editable = true }
+munk-review-agent-runtime-local = { path = "packages/agents/review-agent-runtime-local", editable = true }
+munk-recording-agent-runtime-local = { path = "packages/agents/recording-agent-runtime-local", editable = true }
+munk-knowledge-api = { path = "packages/shared/knowledge-api", editable = true }
+munk-knowledge-runtime-local = { path = "packages/shared/knowledge-runtime-local", editable = true }
+munk-shared-api = { path = "packages/shared/shared-api", editable = true }
+munk-shared-tools-api = { path = "packages/shared/shared-tools-api", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [
+  "dist",
+  "runs",
+  "test_assets",
+  "packages/agents/review-agent-runtime-local/src/munk_review_local/resources/models",
+]
+
+[tool.ruff.lint]
+select = [
+  "C90",
+  "E",
+  "F",
+  "I",
+  "PLR",
+]
+ignore = ["E501", "PLR0913"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-branches = 12
+max-statements = 50
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pylint.main]
+ignore-paths = [
+  "^dist/.*",
+  "^runs/.*",
+  "^test_assets/.*",
+  "^packages/agents/review-agent-runtime-local/src/munk_review_local/resources/models/.*",
+]
+
+[tool.pylint."messages control"]
+disable = ["all"]
+enable = ["too-many-lines"]
+
+[tool.pylint.format]
+max-line-length = 120
+max-module-lines = 500
+
+[tool.pyright]
+pythonVersion = "3.10"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+include = [
+  "packages/devices/device-api/src",
+  "packages/devices/device-runtime-android/src",
+  "packages/devices/device-runtime-ios/src",
+  "packages/devices/device-runtime-web/src",
+  "packages/shared/agent-base/src",
+  "packages/agents/judge-agent-api/src",
+  "packages/agents/judge-agent-runtime-local/src",
+  "packages/agents/knowledge-agent-api/src",
+  "packages/agents/knowledge-agent-runtime-local/src",
+  "packages/agents/optimize-agent-api/src",
+  "packages/agents/optimize-agent-runtime-local/src",
+  "packages/agents/plan-agent-api/src",
+  "packages/agents/plan-agent-runtime-local/src",
+  "packages/agents/recording-agent-api/src",
+  "packages/agents/recording-agent-runtime-local/src",
+  "packages/agents/runner-agent-api/src",
+  "packages/agents/runner-agent-runtime-local/src",
+  "packages/shared/knowledge-api/src",
+  "packages/shared/knowledge-runtime-local/src",
+  "packages/shared/shared-api/src",
+  "packages/shared/shared-tools-api/src",
+  "src",
+  "packages/agents/review-agent-api/src",
+  "packages/agents/review-agent-runtime-local/src",
+  "packages/shared/perception-api/src",
+  "packages/shared/perception-sdk-full/src",
+  "scripts",
+  "tests",
+]
+extraPaths = [
+  ".",
+  "packages/devices/device-api/src",
+  "packages/devices/device-runtime-android/src",
+  "packages/devices/device-runtime-ios/src",
+  "packages/devices/device-runtime-web/src",
+  "packages/shared/agent-base/src",
+  "packages/agents/judge-agent-api/src",
+  "packages/agents/judge-agent-runtime-local/src",
+  "packages/agents/knowledge-agent-api/src",
+  "packages/agents/knowledge-agent-runtime-local/src",
+  "packages/agents/optimize-agent-api/src",
+  "packages/agents/optimize-agent-runtime-local/src",
+  "packages/agents/plan-agent-api/src",
+  "packages/agents/plan-agent-runtime-local/src",
+  "packages/agents/recording-agent-api/src",
+  "packages/agents/recording-agent-runtime-local/src",
+  "packages/agents/runner-agent-api/src",
+  "packages/agents/runner-agent-runtime-local/src",
+  "packages/shared/knowledge-api/src",
+  "packages/shared/knowledge-runtime-local/src",
+  "packages/shared/shared-api/src",
+  "packages/shared/shared-tools-api/src",
+  "src",
+  "packages/agents/review-agent-api/src",
+  "packages/agents/review-agent-runtime-local/src",
+  "packages/shared/perception-api/src",
+  "packages/shared/perception-sdk-full/src",
+  "scripts",
+  "tests",
+]
+exclude = [
+  "**/__pycache__",
+  "dist",
+  "runs",
+  "test_assets",
+  "packages/agents/review-agent-runtime-local/src/munk_review_local/resources/models",
+  "scripts/perception/export_icon_detect_onnx.py",
+]
+reportMissingTypeStubs = false
+reportMissingImports = false
+reportUnknownVariableType = "warning"
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+pythonpath = [
+  ".",
+  "packages/devices/device-api/src",
+  "packages/devices/device-runtime-ios/src",
+  "packages/devices/device-runtime-web/src",
+  "packages/shared/agent-base/src",
+  "packages/agents/judge-agent-api/src",
+  "packages/agents/judge-agent-runtime-local/src",
+  "packages/agents/knowledge-agent-api/src",
+  "packages/agents/knowledge-agent-runtime-local/src",
+  "packages/agents/optimize-agent-api/src",
+  "packages/agents/optimize-agent-runtime-local/src",
+  "packages/agents/plan-agent-api/src",
+  "packages/agents/plan-agent-runtime-local/src",
+  "packages/agents/recording-agent-api/src",
+  "packages/agents/recording-agent-runtime-local/src",
+  "packages/agents/runner-agent-api/src",
+  "packages/agents/runner-agent-runtime-local/src",
+  "packages/shared/knowledge-api/src",
+  "packages/shared/knowledge-runtime-local/src",
+  "packages/shared/shared-api/src",
+  "packages/shared/shared-tools-api/src",
+  "src",
+  "packages/agents/review-agent-api/src",
+  "packages/agents/review-agent-runtime-local/src",
+  "packages/shared/perception-api/src",
+  "packages/shared/perception-sdk-full/src",
+]
+testpaths = [
+  "tests",
+  "packages/devices/device-api/tests",
+  "packages/devices/device-runtime-android/tests",
+  "packages/devices/device-runtime-ios/tests",
+  "packages/devices/device-runtime-web/tests",
+  "packages/agents/judge-agent-runtime-local/tests",
+  "packages/agents/optimize-agent-api/tests",
+  "packages/agents/optimize-agent-runtime-local/tests",
+  "packages/shared/perception-sdk-full/tests",
+  "packages/agents/judge-agent-api/tests",
+  "packages/agents/knowledge-agent-api/tests",
+  "packages/agents/knowledge-agent-runtime-local/tests",
+  "packages/shared/agent-base/tests",
+  "packages/agents/plan-agent-api/tests",
+  "packages/shared/knowledge-runtime-local/tests",
+  "packages/agents/recording-agent-api/tests",
+  "packages/agents/recording-agent-runtime-local/tests",
+  "packages/agents/runner-agent-api/tests",
+  "packages/agents/runner-agent-runtime-local/tests",
+  "packages/shared/shared-api/tests",
+  "packages/shared/knowledge-api/tests",
+  "packages/shared/shared-tools-api/tests",
+  "packages/agents/plan-agent-runtime-local/tests",
+]

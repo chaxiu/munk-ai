@@ -134,6 +134,31 @@ class OperationTracker:
         self._registry.release_claims(self.operation_id)
         return record
 
+    def mark_interrupted(
+        self,
+        *,
+        error_code: str = "operation_interrupted",
+        error_message: str = "operation interrupted",
+        result_json: dict[str, Any] | None = None,
+        artifacts: dict[str, str] | None = None,
+        progress: dict[str, Any] | None = None,
+    ) -> OperationRecord:
+        normalized_result_json = self._normalized_result_payload(result_json)
+        normalized_progress_json = self._normalized_progress_payload(progress or self.get_record().progress_json)
+        record = self._registry.update_operation(
+            self.operation_id,
+            status="interrupted",
+            verification_verdict=None,
+            result_json=normalized_result_json,
+            artifacts_json=artifacts or self.get_record().artifacts_json,
+            progress_json=normalized_progress_json,
+            finished_at=self._now_iso(),
+            error_code=error_code,
+            error_message=error_message,
+        )
+        self._registry.release_claims(self.operation_id)
+        return record
+
     def update_artifacts(self, artifacts: dict[str, str]) -> OperationRecord:
         current = self.get_record().artifacts_json
         updated = dict(current)

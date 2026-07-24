@@ -288,6 +288,7 @@ def build_run_plans_aggregate_payload(*, total_children: int) -> dict[str, Any]:
         succeeded_children=0,
         failed_children=0,
         cancelled_children=0,
+        interrupted_children=0,
         completed_children=0,
     )
     return payload.model_dump(mode="json")
@@ -308,6 +309,8 @@ def update_run_plans_aggregate_payload(
             "succeeded_children": aggregate.succeeded_children + (1 if child_summary.status == "succeeded" else 0),
             "failed_children": aggregate.failed_children + (1 if child_summary.status == "failed" else 0),
             "cancelled_children": aggregate.cancelled_children + (1 if child_summary.status == "cancelled" else 0),
+            "interrupted_children": aggregate.interrupted_children
+            + (1 if child_summary.status == "interrupted" else 0),
             "current_child_operation_id": None,
             "current_child_plan_id": None,
             "current_child_title": None,

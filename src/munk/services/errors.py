@@ -74,6 +74,10 @@ class StartStateError(MunkServiceError):
     """Raised when case start-state preparation cannot be completed."""
 
 
+class SetupExecutionError(MunkServiceError):
+    """Raised when a case setup step cannot be executed successfully."""
+
+
 class OperationError(MunkServiceError):
     """Base error for operation lifecycle failures."""
 

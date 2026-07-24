@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,8 @@ from munk.planning.models import RequirementPlan
 
 if TYPE_CHECKING:
     from munk.planning.storage import PlanStore
+
+_DEFAULT_SELF_HEAL_TTL_SECONDS = 60.0
 
 
 def _resolve_root_dir(root_dir: Path | None) -> Path:
@@ -64,10 +67,17 @@ class IndexedPlanRecord:
 
 
 class PlanCaseIndexStore:
-    def __init__(self, root_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        root_dir: Path | None = None,
+        *,
+        self_heal_ttl_seconds: float = _DEFAULT_SELF_HEAL_TTL_SECONDS,
+    ) -> None:
         self.root_dir = _resolve_root_dir(root_dir)
         self.db_path = self.root_dir / "plans" / "_index" / "plan_case_index.sqlite3"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._self_heal_ttl_seconds = max(0.0, float(self_heal_ttl_seconds))
+        self._last_self_heal_at: float | None = None
         rebuild_from_store = self.db_path.exists() and not self._schema_is_current()
         if rebuild_from_store:
             self.db_path.unlink()
@@ -76,6 +86,7 @@ class PlanCaseIndexStore:
             from munk.planning.storage import PlanStore
 
             self.rebuild_from_plan_store(PlanStore(self.root_dir))
+            self._last_self_heal_at = time.monotonic()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -425,7 +436,13 @@ class PlanCaseIndexStore:
             db_path=self.db_path,
         )
 
-    def _self_heal_if_needed(self) -> None:
+    def _self_heal_if_needed(self, *, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and self._last_self_heal_at is not None:
+            within_ttl = (now - self._last_self_heal_at) < self._self_heal_ttl_seconds
+            if within_ttl and self._summary_unchecked().plan_count > 0:
+                return
+
         from munk.planning.storage import PlanStore
 
         plan_store = PlanStore(self.root_dir)
@@ -435,16 +452,20 @@ class PlanCaseIndexStore:
         indexed_path_strings = {path for path, _updated_at in indexed_plans}
         if actual_path_strings != indexed_path_strings:
             self.rebuild_from_plan_store(plan_store)
+            self._last_self_heal_at = time.monotonic()
             return
         for path, indexed_updated_at in indexed_plans:
             plan_path = Path(path)
             if not plan_path.exists():
                 self.rebuild_from_plan_store(plan_store)
+                self._last_self_heal_at = time.monotonic()
                 return
             indexed_timestamp = datetime.fromisoformat(indexed_updated_at).timestamp()
             if plan_path.stat().st_mtime > indexed_timestamp:
                 self.rebuild_from_plan_store(plan_store)
+                self._last_self_heal_at = time.monotonic()
                 return
+        self._last_self_heal_at = now
 
     def _indexed_plan_rows(self) -> list[tuple[str, str]]:
         with self._connect() as connection:

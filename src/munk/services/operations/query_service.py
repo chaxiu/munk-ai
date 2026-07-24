@@ -22,6 +22,7 @@ from munk.services.artifact_manifest_models import ArtifactSchemaVersions
 from munk.services.diagnostics_service import OperationDiagnosticsService
 from munk.services.machine_contracts import MachineCommandResponse, build_error_result, build_success_result
 from munk.services.operations.models import OperationRecord
+from munk.services.operations.lifecycle_reconcile import should_force_cancel
 from munk.services.operations.payloads import (
     attempt_usages_from_result_json,
     build_operation_detail_payload,
@@ -135,22 +136,30 @@ class OperationQueryService:
         )
 
     def cleanup_stale_claims(self) -> MachineCommandResponse:
-        cleaned = self._operation_service.cleanup_stale_claims()
+        cleaned, reconciled = self._operation_service.repair_operation_lifecycle()
         return build_success_result(
             command="runs_cleanup_locks",
             data={
                 "cleaned_count": len(cleaned),
+                "reconciled_count": len(reconciled),
                 "items": [item.model_dump(mode="json") for item in cleaned],
+                "reconciled_items": [item.model_dump(mode="json") for item in reconciled],
             },
         )
 
     def cancel_operation(self, *, operation_id: str) -> MachineCommandResponse:
         try:
-            record = self._operation_service.registry.request_cancel(operation_id)
-            children = self._operation_service.registry.list_child_operations(operation_id)
-            running_child = next((item for item in children if item.status == "running"), None)
-            if running_child is not None:
-                self._operation_service.registry.request_cancel(running_child.operation_id)
+            registry = self._operation_service.registry
+            registry.request_cancel_operation_tree(operation_id)
+            record = registry.get_operation(operation_id)
+            if should_force_cancel(record):
+                registry.force_finalize_operation_tree(
+                    operation_id,
+                    status="cancelled",
+                    error_code="operation_cancelled",
+                    error_message="operation cancelled; owner pid is no longer alive",
+                )
+                record = registry.get_operation(operation_id)
         except Exception as exc:
             return build_error_result(command="runs_cancel", exc=cast(Exception, exc))
         data: dict[str, Any] = {
@@ -313,7 +322,10 @@ class OperationQueryService:
             succeeded_children=sum(1 for item in children if item.status == "succeeded"),
             failed_children=sum(1 for item in children if item.status == "failed"),
             cancelled_children=sum(1 for item in children if item.status == "cancelled"),
-            completed_children=sum(1 for item in children if item.status in {"succeeded", "failed", "cancelled"}),
+            interrupted_children=sum(1 for item in children if item.status == "interrupted"),
+            completed_children=sum(
+                1 for item in children if item.status in {"succeeded", "failed", "cancelled", "interrupted"}
+            ),
             current_child_operation_id=current.operation_id if current is not None else None,
             current_child_plan_id=current.plan_id if current is not None else None,
             current_child_case_id=current.case_id if current is not None else None,

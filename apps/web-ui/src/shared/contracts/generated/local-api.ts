@@ -141,6 +141,211 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Apps */
+        get: operations["list_cloud_apps_v1_cloud_apps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Cloud Login */
+        post: operations["start_cloud_login_v1_cloud_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout Cloud Session */
+        post: operations["logout_cloud_session_v1_cloud_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Session */
+        get: operations["get_cloud_session_v1_cloud_auth_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/auth/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Workspaces */
+        get: operations["list_cloud_workspaces_v1_cloud_auth_workspaces_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Links */
+        get: operations["get_cloud_links_v1_cloud_links_get"];
+        /** Put Cloud Link */
+        put: operations["put_cloud_link_v1_cloud_links_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/links/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Cloud Link Active */
+        put: operations["put_cloud_link_active_v1_cloud_links_active_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/links/{app_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Cloud Link */
+        delete: operations["delete_cloud_link_v1_cloud_links__app_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sync/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Cloud Sync Publish */
+        post: operations["post_cloud_sync_publish_v1_cloud_sync_publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sync/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Cloud Sync Pull */
+        post: operations["post_cloud_sync_pull_v1_cloud_sync_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sync/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Cloud Sync Push */
+        post: operations["post_cloud_sync_push_v1_cloud_sync_push_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Sync Status */
+        get: operations["get_cloud_sync_status_v1_cloud_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/dashboard/summary": {
         parameters: {
             query?: never;
@@ -203,6 +408,23 @@ export interface paths {
         get: operations["list_devices_v1_devices_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install App */
+        post: operations["install_app_v1_devices_install_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1340,6 +1562,11 @@ export interface components {
              */
             failed_children: number;
             /**
+             * Interrupted Children
+             * @default 0
+             */
+            interrupted_children: number;
+            /**
              * Queued Children
              * @default 0
              */
@@ -1469,6 +1696,8 @@ export interface components {
             procedure?: string[];
             /** Runner Goal */
             runner_goal: string;
+            /** Setup */
+            setup?: (components["schemas"]["HttpSetupStep"] | components["schemas"]["CommandSetupStep"])[];
             /** Start Mode */
             start_mode: string;
             /** Start Page Id */
@@ -1681,6 +1910,326 @@ export interface components {
             /** Review Required Case Count */
             review_required_case_count: number;
         };
+        /** CloudAppSummaryData */
+        CloudAppSummaryData: {
+            /** App Id */
+            app_id: string;
+            /** App Name */
+            app_name?: string | null;
+            /** Content Hash */
+            content_hash?: string | null;
+            /** Platform */
+            platform: string;
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** CloudAppsData */
+        CloudAppsData: {
+            /** Apps */
+            apps?: components["schemas"]["CloudAppSummaryData"][];
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CloudLinkActiveRequest */
+        CloudLinkActiveRequest: {
+            /** App Id */
+            app_id: string;
+        };
+        /** CloudLinkData */
+        CloudLinkData: {
+            /** App Id */
+            app_id: string;
+            /**
+             * Bound At
+             * Format: date-time
+             */
+            bound_at: string;
+            /** Role */
+            role?: string | null;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name?: string | null;
+        };
+        /** CloudLinkItemData */
+        CloudLinkItemData: {
+            /** App Id */
+            app_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
+            /**
+             * Bound At
+             * Format: date-time
+             */
+            bound_at: string;
+            /**
+             * Dirty
+             * @default false
+             */
+            dirty: boolean;
+            /** Last Action */
+            last_action?: ("pull" | "push" | "force_push") | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name?: string | null;
+        };
+        /** CloudLinkUpsertRequest */
+        CloudLinkUpsertRequest: {
+            /** App Id */
+            app_id: string;
+            /** Role */
+            role?: string | null;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name?: string | null;
+        };
+        /** CloudLinksData */
+        CloudLinksData: {
+            /** Active App Id */
+            active_app_id?: string | null;
+            /** Items */
+            items?: components["schemas"]["CloudLinkItemData"][];
+        };
+        /** CloudLoginStartData */
+        CloudLoginStartData: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** State */
+            state: string;
+        };
+        /** CloudSessionSummaryData */
+        CloudSessionSummaryData: {
+            /**
+             * Authenticated
+             * @default false
+             */
+            authenticated: boolean;
+            /**
+             * Can Refresh
+             * @default false
+             */
+            can_refresh: boolean;
+            /** Cloud Base Url */
+            cloud_base_url?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            user?: components["schemas"]["CloudUserSummaryData"] | null;
+        };
+        /** CloudSyncPublishRequest */
+        CloudSyncPublishRequest: {
+            /** App Id */
+            app_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name?: string | null;
+        };
+        /** CloudSyncPublishResultData */
+        CloudSyncPublishResultData: {
+            /**
+             * Action
+             * @default push
+             * @enum {string}
+             */
+            action: "push" | "force_push";
+            /** App Id */
+            app_id: string;
+            /** Content Hash */
+            content_hash?: string | null;
+            /**
+             * Forced
+             * @default false
+             */
+            forced: boolean;
+            /** Revision */
+            revision: number;
+            /**
+             * Shell Created
+             * @default false
+             */
+            shell_created: boolean;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CloudSyncPullRequest */
+        CloudSyncPullRequest: {
+            /** App Id */
+            app_id?: string | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** CloudSyncPullResultData */
+        CloudSyncPullResultData: {
+            /** App Id */
+            app_id: string;
+            /** Content Hash */
+            content_hash?: string | null;
+            /**
+             * Dirty
+             * @default false
+             */
+            dirty: boolean;
+            /**
+             * Forced
+             * @default false
+             */
+            forced: boolean;
+            /**
+             * Plans Deleted
+             * @default 0
+             */
+            plans_deleted: number;
+            /**
+             * Plans Written
+             * @default 0
+             */
+            plans_written: number;
+            /** Revision */
+            revision: number;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CloudSyncPushRequest */
+        CloudSyncPushRequest: {
+            /** App Id */
+            app_id?: string | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** CloudSyncPushResultData */
+        CloudSyncPushResultData: {
+            /**
+             * Action
+             * @default push
+             * @enum {string}
+             */
+            action: "push" | "force_push";
+            /** App Id */
+            app_id: string;
+            /** Content Hash */
+            content_hash?: string | null;
+            /**
+             * Forced
+             * @default false
+             */
+            forced: boolean;
+            /** Revision */
+            revision: number;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CloudSyncStatusData */
+        CloudSyncStatusData: {
+            /** App Id */
+            app_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
+            /**
+             * Bound
+             * @default false
+             */
+            bound: boolean;
+            /**
+             * Can Force Push
+             * @default false
+             */
+            can_force_push: boolean;
+            /**
+             * Can Pull
+             * @default true
+             */
+            can_pull: boolean;
+            /**
+             * Can Push
+             * @default false
+             */
+            can_push: boolean;
+            /** Content Hash */
+            content_hash?: string | null;
+            /**
+             * Dirty
+             * @default false
+             */
+            dirty: boolean;
+            /** Last Action */
+            last_action?: ("pull" | "push" | "force_push") | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Local Content Hash */
+            local_content_hash?: string | null;
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /** Role */
+            role: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CloudUserSummaryData */
+        CloudUserSummaryData: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id */
+            id: string;
+        };
+        /** CloudWorkspaceSummaryData */
+        CloudWorkspaceSummaryData: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Slug */
+            slug: string;
+        };
+        /** CloudWorkspacesData */
+        CloudWorkspacesData: {
+            /** Workspaces */
+            workspaces?: components["schemas"]["CloudWorkspaceSummaryData"][];
+        };
+        /** CommandSetupStep */
+        CommandSetupStep: {
+            /** Args */
+            args?: string[];
+            /** Exec */
+            exec: string;
+            /**
+             * Expected Exit Code
+             * @default 0
+             */
+            expected_exit_code: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "command";
+        };
         /** ContextPrepareDeviceReadyEventPayload */
         ContextPrepareDeviceReadyEventPayload: {
             /** Agent Role */
@@ -1695,6 +2244,29 @@ export interface components {
             platform?: string | null;
             /** Runner Event Type */
             runner_event_type?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareFailedEventPayload */
+        ContextPrepareFailedEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Error Message */
+            error_message?: string | null;
+            /** Error Type */
+            error_type?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Failed Phase */
+            failed_phase?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Step Index */
+            step_index?: number | null;
             /** Timestamp */
             timestamp?: string | null;
         } & {
@@ -1753,6 +2325,172 @@ export interface components {
             runner_event_type?: string | null;
             /** Timestamp */
             timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareSetupReadyEventPayload */
+        ContextPrepareSetupReadyEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Step Count */
+            step_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareSetupStartedEventPayload */
+        ContextPrepareSetupStartedEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Step Count */
+            step_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareSetupStepEventPayload */
+        ContextPrepareSetupStepEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Args */
+            args?: string[] | null;
+            /** Base */
+            base?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Exec */
+            exec?: string | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Expected Exit Code */
+            expected_exit_code?: number | null;
+            /** Expected Status */
+            expected_status?: number[] | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Method */
+            method?: string | null;
+            /** Outcome */
+            outcome?: string | null;
+            /** Path */
+            path?: string | null;
+            /** Request Body */
+            request_body?: unknown | null;
+            /** Request Url */
+            request_url?: string | null;
+            /** Response Body */
+            response_body?: string | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Status Code */
+            status_code?: number | null;
+            /** Stderr Tail */
+            stderr_tail?: string | null;
+            /** Stdout Tail */
+            stdout_tail?: string | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Step Kind */
+            step_kind?: string | null;
+            /** Step Total */
+            step_total?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareStartStateReadyEventPayload */
+        ContextPrepareStartStateReadyEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Step Count */
+            step_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareStartStateStartedEventPayload */
+        ContextPrepareStartStateStartedEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Step Count */
+            step_count?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContextPrepareStartStateStepEventPayload */
+        ContextPrepareStartStateStepEventPayload: {
+            /** Agent Role */
+            agent_role: string;
+            /** App Id */
+            app_id?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Entry Identity */
+            entry_identity?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Event Timestamp */
+            event_timestamp?: string | null;
+            /** Lifecycle State */
+            lifecycle_state: string;
+            /** Outcome */
+            outcome?: string | null;
+            /** Page Id */
+            page_id?: string | null;
+            /** Runner Event Type */
+            runner_event_type?: string | null;
+            /** Skip Reason */
+            skip_reason?: string | null;
+            /** Start Mode */
+            start_mode?: string | null;
+            /** Step Index */
+            step_index?: number | null;
+            /** Step Kind */
+            step_kind?: string | null;
+            /** Step Total */
+            step_total?: number | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Was Locked */
+            was_locked?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -1883,6 +2621,34 @@ export interface components {
             raw?: {
                 [key: string]: unknown;
             };
+        };
+        /** DeviceInstallData */
+        DeviceInstallData: {
+            /** Action */
+            action: string;
+            /** App Id */
+            app_id: string;
+            /** Artifact Path */
+            artifact_path?: string | null;
+            /** Device Ref */
+            device_ref: string;
+            /** Entry Identity */
+            entry_identity: string;
+            /** Operation Id */
+            operation_id: string;
+            /** Platform */
+            platform: string;
+        };
+        /** DeviceInstallRequest */
+        DeviceInstallRequest: {
+            app_target: components["schemas"]["AppTarget"];
+            /**
+             * Artifact Path
+             * Format: path
+             */
+            artifact_path: string;
+            /** Device Ref */
+            device_ref: string;
         };
         /** DeviceListData */
         DeviceListData: {
@@ -2295,6 +3061,48 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HttpBaseConfigEditor */
+        HttpBaseConfigEditor: {
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Url */
+            url?: string | null;
+        };
+        /** HttpSetupStep */
+        HttpSetupStep: {
+            /** Base */
+            base: string;
+            /** Body */
+            body?: unknown | null;
+            /** Expected Status */
+            expected_status?: number[];
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "http";
+            /**
+             * Method
+             * @default GET
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            /**
+             * Path
+             * @default /
+             */
+            path: string;
+            /** Query */
+            query?: {
+                [key: string]: string;
+            };
+        };
         /** IOSAppIdentity */
         IOSAppIdentity: {
             /** Bundle Id */
@@ -2311,6 +3119,11 @@ export interface components {
             sudo_enabled: boolean;
             /** Sudo Password */
             sudo_password?: string | null;
+            /**
+             * Sudo Password Configured
+             * @default false
+             */
+            sudo_password_configured: boolean;
         };
         /** InputForwardingPayload */
         InputForwardingPayload: {
@@ -3528,7 +4341,7 @@ export interface components {
             /** Child Operation Id */
             child_operation_id?: string | null;
             /** Data Json */
-            data_json?: components["schemas"]["RunStartedEventPayload"] | components["schemas"]["StepStartedEventPayload"] | components["schemas"]["PerceptionCompletedEventPayload"] | components["schemas"]["RunnerToolCalledEventPayload"] | components["schemas"]["RunnerContractMissEventPayload"] | components["schemas"]["RunnerDecisionCompletedEventPayload"] | components["schemas"]["RunnerActionEventPayload"] | components["schemas"]["RunStoppedEventPayload"] | components["schemas"]["RunFailedEventPayload"] | components["schemas"]["LogEventPayload"] | components["schemas"]["LlmRequestTimelinePayload"] | components["schemas"]["LlmResponseTimelinePayload"] | components["schemas"]["WorkflowStartedEventPayload"] | components["schemas"]["WorkflowAttemptStartedEventPayload"] | components["schemas"]["WorkflowAttemptFinishedEventPayload"] | components["schemas"]["WorkflowRetryScheduledEventPayload"] | components["schemas"]["WorkflowFinishedEventPayload"] | components["schemas"]["JudgeDecisionEventPayload"] | components["schemas"]["AgentRuntimeLifecycleEventPayload"] | components["schemas"]["ContextPrepareParamsResolvedEventPayload"] | components["schemas"]["ContextPrepareDeviceReadyEventPayload"] | components["schemas"]["ContextPreparePerceptionReadyEventPayload"] | components["schemas"]["RunnerRuntimeEventPayload"] | components["schemas"]["JudgeRuntimeEventPayload"] | components["schemas"]["PostRunChildOperationEventPayload"] | components["schemas"]["OperationSubmittedEventPayload"] | components["schemas"]["OperationStartedEventPayload"] | components["schemas"]["OperationInterruptedEventPayload"] | components["schemas"]["ResourceClaimedEventPayload"] | components["schemas"]["ResourceReleasedEventPayload"] | components["schemas"]["ResourceConflictEventPayload"] | components["schemas"]["BatchStartedEventPayload"] | components["schemas"]["BatchChildStartedEventPayload"] | components["schemas"]["BatchChildFinishedEventPayload"] | components["schemas"]["BatchStoppedEarlyEventPayload"] | components["schemas"]["BatchFinishedEventPayload"] | components["schemas"]["PlanningTimelineEventPayload"] | components["schemas"]["ChangeVerificationReviewContractLoadedPayload"] | components["schemas"]["ChangeVerificationCasesReadyPayload"] | components["schemas"]["ChangeVerificationPlanSavedPayload"] | components["schemas"]["ReviewTimelineEventPayload"] | components["schemas"]["KnowledgeTimelineEventPayload"] | components["schemas"]["OptimizeTimelineEventPayload"] | components["schemas"]["RecordingIdEventPayload"] | components["schemas"]["RecordingStartedEventPayload"] | components["schemas"]["RecordingTapObservedEventPayload"] | components["schemas"]["RecordingInteractionRecordedEventPayload"] | components["schemas"]["RecordingCaseExportedEventPayload"] | components["schemas"]["RecordingReplayLinkedEventPayload"] | components["schemas"]["RecordingReplayStartedEventPayload"] | components["schemas"]["RecordingReplayCompletedEventPayload"] | components["schemas"]["RecordingBridgeCleanupFailedEventPayload"] | components["schemas"]["RecordingAnalysisStatusEventPayload"] | components["schemas"]["RecordingAnalysisBundleLoadedEventPayload"] | components["schemas"]["RecordingAnalysisStepEventPayload"] | components["schemas"]["GenericOperationEventPayload"] | null;
+            data_json?: components["schemas"]["RunStartedEventPayload"] | components["schemas"]["StepStartedEventPayload"] | components["schemas"]["PerceptionCompletedEventPayload"] | components["schemas"]["RunnerToolCalledEventPayload"] | components["schemas"]["RunnerContractMissEventPayload"] | components["schemas"]["RunnerDecisionCompletedEventPayload"] | components["schemas"]["RunnerActionEventPayload"] | components["schemas"]["RunStoppedEventPayload"] | components["schemas"]["RunFailedEventPayload"] | components["schemas"]["LogEventPayload"] | components["schemas"]["LlmRequestTimelinePayload"] | components["schemas"]["LlmResponseTimelinePayload"] | components["schemas"]["WorkflowStartedEventPayload"] | components["schemas"]["WorkflowAttemptStartedEventPayload"] | components["schemas"]["WorkflowAttemptFinishedEventPayload"] | components["schemas"]["WorkflowRetryScheduledEventPayload"] | components["schemas"]["WorkflowFinishedEventPayload"] | components["schemas"]["JudgeDecisionEventPayload"] | components["schemas"]["AgentRuntimeLifecycleEventPayload"] | components["schemas"]["ContextPrepareParamsResolvedEventPayload"] | components["schemas"]["ContextPrepareDeviceReadyEventPayload"] | components["schemas"]["ContextPreparePerceptionReadyEventPayload"] | components["schemas"]["ContextPrepareSetupStartedEventPayload"] | components["schemas"]["ContextPrepareSetupStepEventPayload"] | components["schemas"]["ContextPrepareSetupReadyEventPayload"] | components["schemas"]["ContextPrepareStartStateStartedEventPayload"] | components["schemas"]["ContextPrepareStartStateStepEventPayload"] | components["schemas"]["ContextPrepareStartStateReadyEventPayload"] | components["schemas"]["ContextPrepareFailedEventPayload"] | components["schemas"]["RunnerRuntimeEventPayload"] | components["schemas"]["JudgeRuntimeEventPayload"] | components["schemas"]["PostRunChildOperationEventPayload"] | components["schemas"]["OperationSubmittedEventPayload"] | components["schemas"]["OperationStartedEventPayload"] | components["schemas"]["OperationInterruptedEventPayload"] | components["schemas"]["ResourceClaimedEventPayload"] | components["schemas"]["ResourceReleasedEventPayload"] | components["schemas"]["ResourceConflictEventPayload"] | components["schemas"]["BatchStartedEventPayload"] | components["schemas"]["BatchChildStartedEventPayload"] | components["schemas"]["BatchChildFinishedEventPayload"] | components["schemas"]["BatchStoppedEarlyEventPayload"] | components["schemas"]["BatchFinishedEventPayload"] | components["schemas"]["PlanningTimelineEventPayload"] | components["schemas"]["ChangeVerificationReviewContractLoadedPayload"] | components["schemas"]["ChangeVerificationCasesReadyPayload"] | components["schemas"]["ChangeVerificationPlanSavedPayload"] | components["schemas"]["ReviewTimelineEventPayload"] | components["schemas"]["KnowledgeTimelineEventPayload"] | components["schemas"]["OptimizeTimelineEventPayload"] | components["schemas"]["RecordingIdEventPayload"] | components["schemas"]["RecordingStartedEventPayload"] | components["schemas"]["RecordingTapObservedEventPayload"] | components["schemas"]["RecordingInteractionRecordedEventPayload"] | components["schemas"]["RecordingCaseExportedEventPayload"] | components["schemas"]["RecordingReplayLinkedEventPayload"] | components["schemas"]["RecordingReplayStartedEventPayload"] | components["schemas"]["RecordingReplayCompletedEventPayload"] | components["schemas"]["RecordingBridgeCleanupFailedEventPayload"] | components["schemas"]["RecordingAnalysisStatusEventPayload"] | components["schemas"]["RecordingAnalysisBundleLoadedEventPayload"] | components["schemas"]["RecordingAnalysisStepEventPayload"] | components["schemas"]["GenericOperationEventPayload"] | null;
             /** Event Type */
             event_type: string;
             /** Message */
@@ -5397,6 +6210,11 @@ export interface components {
             current_child_title?: string | null;
             /** Failed Children */
             failed_children: number;
+            /**
+             * Interrupted Children
+             * @default 0
+             */
+            interrupted_children: number;
             /** Queued Children */
             queued_children: number;
             /** Running Children */
@@ -5431,7 +6249,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
             /** Title */
             title: string;
             token_usage?: components["schemas"]["TokenUsage"] | null;
@@ -5907,6 +6725,7 @@ export interface components {
             provider: string;
             proxy?: components["schemas"]["ProxyConfigEditor"];
             runtime?: components["schemas"]["RuntimeConfigEditor"];
+            test_env?: components["schemas"]["TestEnvConfigEditor"];
         };
         /** SettingsConfigUpsertRequest */
         SettingsConfigUpsertRequest: {
@@ -5923,6 +6742,7 @@ export interface components {
             provider: "openai_compatible" | "gemini";
             proxy?: components["schemas"]["ProxyConfigEditor"];
             runtime?: components["schemas"]["RuntimeConfigEditor"];
+            test_env?: components["schemas"]["TestEnvConfigEditor"];
         };
         /** StepStartedEventPayload */
         StepStartedEventPayload: {
@@ -6043,6 +6863,166 @@ export interface components {
              */
             ok: true;
         };
+        /** SuccessResponse[CloudAppsData] */
+        SuccessResponse_CloudAppsData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudAppsData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudLinkData] */
+        SuccessResponse_CloudLinkData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudLinkData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudLinksData] */
+        SuccessResponse_CloudLinksData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudLinksData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudLoginStartData] */
+        SuccessResponse_CloudLoginStartData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudLoginStartData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudSessionSummaryData] */
+        SuccessResponse_CloudSessionSummaryData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudSessionSummaryData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudSyncPublishResultData] */
+        SuccessResponse_CloudSyncPublishResultData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudSyncPublishResultData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudSyncPullResultData] */
+        SuccessResponse_CloudSyncPullResultData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudSyncPullResultData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudSyncPushResultData] */
+        SuccessResponse_CloudSyncPushResultData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudSyncPushResultData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudSyncStatusData] */
+        SuccessResponse_CloudSyncStatusData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudSyncStatusData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[CloudWorkspacesData] */
+        SuccessResponse_CloudWorkspacesData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["CloudWorkspacesData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
         /** SuccessResponse[DashboardSummaryData] */
         SuccessResponse_DashboardSummaryData_: {
             /** Artifacts */
@@ -6068,6 +7048,22 @@ export interface components {
             /** Command */
             command: string;
             data: components["schemas"]["DeleteAppData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[DeviceInstallData] */
+        SuccessResponse_DeviceInstallData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["DeviceInstallData"];
             /**
              * Ok
              * @default true
@@ -6708,6 +7704,8 @@ export interface components {
             procedure?: string[];
             /** Runner Goal */
             runner_goal: string;
+            /** Setup */
+            setup?: (components["schemas"]["HttpSetupStep"] | components["schemas"]["CommandSetupStep"])[];
             /** Source Metadata */
             source_metadata?: {
                 [key: string]: string;
@@ -6739,6 +7737,8 @@ export interface components {
             procedure?: string[];
             /** Runner Goal */
             runner_goal: string;
+            /** Setup */
+            setup?: (components["schemas"]["HttpSetupStep"] | components["schemas"]["CommandSetupStep"])[];
             /** Source Metadata */
             source_metadata?: {
                 [key: string]: string;
@@ -6746,6 +7746,15 @@ export interface components {
             start_state?: components["schemas"]["CaseStartStateRequest"];
             /** Title */
             title: string;
+        };
+        /** TestEnvConfigEditor */
+        TestEnvConfigEditor: {
+            /** Allowed Exec */
+            allowed_exec?: string[];
+            /** Bases */
+            bases?: {
+                [key: string]: components["schemas"]["HttpBaseConfigEditor"];
+            };
         };
         /** TextInjectStepPayload */
         TextInjectStepPayload: {
@@ -7736,6 +8745,1003 @@ export interface operations {
             };
         };
     };
+    list_cloud_apps_v1_cloud_apps_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudAppsData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_cloud_login_v1_cloud_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudLoginStartData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_cloud_session_v1_cloud_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSessionSummaryData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cloud_session_v1_cloud_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSessionSummaryData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_cloud_workspaces_v1_cloud_auth_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudWorkspacesData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cloud_links_v1_cloud_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudLinksData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_cloud_link_v1_cloud_links_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudLinkUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudLinkData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_cloud_link_active_v1_cloud_links_active_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudLinkActiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudLinksData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_cloud_link_v1_cloud_links__app_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudLinksData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_cloud_sync_publish_v1_cloud_sync_publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudSyncPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSyncPublishResultData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_cloud_sync_pull_v1_cloud_sync_pull_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CloudSyncPullRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSyncPullResultData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_cloud_sync_push_v1_cloud_sync_push_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CloudSyncPushRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSyncPushResultData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cloud_sync_status_v1_cloud_sync_status_get: {
+        parameters: {
+            query?: {
+                app_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_CloudSyncStatusData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dashboard_summary_v1_dashboard_summary_get: {
         parameters: {
             query?: never;
@@ -7795,6 +9801,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unprocessable Content */
             422: {
                 headers: {
@@ -7846,6 +9861,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unprocessable Content */
             422: {
                 headers: {
@@ -7888,6 +9912,75 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    install_app_v1_devices_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_DeviceInstallData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9703,8 +11796,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                status?: ("queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
-                kind?: ("plan" | "run_case" | "run_plan" | "run_plans" | "verify_change" | "review" | "optimize_case" | "knowledge_post_action" | "record_case" | "recording_analysis" | "interactive_session") | null;
+                status?: ("queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted") | null;
+                kind?: ("plan" | "run_case" | "run_plan" | "run_plans" | "verify_change" | "review" | "optimize_case" | "knowledge_post_action" | "record_case" | "recording_analysis" | "interactive_session" | "app_install") | null;
                 device_ref?: string | null;
                 surface?: string | null;
                 verification_verdict?: string | null;

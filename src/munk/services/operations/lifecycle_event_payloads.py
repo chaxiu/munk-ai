@@ -37,6 +37,69 @@ class ContextPreparePerceptionReadyEventPayload(AgentRuntimeLifecycleEventPayloa
     icon_conf: float | None = None
 
 
+class ContextPrepareSetupStartedEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_count: int | None = None
+
+
+class ContextPrepareSetupStepEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_index: int | None = None
+    step_total: int | None = None
+    step_kind: str | None = None
+    outcome: str | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+    method: str | None = None
+    base: str | None = None
+    path: str | None = None
+    request_url: str | None = None
+    request_body: object | None = None
+    status_code: int | None = None
+    expected_status: list[int] | None = None
+    response_body: str | None = None
+    exec: str | None = None
+    args: list[str] | None = None
+    exit_code: int | None = None
+    expected_exit_code: int | None = None
+    stdout_tail: str | None = None
+    stderr_tail: str | None = None
+
+
+class ContextPrepareSetupReadyEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_count: int | None = None
+    duration_ms: int | None = None
+
+
+class ContextPrepareStartStateStartedEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_count: int | None = None
+
+
+class ContextPrepareStartStateStepEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_index: int | None = None
+    step_total: int | None = None
+    step_kind: str | None = None
+    outcome: str | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+    skip_reason: str | None = None
+    was_locked: bool | None = None
+    start_mode: str | None = None
+    entry_identity: str | None = None
+    page_id: str | None = None
+    app_id: str | None = None
+
+
+class ContextPrepareStartStateReadyEventPayload(AgentRuntimeLifecycleEventPayload):
+    step_count: int | None = None
+    duration_ms: int | None = None
+
+
+class ContextPrepareFailedEventPayload(AgentRuntimeLifecycleEventPayload):
+    failed_phase: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    step_index: int | None = None
+
+
 class JudgeRuntimeEventPayload(AgentRuntimeLifecycleEventPayload):
     root_dir: str | None = None
     evidence_count: int | None = None

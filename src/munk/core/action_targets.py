@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from munk.core.action_target_building import build_action_targets, build_target_parts
+from munk.core.action_target_building import build_action_targets, build_canonical_target_parts, build_target_parts
 from munk.core.action_target_models import (
     TREE_PART_MAX,
     VISION_PART_MAX,
@@ -27,6 +27,7 @@ __all__ = [
     "ActionTargetResolution",
     "TargetParts",
     "build_action_targets",
+    "build_canonical_target_parts",
     "build_recording_action_summary",
     "build_target_parts",
     "degrade_target_confidence",

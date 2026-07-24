@@ -165,6 +165,8 @@ def test_register_case_run_evidence_tools_returns_provider_payloads() -> None:
     assert judge_payload["summary"] == "login failed"
     assert overview_payload["attempts"][0]["retry_reason"] == "element_not_found"
     assert summary_payload["attempt_index"] == 0
+    assert summary_payload["execution"]["error_type"] == "RunnerProtocolError"
+    assert "huge_blob" not in summary_payload
     assert handoffs_payload["retry_handoffs"][0]["reason"] == "retry login"
     assert history_payload["entries"] == [{"type": "judge_completed"}]
     assert trace_payload["entries"] == [{"step": 2, "decision": "stop"}]

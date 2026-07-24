@@ -13,6 +13,7 @@ from munk.services.operations.models import (
     OperationKind,
     OperationRecord,
     OperationStatus,
+    ReconcileOperationResult,
     ResourceScope,
 )
 from munk.services.operations.paths import operations_db_path
@@ -40,6 +41,7 @@ class OperationService:
     def __init__(self, registry: OperationRegistry | None = None) -> None:
         self._registry = registry or OperationRegistry(self._registry_path_from_env())
         self._registry.cleanup_stale_claims()
+        self._registry.reconcile_orphaned_operations()
 
     @property
     def registry(self) -> OperationRegistry:
@@ -104,6 +106,18 @@ class OperationService:
         claim_request: DeviceClaimRequest | None = None,
     ) -> list[CleanupClaimResult]:
         return self._registry.cleanup_stale_claims(claim_request=claim_request)
+
+    def reconcile_orphaned_operations(self) -> list[ReconcileOperationResult]:
+        return self._registry.reconcile_orphaned_operations()
+
+    def repair_operation_lifecycle(
+        self,
+        *,
+        claim_request: DeviceClaimRequest | None = None,
+    ) -> tuple[list[CleanupClaimResult], list[ReconcileOperationResult]]:
+        cleaned = self.cleanup_stale_claims(claim_request=claim_request)
+        reconciled = self.reconcile_orphaned_operations()
+        return cleaned, reconciled
 
     def tracker_for_current_env(self) -> OperationTracker | None:
         operation_id = os.environ.get(OPERATION_ID_ENV)

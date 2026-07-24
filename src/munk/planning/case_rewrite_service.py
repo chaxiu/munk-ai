@@ -277,6 +277,7 @@ class CaseRewriteService:
             expected=list(draft.expected if draft.expected is not None else current_case.expected),
             procedure=list(draft.procedure if draft.procedure is not None else current_case.procedure),
             post_action=list(draft.post_action if draft.post_action is not None else current_case.post_action),
+            setup=list(current_case.setup),
             is_core_case=draft.is_core_case if draft.is_core_case is not None else current_case.is_core_case,
             runner_goal=draft.runner_goal,
             budget=budget,

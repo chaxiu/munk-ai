@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from munk.judging.models import is_screen_diff_evidence, is_screen_frame_evidence
 from pydantic_ai import Agent
 from pydantic_ai import RunContext as PydanticRunContext
 from pydantic_ai.messages import ToolReturn
-
-from munk.judging.models import is_screen_diff_evidence, is_screen_frame_evidence
 
 from .image_payloads import load_screenshot_binary_image
 from .step_projection import (
@@ -17,6 +16,7 @@ from .step_projection import (
     find_transition_evidence_by_step,
 )
 from .tool_models import JudgeRunDeps
+from .tree_excerpt import build_focus_compact_tree
 
 
 def register_judge_tools(agent: Agent[JudgeRunDeps, object]) -> None:
@@ -76,7 +76,10 @@ def _read_step_screen(deps: JudgeRunDeps, *, step_index: int) -> str:
         return f"unknown step index: {step_index}"
     detail: dict[str, Any] = {
         "summary": evidence.summary,
-        "compact_tree": evidence.payload.compact_tree.model_dump(mode="json"),
+        "compact_tree": build_focus_compact_tree(
+            evidence.payload.compact_tree.model_dump(mode="json"),
+            focus_hits=[entry.model_dump(mode="json") for entry in evidence.payload.focus_hits],
+        ),
         "focus_hits": [entry.model_dump(mode="json") for entry in evidence.payload.focus_hits[:6]],
     }
     return json.dumps(detail, ensure_ascii=False, sort_keys=True)

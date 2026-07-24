@@ -42,31 +42,34 @@ def test_build_evidence_pack_selects_relevant_observation_as_primary(tmp_path) -
     diffs_dir.mkdir()
     tree_dir.mkdir()
     raw_dir.mkdir()
+    tree_nodes = []
+    for index in range(80):
+        tree_nodes.append(
+            {
+                "node_id": f"{index}",
+                "stable_key": f"rid:node-{index}",
+                "text": "New Task" if index == 40 else f"noise-{index}",
+                "content_desc": None,
+                "resource_id": f"com.example.todo:id/node_{index}",
+                "class_name": "android.widget.TextView",
+                "bounds": [0, index, 100, index + 40],
+                "clickable": False,
+                "checkable": False,
+                "enabled": True,
+                "focused": False,
+                "selected": False,
+                "scrollable": False,
+                "checked": False,
+                "matched_visual_ids": [],
+            }
+        )
     (frames_dir / "step_0001.json").write_text(
         json.dumps(
             {
                 "package": "com.example.todo",
                 "tree_available": True,
-                "tree_summary": "nodes=3",
-                "tree_nodes": [
-                    {
-                        "node_id": "1",
-                        "stable_key": "rid:com.example.todo:id/task_title",
-                        "text": "New Task",
-                        "content_desc": None,
-                        "resource_id": "com.example.todo:id/task_title",
-                        "class_name": "android.widget.TextView",
-                        "bounds": [0, 0, 100, 40],
-                        "clickable": False,
-                        "checkable": False,
-                        "enabled": True,
-                        "focused": False,
-                        "selected": False,
-                        "scrollable": False,
-                        "checked": False,
-                        "matched_visual_ids": [],
-                    }
-                ],
+                "tree_summary": "nodes=80",
+                "tree_nodes": tree_nodes,
             }
         ),
         encoding="utf-8",
@@ -114,8 +117,9 @@ def test_build_evidence_pack_selects_relevant_observation_as_primary(tmp_path) -
     assert "screen_frame" in primary_kinds
     frame_item = next(item for item in pack.primary_evidence if item.kind == "screen_frame")
     compact_tree = frame_item.payload.compact_tree
-    assert compact_tree.node_count == 1
-    assert compact_tree.nodes[0].text == "New Task"
+    assert compact_tree.node_count == 80
+    assert len(compact_tree.nodes) < 80
+    assert any(node.text == "New Task" for node in compact_tree.nodes)
     assert pack.recent_raw_screenshots[0].step_index == 1
     assert pack.recent_raw_screenshots[0].tree_evidence_id == "screen_frame-step_0001"
     assert pack.evidence[0].evidence_id == "execution"

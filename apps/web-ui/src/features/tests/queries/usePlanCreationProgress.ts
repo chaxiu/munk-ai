@@ -23,7 +23,7 @@ export function usePlanCreationProgress(operationId: MaybeRefOrGetter<string>) {
 
   const isFinished = computed(() => {
     const status = operation.value?.status
-    return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+    return status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
   })
 
   function stopPolling() {

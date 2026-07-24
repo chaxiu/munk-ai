@@ -8,12 +8,6 @@ import {
 } from './runMapperShared'
 import { runCaseResult } from './runSummaryMappers'
 
-type EvidencePayload = {
-  path?: string
-  step_index?: number
-  excerpt?: unknown
-}
-
 export type RunJudgeEvidenceView = {
   evidence_id: string
   kind: string
@@ -41,20 +35,86 @@ export type RunEvidenceItemView = {
   sortIndex: number
 }
 
+function deriveEvidencePath(kind: string, payload: Record<string, unknown> | null): string | null {
+  const path = asString(payload?.path)
+  if (path) {
+    return path
+  }
+  if (kind === 'screenshot') {
+    return asString(payload?.path) ?? null
+  }
+  return null
+}
+
+function deriveEvidenceStepIndex(kind: string, payload: Record<string, unknown> | null): number | null {
+  const stepIndex = asNumber(payload?.step_index)
+  if (stepIndex != null) {
+    return stepIndex
+  }
+  if (kind === 'runner_history') {
+    return asNumber(payload?.latest_step_index) ?? null
+  }
+  if (kind === 'runner_issue') {
+    return asNumber(asObject(payload?.issue)?.step_index) ?? null
+  }
+  if (kind === 'screenshot') {
+    return asNumber(payload?.step_index) ?? null
+  }
+  return null
+}
+
+function deriveEvidenceExcerpt(kind: string, payload: Record<string, unknown> | null): unknown | null {
+  if (!payload) {
+    return null
+  }
+  if (kind === 'runner_history' || kind === 'runner_memory') {
+    return payload.excerpt ?? null
+  }
+  if (kind === 'runner_issue') {
+    return payload.issue ?? null
+  }
+  if (kind === 'screen_frame') {
+    return {
+      package: payload.package ?? null,
+      tree_available: payload.tree_available ?? null,
+      tree_summary: payload.tree_summary ?? null,
+      compact_tree: payload.compact_tree ?? null,
+      focus_hits: payload.focus_hits ?? [],
+    }
+  }
+  if (kind === 'screen_diff') {
+    return {
+      summary: payload.summary ?? null,
+      appeared_labels: payload.appeared_labels ?? [],
+      updated_labels: payload.updated_labels ?? [],
+      disappeared_labels: payload.disappeared_labels ?? [],
+      linked_visual_changes: payload.linked_visual_changes ?? [],
+    }
+  }
+  if (kind === 'decision_trace') {
+    return payload
+  }
+  if (kind === 'runtime_error_log') {
+    return payload.excerpt ?? null
+  }
+  return payload
+}
+
 export function judgeEvidenceItems(detail?: OperationDetailData | null): RunJudgeEvidenceView[] {
   const result = runCaseResult(detail)
   const evidence = Array.isArray(result?.evidence) ? result.evidence : []
   return evidence.map((item) => {
     const evidenceItem = asObject(item) ?? {}
-    const payload = asObject(evidenceItem.payload) as EvidencePayload | null
+    const payload = asObject(evidenceItem.payload)
+    const kind = typeof evidenceItem.kind === 'string' ? evidenceItem.kind : ''
     return {
       evidence_id: typeof evidenceItem.evidence_id === 'string' ? evidenceItem.evidence_id : '',
-      kind: typeof evidenceItem.kind === 'string' ? evidenceItem.kind : '',
+      kind,
       source: typeof evidenceItem.source === 'string' ? evidenceItem.source : '',
       summary: typeof evidenceItem.summary === 'string' ? evidenceItem.summary : '',
-      path: typeof payload?.path === 'string' ? payload.path : null,
-      stepIndex: typeof payload?.step_index === 'number' ? payload.step_index : null,
-      excerpt: payload?.excerpt ?? null,
+      path: deriveEvidencePath(kind, payload),
+      stepIndex: deriveEvidenceStepIndex(kind, payload),
+      excerpt: deriveEvidenceExcerpt(kind, payload),
     }
   }).filter((item) => Boolean(item.evidence_id))
 }
@@ -137,6 +197,7 @@ function evidenceKindLabel(kind: string | null | undefined, t: Translate): strin
     case 'runner_history':
       return t('runDetail.evidence.kinds.runnerHistory')
     case 'execution':
+    case 'execution_outcome':
       return t('runDetail.evidence.kinds.execution')
     case 'runtime_error_log':
       return t('runDetail.evidence.kinds.runtimeErrorLog')
@@ -375,7 +436,7 @@ export function presentJudgeEvidenceItem(
   if (item.kind === 'screen_frame' || item.kind === 'screen_diff' || item.kind === 'screenshot') {
     return buildScreenEvidence(normalizedItem, t, sortIndex)
   }
-  if (item.kind === 'execution' || prefix?.startsWith('execution outcome')) {
+  if (item.kind === 'execution' || item.kind === 'execution_outcome' || prefix?.startsWith('execution outcome')) {
     return buildExecutionEvidence(normalizedItem, t, sortIndex)
   }
   return buildGenericEvidence(normalizedItem, t, sortIndex)

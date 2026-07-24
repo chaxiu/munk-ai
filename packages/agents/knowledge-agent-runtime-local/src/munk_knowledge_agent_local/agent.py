@@ -10,7 +10,12 @@ from pydantic_ai import Agent
 from munk.config.defaults import MUNK_CODE_DEFAULTS
 from munk.config.schema import OutputStrategy
 
-from .prompt import SYSTEM_PROMPT, build_knowledge_agent_prompt_payload, build_knowledge_agent_user_prompt
+from .prompt import (
+    SYSTEM_PROMPT,
+    build_knowledge_agent_prompt_diagnostics,
+    build_knowledge_agent_prompt_payload,
+    build_knowledge_agent_user_prompt,
+)
 from .tool_models import KnowledgeToolDeps
 from .tools import register_knowledge_agent_tools
 
@@ -27,6 +32,7 @@ class PydanticAiKnowledgeAgent:
         output_spec = build_structured_output_spec(KnowledgeAgentResult, output_strategy=output_strategy)
         self.last_tool_calls: list[str] = []
         self.last_prompt = ""
+        self.last_prompt_diagnostics: dict[str, object] = {}
         self._agent = Agent(
             model=cast(Any, model),
             deps_type=KnowledgeToolDeps,
@@ -43,6 +49,7 @@ class PydanticAiKnowledgeAgent:
     def generate_candidates(self, request: KnowledgeAgentRequest, *, deps: KnowledgeToolDeps) -> KnowledgeAgentResult:
         prompt = build_knowledge_agent_user_prompt(request)
         self.last_prompt = build_knowledge_agent_prompt_payload(request)
+        self.last_prompt_diagnostics = build_knowledge_agent_prompt_diagnostics(self.last_prompt)
         result = run_agent_sync_compatible(self._agent, user_prompt=prompt, deps=deps)
         self.last_tool_calls = list(deps.tool_calls)
         return result.output

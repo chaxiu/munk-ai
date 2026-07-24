@@ -4,6 +4,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import CloudBoundAppBadges from '@/features/cloud/components/CloudBoundAppBadges.vue'
+import { useCloudBoundAppMarker } from '@/features/cloud/queries/useCloudBoundAppMarker'
 import AppCard from '@/shared/components/AppCard.vue'
 import AppEmptyState from '@/shared/components/AppEmptyState.vue'
 import UiButton from '@/shared/ui/UiButton.vue'
@@ -20,6 +22,7 @@ const platformFilter = ref<FilterPlatform>('all')
 const appsQuery = useAppsQuery(computed(() => (
   platformFilter.value === 'all' ? {} : { platform: platformFilter.value }
 )))
+const { isBoundApp, isDirtyApp } = useCloudBoundAppMarker()
 
 const apps = computed(() => appsQuery.data.value ?? [])
 const listErrorMessage = computed(() => {
@@ -111,7 +114,13 @@ function displayAppName(item: { app_id: string } & Record<string, unknown>): str
         >
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <p class="font-medium text-text-primary">{{ displayAppName(item) }}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="font-medium text-text-primary">{{ displayAppName(item) }}</p>
+                <CloudBoundAppBadges
+                  :bound="isBoundApp(item.app_id)"
+                  :dirty="isDirtyApp(item.app_id)"
+                />
+              </div>
               <p class="text-xs text-text-muted">{{ item.app_id }}</p>
             </div>
             <span class="rounded-full border border-border px-2 py-0.5 text-xs uppercase tracking-[0.12em] text-text-secondary">

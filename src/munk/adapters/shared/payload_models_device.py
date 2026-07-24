@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from munk.app import AppTarget
 
 
 class DeviceDescriptorData(BaseModel):
@@ -43,3 +46,19 @@ class DeviceUnlockData(BaseModel):
     message: str
     before: DeviceStateData
     after: DeviceStateData
+
+
+class DeviceInstallRequest(BaseModel):
+    device_ref: str
+    artifact_path: Path
+    app_target: AppTarget
+
+
+class DeviceInstallData(BaseModel):
+    operation_id: str
+    action: str
+    app_id: str
+    platform: str
+    device_ref: str
+    entry_identity: str
+    artifact_path: str | None = None

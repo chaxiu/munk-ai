@@ -10,6 +10,7 @@ from .runtime_bridge import (
     build_runner_runtime_result_data_from_kernel_result,
 )
 from .runtime_host import RunnerHostManagedPaths, build_runner_host_bundle, build_runner_host_paths
+from .setup_executor import execute_case_setup
 from .start_state import PageNavigator, prepare_case_start_state, register_page_navigator
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "build_runner_runtime_context",
     "build_runner_runtime_result_data_from_kernel_result",
     "create_unique_run_dir",
+    "execute_case_setup",
     "PageNavigator",
     "prepare_case_start_state",
     "prepare_run_paths",

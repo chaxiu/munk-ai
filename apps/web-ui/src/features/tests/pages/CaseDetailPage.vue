@@ -9,6 +9,7 @@ import AppBadge from '@/shared/components/AppBadge.vue'
 import AppCard from '@/shared/components/AppCard.vue'
 import AppEmptyState from '@/shared/components/AppEmptyState.vue'
 import CaseRewritePreviewModal from '@/features/tests/components/CaseRewritePreviewModal.vue'
+import CaseSetupStepsEditor from '@/features/tests/components/CaseSetupStepsEditor.vue'
 import UiButton from '@/shared/ui/UiButton.vue'
 import UiField from '@/shared/ui/UiField.vue'
 import UiInput from '@/shared/ui/UiInput.vue'
@@ -22,6 +23,7 @@ import { formatDeviceLabel } from '@/features/devices/deviceLabels'
 import { useDevicesQuery } from '@/features/devices/queries/useDevicesQuery'
 import { useAppDetailQuery } from '@/features/apps/queries/useAppDetailQuery'
 import { useCaseDetailQuery } from '@/features/tests/queries/useCaseDetailQuery'
+import { useSettingsConfigQuery } from '@/features/settings/queries/useSettingsConfigQuery'
 import { useRewriteCasePreviewMutation } from '@/features/tests/queries/useRewriteCasePreviewMutation'
 import { useReplaceCaseMutation } from '@/features/tests/queries/useReplaceCaseMutation'
 import { formatPlanVersionLabel } from '@/features/tests/version'
@@ -41,6 +43,7 @@ const planId = computed(() => String(route.params.planId))
 const caseId = computed(() => String(route.params.caseId))
 
 const query = useCaseDetailQuery(appId, planId, caseId)
+const settingsConfigQuery = useSettingsConfigQuery()
 const devicesQuery = useDevicesQuery('all')
 const selectedDeviceRef = ref('')
 const submitting = ref(false)
@@ -60,6 +63,7 @@ const form = reactive<CaseEditorFormModel>({
   expectedText: '',
   procedureText: '',
   postActionText: '',
+  setupSteps: [],
   objectiveClarificationsText: '',
   preflightChecksText: '',
   interactionHintsText: '',
@@ -140,6 +144,18 @@ const startModeOptions = computed(() => ([
   { label: formatStartModeLabel('reset', t), value: 'reset' },
   { label: formatStartModeLabel('resume', t), value: 'resume' },
 ]))
+
+const setupBaseOptions = computed(() => {
+  const bases = settingsConfigQuery.data.value?.test_env?.bases ?? {}
+  return Object.keys(bases).map((name) => ({ value: name, label: name }))
+})
+
+const setupExecOptions = computed(() => (
+  (settingsConfigQuery.data.value?.test_env?.allowed_exec ?? []).map((name) => ({
+    value: name,
+    label: name,
+  }))
+))
 
 function translateUnknownError(error: unknown): string | null {
   if (!error) {
@@ -371,6 +387,16 @@ async function handleSaveCase() {
           >
           <span>{{ t('caseDetail.fields.isCoreCase') }}</span>
         </label>
+        <div class="grid gap-2">
+          <h3 class="text-base font-semibold text-text-primary">{{ t('caseDetail.setup.title') }}</h3>
+          <p class="text-sm text-text-secondary">{{ t('caseDetail.setup.description') }}</p>
+        </div>
+        <CaseSetupStepsEditor
+          v-model="form.setupSteps"
+          :base-options="setupBaseOptions"
+          :exec-options="setupExecOptions"
+          :disabled="replaceCaseMutation.isPending.value"
+        />
         <div class="grid gap-4 xl:grid-cols-4">
           <UiField :label="t('caseDetail.fields.preconditions')">
             <UiTextarea v-model="form.preconditionsText" :rows="8" :disabled="replaceCaseMutation.isPending.value" />

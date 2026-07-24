@@ -70,11 +70,17 @@ def test_optimize_tool_deps_reads_history_payloads() -> None:
     assert payload["summary"] == "tap save"
 
 
-def test_optimize_agent_prompt_includes_structured_evidence() -> None:
+def test_optimize_agent_prompt_uses_evidence_seed_instead_of_full_structured_evidence() -> None:
     prompt = PydanticAiOptimizeAgent._build_user_prompt(_build_request())
     payload = json.loads(prompt[0].content)
 
-    assert payload["structured_evidence"]["judge_result"]["optimization_reason"] == "runner and judge both showed ambiguity"
+    assert "structured_evidence" not in payload
+    assert payload["evidence_seed"]["judge_result"]["optimization_reason"] == (
+        "runner and judge both showed ambiguity"
+    )
+    assert payload["evidence_seed"]["attempts_overview"][0]["attempt_index"] == 0
+    assert "read_tools_hint" in payload["evidence_seed"]
+    assert payload["requirements"]["use_read_tools_for_detail"] is True
 
 
 class _CapturingAgent:

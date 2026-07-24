@@ -128,6 +128,12 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: 'Edit App', navLabel: 'apps.editor.editTitle', feature: 'apps', sidebar: false },
   },
   {
+    path: '/cloud',
+    name: 'cloud',
+    component: () => import('@/features/cloud/pages/CloudPage.vue'),
+    meta: { title: 'Cloud', navLabel: 'nav.cloud', feature: 'cloud', sidebar: true },
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('@/features/settings/pages/SettingsPage.vue'),

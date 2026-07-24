@@ -4,6 +4,37 @@ from typing import Any
 
 from munk.services.operations.models import OperationKind, OperationStatus
 
+OPERATION_SUMMARY_COLUMNS = (
+    "operation_id",
+    "kind",
+    "status",
+    "verification_verdict",
+    "app_id",
+    "plan_id",
+    "case_id",
+    "parent_operation_id",
+    "batch_id",
+    "position_index",
+    "position_label",
+    "projected_run_type",
+    "projected_platform",
+    "projected_title",
+    "projected_source_recording_id",
+    "pid",
+    "cancel_requested",
+    "device_ref",
+    "resource_scope",
+    "conflict_reason",
+    "error_code",
+    "error_message",
+    "created_at",
+    "started_at",
+    "finished_at",
+    "result_path",
+)
+
+OPERATION_SUMMARY_SELECT = ",\n            ".join(OPERATION_SUMMARY_COLUMNS)
+
 
 def build_list_operations_page_query(
     *,
@@ -18,8 +49,9 @@ def build_list_operations_page_query(
     run_type_expr: str,
     platform_expr: str,
 ) -> tuple[str, list[Any]]:
-    sql = """
-        SELECT *
+    sql = f"""
+        SELECT
+            {OPERATION_SUMMARY_SELECT}
         FROM operations
         WHERE 1 = 1
     """
@@ -104,10 +136,52 @@ def build_latest_plan_runs_query(plan_refs: list[tuple[str, str]]) -> tuple[str 
         params.extend([app_id, plan_id])
 
     sql = f"""
-        SELECT *
-        FROM operations
-        WHERE kind = ?
-          AND ({' OR '.join(clauses)})
-        ORDER BY datetime(created_at) DESC, operation_id DESC
+        SELECT
+            {OPERATION_SUMMARY_SELECT}
+        FROM (
+            SELECT
+                {OPERATION_SUMMARY_SELECT},
+                ROW_NUMBER() OVER (
+                    PARTITION BY app_id, plan_id
+                    ORDER BY created_at DESC, operation_id DESC
+                ) AS rn
+            FROM operations
+            WHERE kind = ?
+              AND ({' OR '.join(clauses)})
+        ) ranked
+        WHERE rn = 1
     """
     return sql, params, unique_refs
+
+
+def build_count_operations_query(
+    *,
+    status: OperationStatus | None = None,
+    kind: OperationKind | None = None,
+    device_ref: str | None = None,
+    surface: str | None = None,
+    verification_verdict: str | None = None,
+    platform: str | None = None,
+    query: str | None = None,
+    run_type: str | None = None,
+    run_type_expr: str,
+    platform_expr: str,
+) -> tuple[str, list[Any]]:
+    list_sql, params = build_list_operations_page_query(
+        status=status,
+        kind=kind,
+        device_ref=device_ref,
+        surface=surface,
+        verification_verdict=verification_verdict,
+        platform=platform,
+        query=query,
+        run_type=run_type,
+        run_type_expr=run_type_expr,
+        platform_expr=platform_expr,
+    )
+    # Replace the SELECT list with COUNT(*) while keeping the same WHERE clause.
+    where_index = list_sql.find("WHERE")
+    if where_index < 0:
+        raise RuntimeError("list operations query missing WHERE clause")
+    sql = f"SELECT COUNT(*) AS total FROM operations {list_sql[where_index:]}"
+    return sql, params

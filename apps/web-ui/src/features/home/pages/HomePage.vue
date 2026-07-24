@@ -87,7 +87,7 @@ function toneForStatus(status: string): 'neutral' | 'success' | 'error' | 'warni
   if (status === 'failed' || status === 'cancelled') {
     return 'error'
   }
-  if (status === 'running') {
+  if (status === 'running' || status === 'interrupted') {
     return 'warning'
   }
   return 'neutral'

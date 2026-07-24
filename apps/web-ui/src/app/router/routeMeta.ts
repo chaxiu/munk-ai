@@ -9,6 +9,7 @@ export type AppFeature =
   | 'recording'
   | 'assets'
   | 'apps'
+  | 'cloud'
   | 'settings'
   | 'not-found'
 

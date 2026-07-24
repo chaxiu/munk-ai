@@ -80,8 +80,14 @@ def serve_command(
     setup_persistent_logging(serve_log_path)
     response = MachineCommandService().cleanup_stale_claims()
     cleaned_count = int(response.payload["data"]["cleaned_count"])
+    reconciled_count = int(response.payload["data"].get("reconciled_count") or 0)
     if cleaned_count > 0:
         typer.echo(f"cleaned {cleaned_count} stale device claims before starting local API", err=True)
+    if reconciled_count > 0:
+        typer.echo(
+            f"reconciled {reconciled_count} orphaned operations before starting local API",
+            err=True,
+        )
     if kill_port_conflicts:
         killed_pids = _terminate_port_conflicts(port)
         if killed_pids:

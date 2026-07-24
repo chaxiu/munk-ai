@@ -29,6 +29,12 @@ from .models import JudgeEvidencePack
 from .step_projection import build_recent_step_summaries
 from .tool_models import JudgeRunDeps
 from .tools import register_judge_tools
+from .tree_excerpt import (
+    MAX_PRIMARY_EXCERPT_CHARS,
+    bound_json_payload,
+    build_focus_compact_tree,
+    build_prompt_size_diagnostics,
+)
 
 SYSTEM_PROMPT = "\n".join(
     [
@@ -60,6 +66,7 @@ class PydanticAiJudgeAgent:
     ) -> None:
         self._vl_max_side = vl_max_side
         self.last_prompt = ""
+        self.last_prompt_diagnostics: dict[str, object] = {}
         self.last_tool_calls: list[str] = []
         output_spec = build_structured_output_spec(JudgeAgentOutput, output_strategy=output_strategy)
         self._agent = Agent(
@@ -80,6 +87,7 @@ class PydanticAiJudgeAgent:
         deps = JudgeRunDeps(evidence_pack=evidence_pack, vl_max_side=vl_max_side)
         user_prompt = self._build_user_prompt(evidence_pack)
         self.last_prompt = self._build_prompt(evidence_pack)
+        self.last_prompt_diagnostics = build_prompt_size_diagnostics(self.last_prompt)
         result = run_agent_sync_compatible(
             self._agent,
             user_prompt=user_prompt,
@@ -216,7 +224,8 @@ class PydanticAiJudgeAgent:
         excerpt = PydanticAiJudgeAgent._evidence_excerpt(item)
         excerpt_text = "none"
         if excerpt is not None:
-            excerpt_text = json.dumps(excerpt, ensure_ascii=False, sort_keys=True)
+            bounded = bound_json_payload(excerpt, max_chars=MAX_PRIMARY_EXCERPT_CHARS)
+            excerpt_text = json.dumps(bounded, ensure_ascii=False, sort_keys=True)
         return (
             f"- {item.evidence_id} [{item.kind}/{item.source}] {item.summary}\n"
             f"  excerpt={excerpt_text}"
@@ -298,11 +307,15 @@ class PydanticAiJudgeAgent:
                 "linked_visual_changes": list(item.payload.linked_visual_changes),
             }
         if is_screen_frame_evidence(item):
+            compact_tree = build_focus_compact_tree(
+                item.payload.compact_tree.model_dump(mode="json"),
+                focus_hits=[entry.model_dump(mode="json") for entry in item.payload.focus_hits],
+            )
             return {
                 "package": item.payload.package,
                 "tree_available": item.payload.tree_available,
                 "tree_summary": item.payload.tree_summary,
-                "compact_tree": item.payload.compact_tree.model_dump(mode="json"),
+                "compact_tree": compact_tree,
                 "focus_hits": [entry.model_dump(mode="json") for entry in item.payload.focus_hits],
             }
         if is_runner_history_evidence(item):

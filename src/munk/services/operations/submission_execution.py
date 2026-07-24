@@ -87,17 +87,20 @@ class SubmissionExecutionRunner:
                 message="operation interrupted by user",
                 data={"command": command},
             )
-            tracker.mark_cancelled()
+            tracker.mark_interrupted(
+                error_code="operation_interrupted",
+                error_message="operation interrupted by user",
+            )
             self._append_resource_released_event(
                 tracker=tracker,
                 device_ref=context.device_ref,
                 requires_device=context.requires_device,
-                reason="cancelled",
+                reason="interrupted",
             )
             self._capture_command_finished(
                 command=command,
                 started_at=telemetry_started_at,
-                status="cancelled",
+                status="interrupted",
                 context=context,
                 operation_id=tracker.operation_id,
             )

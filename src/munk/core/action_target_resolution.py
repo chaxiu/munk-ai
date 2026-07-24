@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from munk.agent_base.base import ScreenState
-from munk.core.action_target_building import build_action_targets
+from munk.core.action_target_building import build_action_targets, build_canonical_target_parts
 from munk.core.action_target_geometry import (
     box_area,
     distance_sq_to_box_center,
@@ -15,7 +15,9 @@ from munk.core.action_target_utils import first_int, normalized_text
 
 
 def resolve_action_target(screen: ScreenState, *, target_id: int, max_elements: int) -> ActionTarget:
-    targets = build_action_targets(screen, max_elements=max_elements)
+    _ = max_elements
+    canonical_parts = build_canonical_target_parts(screen)
+    targets = [*canonical_parts.vision_targets, *canonical_parts.tree_targets]
     index = target_id - 1 if target_id > 0 else target_id
     if not 0 <= index < len(targets):
         raise ValueError(f"target_id out of range: {target_id}")

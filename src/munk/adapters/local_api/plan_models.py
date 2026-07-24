@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from munk.testing import AiGuidance, CaseBudget, CaseStartState, TestCase
+from munk.testing import AiGuidance, CaseBudget, CaseStartState, SetupStep, TestCase
 
 _EDITABLE_CASE_FIELDS = (
     "intent",
@@ -124,6 +124,7 @@ class TestCasePayload(BaseModel):
     expected: list[str] = Field(default_factory=list)
     procedure: list[str] = Field(default_factory=list)
     post_action: list[str] = Field(default_factory=list)
+    setup: list[SetupStep] = Field(default_factory=list)
     is_core_case: bool = False
     runner_goal: str
     budget: CaseBudgetRequest | None = None
@@ -179,6 +180,7 @@ class TestCasePayload(BaseModel):
             expected=list(self.expected),
             procedure=list(self.procedure),
             post_action=list(self.post_action),
+            setup=list(self.setup),
             is_core_case=self.is_core_case,
             runner_goal=self.runner_goal,
             budget=None if self.budget is None else self.budget.to_case_budget(),

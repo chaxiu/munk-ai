@@ -23,6 +23,7 @@ Install Munk AI, run diagnostics, and start the local Web UI:
 ```bash
 curl -fsSL https://get.munk.sh | sh
 munk doctor
+munk doctor --fix       # apply auto-fixable repairs (e.g. Playwright Chromium)
 munk serve --port 16888
 ```
 
@@ -268,8 +269,8 @@ Munk AI is under active development.
 - [ ] Docs and CONTRIBUTING guide
 - [ ] Windows support
 - [ ] Linux support
-- [ ] iOS environment setup
-- [ ] Web environment setup
+- [x] iOS run case (Simulator + real device via WDA)
+- [x] Web run case (Playwright + Chromium MVP)
 - [ ] Advanced agent
 
 

@@ -69,6 +69,29 @@ export function runCaseResult(detail?: OperationDetailData | null): Record<strin
   return asObject(detail?.result ?? null)
 }
 
+export type KnowledgePostActionResultView = {
+  summary: string | null
+  submitted: boolean
+  skipReason: string | null
+  candidateId: string | null
+}
+
+export function knowledgePostActionResult(detail?: OperationDetailData | null): KnowledgePostActionResultView | null {
+  if (!detail || detail.run_type !== 'knowledge_post_action') {
+    return null
+  }
+  const result = runCaseResult(detail)
+  if (!result) {
+    return null
+  }
+  return {
+    summary: asString(result.summary),
+    submitted: result.submitted === true,
+    skipReason: asString(result.skip_reason),
+    candidateId: asString(result.candidate_id),
+  }
+}
+
 export function runAttemptCount(detail?: OperationDetailData | null): number {
   const result = runCaseResult(detail)
   const explicitCount = asNumber(result?.attempt_count)

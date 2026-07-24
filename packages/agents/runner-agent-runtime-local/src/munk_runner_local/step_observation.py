@@ -7,7 +7,7 @@ from pathlib import Path
 
 import cv2
 from munk.agent_base.base import RuntimeObservationSnapshot, ScreenState
-from munk.core.action_targets import build_target_parts
+from munk.core.action_targets import build_canonical_target_parts
 from munk.perception import ObservationTree, to_json_dict
 from munk.perception.image import BgrImage
 from munk.services.settle import SettleComparableSnapshot
@@ -52,11 +52,7 @@ def refresh_step_observation_state(
         )
     screen = replace(
         screen,
-        action_target_parts=build_target_parts(
-            screen,
-            vision_limit=context.params.runner_max_elements,
-            tree_limit=context.params.runner_max_elements,
-        ),
+        action_target_parts=build_canonical_target_parts(screen),
     )
     write_observation_artifacts(context, step_index, screen, snapshot.observation_tree)
     settle_before = capture_settle_snapshot(

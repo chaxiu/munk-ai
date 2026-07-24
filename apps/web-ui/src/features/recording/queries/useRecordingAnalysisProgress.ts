@@ -28,7 +28,7 @@ export function useRecordingAnalysisProgress(operationId: MaybeRefOrGetter<strin
   }
 
   function isTerminalStatus(status: string | null | undefined): boolean {
-    return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+    return status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
   }
 
   async function pollOnce() {

@@ -219,11 +219,17 @@ def optimize_case(
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    fix: bool = typer.Option(
+        False,
+        "--fix",
+        help="Apply auto-fixable runtime repairs (for example Playwright Chromium), then re-check.",
+    ),
+) -> None:
     _boot_log("doctor command invoked")
     from munk.adapters.cli.doctor_command import doctor_command
 
-    doctor_command()
+    doctor_command(fix=fix)
 
 
 @app.command()

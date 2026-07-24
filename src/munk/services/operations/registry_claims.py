@@ -14,7 +14,7 @@ from munk.services.operations.models import (
     now_iso,
 )
 
-TERMINAL_STATUSES: set[OperationStatus] = {"succeeded", "failed", "cancelled"}
+TERMINAL_STATUSES: set[OperationStatus] = {"succeeded", "failed", "cancelled", "interrupted"}
 DEVICE_RESOURCE_TYPE = "device"
 
 
@@ -111,9 +111,12 @@ def cleanup_stale_claims_locked(
 
         if owner_kind == "interactive_session" and interactive_claim_expired(owner_progress_json, load_json):
             detail = "interactive session lease expired"
-            mark_operation_failed_locked(
+            from munk.services.operations.lifecycle_reconcile import finalize_owner_and_descendants_locked
+
+            finalize_owner_and_descendants_locked(
                 connection,
                 operation_id=operation_id,
+                status="failed",
                 error_code="interactive_session_expired",
                 error_message=detail,
             )
@@ -134,16 +137,25 @@ def cleanup_stale_claims_locked(
         if owner_status == "queued" and not claim_wait_timed_out(claimed_at, queue_startup_grace_seconds):
             continue
 
-        error_code = "owner_start_timeout" if owner_status == "queued" and owner_pid is None else "stale_claim_owner_dead"
-        action = "released_start_timeout" if error_code == "owner_start_timeout" else "released_dead_owner"
-        detail = (
-            "queued owner did not publish a live pid before startup timeout"
-            if error_code == "owner_start_timeout"
-            else "owner pid is no longer alive"
+        from munk.services.operations.lifecycle_reconcile import (
+            FinalizeStatus,
+            finalize_owner_and_descendants_locked,
         )
-        mark_operation_failed_locked(
+
+        if owner_status == "queued" and owner_pid is None:
+            error_code = "owner_start_timeout"
+            action = "released_start_timeout"
+            detail = "queued owner did not publish a live pid before startup timeout"
+            finalize_status: FinalizeStatus = "failed"
+        else:
+            error_code = "owner_pid_dead"
+            action = "released_dead_owner"
+            detail = "owner pid is no longer alive"
+            finalize_status = "interrupted"
+        finalize_owner_and_descendants_locked(
             connection,
             operation_id=operation_id,
+            status=finalize_status,
             error_code=error_code,
             error_message=detail,
         )
@@ -263,16 +275,14 @@ def mark_operation_failed_locked(
     error_code: str,
     error_message: str,
 ) -> None:
-    connection.execute(
-        """
-        UPDATE operations
-        SET status = 'failed',
-            error_code = ?,
-            error_message = ?,
-            finished_at = COALESCE(finished_at, ?)
-        WHERE operation_id = ?
-        """,
-        (error_code, error_message, now_iso(), operation_id),
+    from munk.services.operations.lifecycle_reconcile import mark_operation_terminal_locked
+
+    mark_operation_terminal_locked(
+        connection,
+        operation_id=operation_id,
+        status="failed",
+        error_code=error_code,
+        error_message=error_message,
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -9,6 +10,7 @@ import yaml
 from munk.adapters.local_api.config_models import (
     AgentConfigEditor,
     GeminiSectionEditor,
+    HttpBaseConfigEditor,
     IOSBridgeConfigEditor,
     OpenAICompatibleSectionEditor,
     OrchestrationConfigEditor,
@@ -16,14 +18,27 @@ from munk.adapters.local_api.config_models import (
     RuntimeConfigEditor,
     SettingsAgentsEditor,
     SettingsConfigUpsertRequest,
+    TestEnvConfigEditor,
 )
 from munk.config.defaults import MUNK_CODE_DEFAULTS
+from munk.config.layered import (
+    build_layered_document,
+    deep_merge,
+    effective_config_dict,
+    ensure_no_secrets_in_shared,
+    parse_layered_document,
+    read_shared_for_sync,
+    replace_shared_in_document,
+    sanitize_shared_for_sync,
+    split_flat_to_layered,
+)
 from munk.config.load import profile_config_path, resolve_config_file
 from munk.config.resolve import RuntimeOverridePatch
 from munk.config.schema import LLMProviderKind, MunkConfig, OutputStrategy, SettleMode
 
 AgentRoleName = Literal["plan", "runner", "judge", "review", "analysis"]
 _AGENT_ROLES: tuple[AgentRoleName, ...] = ("plan", "runner", "judge", "review", "analysis")
+_SETTINGS_AGENT_ROLES = frozenset(_AGENT_ROLES)
 
 
 class ProfileConfigService:
@@ -48,16 +63,100 @@ class ProfileConfigService:
 
     def load_editor_state(self) -> dict[str, Any]:
         raw_payload = self._load_raw_yaml_dict()
-        MunkConfig.model_validate(raw_payload)
-        return self._build_editor_payload(raw_payload=raw_payload, file_exists=self.path.exists())
+        effective = effective_config_dict(raw_payload)
+        MunkConfig.model_validate(effective)
+        return self._build_editor_payload(raw_payload=effective, file_exists=self.path.exists())
 
     def save_editor_state(self, request: SettingsConfigUpsertRequest) -> dict[str, Any]:
-        previous_payload = self._load_raw_yaml_dict()
-        payload = self._build_yaml_payload(request=request, previous_payload=previous_payload)
-        MunkConfig.model_validate(payload)
+        previous_raw = self._load_raw_yaml_dict()
+        previous_effective = effective_config_dict(previous_raw)
+        flat_payload = self._build_yaml_payload(request=request, previous_payload=previous_effective)
+        MunkConfig.model_validate(flat_payload)
+        layered = self._to_layered_document(flat_payload=flat_payload, previous_raw=previous_raw)
+        ensure_no_secrets_in_shared(layered.get("shared", {}))
+        MunkConfig.model_validate(effective_config_dict(layered))
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(self._dump_yaml(payload), encoding="utf-8")
-        return self._build_editor_payload(raw_payload=payload, file_exists=True)
+        self.path.write_text(self._dump_yaml(layered), encoding="utf-8")
+        return self._build_editor_payload(
+            raw_payload=effective_config_dict(layered),
+            file_exists=True,
+        )
+
+    def export_shared_config(self) -> dict[str, Any]:
+        """Return sanitized shared section for cloud Bundle team_config."""
+        return read_shared_for_sync(self._load_raw_yaml_dict())
+
+    def apply_shared_config(self, team_config: dict[str, Any]) -> dict[str, Any]:
+        """Replace shared from cloud team_config; preserve local. Returns editor state."""
+        previous_raw = self._load_raw_yaml_dict()
+        layered = replace_shared_in_document(previous_raw, team_config)
+        ensure_no_secrets_in_shared(layered.get("shared", {}))
+        MunkConfig.model_validate(effective_config_dict(layered))
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(self._dump_yaml(layered), encoding="utf-8")
+        return self._build_editor_payload(
+            raw_payload=effective_config_dict(layered),
+            file_exists=True,
+        )
+
+    def _to_layered_document(
+        self,
+        *,
+        flat_payload: dict[str, Any],
+        previous_raw: dict[str, Any],
+    ) -> dict[str, Any]:
+        new_shared, new_local = split_flat_to_layered(flat_payload)
+        previous_shared, previous_local = parse_layered_document(previous_raw)
+        shared = self._preserve_unmodeled_shared(previous_shared, new_shared)
+        local = self._preserve_unmodeled_local(previous_local, new_local)
+        return build_layered_document(sanitize_shared_for_sync(shared), local)
+
+    @staticmethod
+    def _preserve_unmodeled_shared(
+        previous_shared: dict[str, Any],
+        new_shared: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = deepcopy(new_shared)
+        # Settings does not edit perception; keep previous shared perception.
+        if "perception" in previous_shared and "perception" not in result:
+            result["perception"] = deepcopy(previous_shared["perception"])
+        previous_agents = previous_shared.get("agents")
+        if isinstance(previous_agents, dict):
+            agents = cast(dict[str, Any], deepcopy(result.get("agents") or {}))
+            for role, payload in previous_agents.items():
+                if role in _SETTINGS_AGENT_ROLES:
+                    continue
+                if role not in agents:
+                    agents[role] = deepcopy(payload)
+            if agents:
+                result["agents"] = agents
+        return result
+
+    @staticmethod
+    def _preserve_unmodeled_local(
+        previous_local: dict[str, Any],
+        new_local: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = deepcopy(new_local)
+        if "perception" in previous_local:
+            previous_perception = cast(dict[str, Any], previous_local["perception"])
+            current = cast(dict[str, Any], result.get("perception") or {})
+            result["perception"] = deep_merge(previous_perception, current)
+        # Preserve unknown local top-level keys Settings never writes.
+        settings_local_keys = {
+            "proxy",
+            "ios_bridge",
+            "openai_compatible",
+            "gemini",
+            "agents",
+            "perception",
+        }
+        for key, value in previous_local.items():
+            if key in settings_local_keys:
+                continue
+            if key not in result:
+                result[key] = deepcopy(value)
+        return result
 
     def _load_raw_yaml_dict(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -82,6 +181,7 @@ class ProfileConfigService:
             "agents": self._build_agents_editor(agents_payload),
             "proxy": self._build_proxy_editor(raw_payload.get("proxy")),
             "ios_bridge": self._build_ios_bridge_editor(raw_payload.get("ios_bridge")),
+            "test_env": self._build_test_env_editor(raw_payload.get("test_env")),
             "runtime": self._build_runtime_editor(runtime_payload),
             "orchestration": self._build_orchestration_editor(raw_payload.get("orchestration")),
         }
@@ -176,7 +276,28 @@ class ProfileConfigService:
         payload = cast(dict[str, Any], value) if isinstance(value, dict) else {}
         return IOSBridgeConfigEditor(
             sudo_enabled=bool(payload.get("sudo_enabled", False)),
-            sudo_password=self._string_or_none(payload.get("sudo_password")),
+            sudo_password=None,
+            sudo_password_configured=bool(self._string_or_none(payload.get("sudo_password"))),
+        )
+
+    def _build_test_env_editor(self, value: Any) -> TestEnvConfigEditor:
+        payload = cast(dict[str, Any], value) if isinstance(value, dict) else {}
+        bases_payload = payload.get("bases")
+        bases: dict[str, HttpBaseConfigEditor] = {}
+        if isinstance(bases_payload, dict):
+            typed_bases = cast(dict[Any, Any], bases_payload)
+            for name, base_value in typed_bases.items():
+                normalized_name = self._string_or_none(name)
+                if normalized_name is None:
+                    continue
+                base_payload = cast(dict[str, Any], base_value) if isinstance(base_value, dict) else {}
+                bases[normalized_name] = HttpBaseConfigEditor(
+                    url=self._string_or_none(base_payload.get("url")),
+                    headers=self._coerce_nonempty_string_dict(base_payload.get("headers")),
+                )
+        return TestEnvConfigEditor(
+            bases=bases,
+            allowed_exec=self._normalize_allowed_exec(payload.get("allowed_exec")),
         )
 
     def _build_yaml_payload(
@@ -185,9 +306,21 @@ class ProfileConfigService:
         request: SettingsConfigUpsertRequest,
         previous_payload: dict[str, Any],
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "provider": request.provider,
-        }
+        payload: dict[str, Any] = {"provider": request.provider}
+        self._apply_provider_sections(payload, request=request, previous_payload=previous_payload)
+        agents_payload = self._build_agents_payload(request=request, previous_payload=previous_payload)
+        if agents_payload:
+            payload["agents"] = agents_payload
+        self._apply_runtime_sections(payload, request=request, previous_payload=previous_payload)
+        return payload
+
+    def _apply_provider_sections(
+        self,
+        payload: dict[str, Any],
+        *,
+        request: SettingsConfigUpsertRequest,
+        previous_payload: dict[str, Any],
+    ) -> None:
         openai_payload = self._build_openai_section_payload(
             request.openai_compatible,
             previous_section=previous_payload.get("openai_compatible"),
@@ -205,6 +338,12 @@ class ProfileConfigService:
         if gemini_payload is not None:
             payload["gemini"] = gemini_payload
 
+    def _build_agents_payload(
+        self,
+        *,
+        request: SettingsConfigUpsertRequest,
+        previous_payload: dict[str, Any],
+    ) -> dict[str, Any]:
         previous_agents = previous_payload.get("agents")
         previous_agent_payloads = cast(dict[str, Any], previous_agents) if isinstance(previous_agents, dict) else {}
         agents_payload: dict[str, Any] = {}
@@ -217,9 +356,15 @@ class ProfileConfigService:
             )
             if role_payload is not None:
                 agents_payload[role] = role_payload
-        if agents_payload:
-            payload["agents"] = agents_payload
+        return agents_payload
 
+    def _apply_runtime_sections(
+        self,
+        payload: dict[str, Any],
+        *,
+        request: SettingsConfigUpsertRequest,
+        previous_payload: dict[str, Any],
+    ) -> None:
         runtime_payload = self._build_runtime_payload(request.runtime)
         if runtime_payload:
             payload["runtime"] = runtime_payload
@@ -232,7 +377,9 @@ class ProfileConfigService:
         ios_bridge_payload = self._build_ios_bridge_payload(request.ios_bridge, previous_payload.get("ios_bridge"))
         if ios_bridge_payload is not None:
             payload["ios_bridge"] = ios_bridge_payload
-        return payload
+        test_env_payload = self._build_test_env_payload(request.test_env)
+        if test_env_payload is not None:
+            payload["test_env"] = test_env_payload
 
     def _build_agent_payload(
         self,
@@ -356,6 +503,30 @@ class ProfileConfigService:
             payload["sudo_password"] = sudo_password
         return payload
 
+    def _build_test_env_payload(self, editor: TestEnvConfigEditor) -> dict[str, Any] | None:
+        bases_payload: dict[str, Any] = {}
+        for name, base_editor in editor.bases.items():
+            normalized_name = self._string_or_none(name)
+            if normalized_name is None:
+                raise ValueError("test_env.bases keys must not be empty")
+            url = self._string_or_none(base_editor.url)
+            if url is None:
+                raise ValueError(f"test_env.bases['{normalized_name}'].url must not be empty")
+            headers = self._coerce_nonempty_string_dict(base_editor.headers)
+            base_payload: dict[str, Any] = {"url": url}
+            if headers:
+                base_payload["headers"] = headers
+            bases_payload[normalized_name] = base_payload
+        allowed_exec = self._normalize_allowed_exec(editor.allowed_exec)
+        if not bases_payload and not allowed_exec:
+            return None
+        payload: dict[str, Any] = {}
+        if bases_payload:
+            payload["bases"] = bases_payload
+        if allowed_exec:
+            payload["allowed_exec"] = allowed_exec
+        return payload
+
     def _dump_yaml(self, payload: dict[str, Any]) -> str:
         return yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
 
@@ -409,6 +580,36 @@ class ProfileConfigService:
         for key, item in typed_value.items():
             if isinstance(key, str) and isinstance(item, str):
                 result[key] = item
+        return result
+
+    @staticmethod
+    def _coerce_nonempty_string_dict(value: Any) -> dict[str, str]:
+        if not isinstance(value, dict):
+            return {}
+        typed_value = cast(dict[Any, Any], value)
+        result: dict[str, str] = {}
+        for key, item in typed_value.items():
+            normalized_key = ProfileConfigService._string_or_none(key)
+            normalized_value = ProfileConfigService._string_or_none(item)
+            if normalized_key is None or normalized_value is None:
+                raise ValueError("test_env headers must contain only non-empty string keys and values")
+            result[normalized_key] = normalized_value
+        return result
+
+    @staticmethod
+    def _normalize_allowed_exec(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        seen: set[str] = set()
+        result: list[str] = []
+        for item in cast(list[Any], value):
+            normalized = ProfileConfigService._string_or_none(item)
+            if normalized is None:
+                continue
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(normalized)
         return result
 
     @staticmethod

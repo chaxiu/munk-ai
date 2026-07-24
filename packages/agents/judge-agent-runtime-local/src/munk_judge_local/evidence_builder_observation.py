@@ -5,8 +5,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import cast
 
-from munk.core.compact_tree import build_compact_tree
 from munk.judging.models import JudgeEvidence, JudgeScreenDiffEvidence, JudgeScreenFrameEvidence
+
+from munk.core.compact_tree import build_compact_tree
 
 from .evidence_builder_parsers import (
     _dict_list,
@@ -14,6 +15,7 @@ from .evidence_builder_parsers import (
     _screen_frame_payload,
 )
 from .focus_terms import count_focus_matches
+from .tree_excerpt import build_focus_compact_tree
 
 SCREEN_FRAME_WINDOW = 3
 SCREEN_DIFF_WINDOW = 5
@@ -187,7 +189,8 @@ def _build_compact_tree_excerpt(
 ) -> dict[str, object]:
     compact_tree = build_compact_tree(raw_nodes, tree_parent_map=tree_parent_map)
     compact_tree["focus_term_count"] = len(focus_terms)
-    return compact_tree
+    focus_hits = _extract_focus_hits(raw_nodes, focus_terms)
+    return build_focus_compact_tree(compact_tree, focus_hits=focus_hits)
 
 
 def _load_tree_parent_map(

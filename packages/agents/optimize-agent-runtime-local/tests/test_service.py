@@ -27,6 +27,7 @@ class _FakeOptimizeAgent:
     def __init__(self) -> None:
         self.last_tool_calls = ["read_attempts_overview", "read_step_summary"]
         self.last_prompt = "optimize prompt"
+        self.last_prompt_diagnostics = {"prompt_chars": 15, "prompt_tokens_estimate": 3, "degraded": False}
 
     def optimize(self, request: OptimizeRequest, *, deps) -> OptimizeAgentOutput:  # noqa: ANN001
         assert request.case_id == "case-1"
@@ -89,6 +90,9 @@ def test_optimize_runtime_service_emits_canonical_timeline_events_and_writes_art
     assert context.managed_paths.prompt_path.read_text(encoding="utf-8") == "optimize prompt"
     tool_calls_payload = json.loads(context.managed_paths.tool_calls_path.read_text(encoding="utf-8"))
     assert tool_calls_payload["tool_calls"] == ["read_attempts_overview", "read_step_summary"]
+    diagnostics = json.loads((context.managed_paths.root_dir / "prompt_diagnostics.json").read_text(encoding="utf-8"))
+    assert diagnostics["prompt_chars"] == 15
+    assert diagnostics["degraded"] is False
 
 
 def _build_request(tmp_path: Path) -> OptimizeRequest:

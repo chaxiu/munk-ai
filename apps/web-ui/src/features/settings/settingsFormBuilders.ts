@@ -1,8 +1,10 @@
 import type { SettingsConfigData, SettingsConfigUpsertRequest } from '@/shared/api/settings'
+import { recordToStringMapEntries, stringMapEntriesToRecord } from '@/shared/lib/stringMapForm'
 
 import type {
   AgentForm,
   GeminiSectionForm,
+  HttpBaseFormItem,
   IOSBridgeForm,
   OpenAISectionForm,
   OrchestrationData,
@@ -12,6 +14,7 @@ import type {
   RoleName,
   RuntimeForm,
   SettingsFormState,
+  TestEnvForm,
 } from './settingsFormTypes'
 import { ROLE_NAMES } from './settingsFormTypes'
 import { isProviderSectionConfigured } from './settingsProviderConfig'
@@ -34,6 +37,7 @@ type GeminiEditor = NonNullable<SettingsConfigData['gemini']>
 type AgentEditor = NonNullable<NonNullable<SettingsConfigData['agents']>[RoleName]>
 type ProxyEditor = NonNullable<SettingsConfigData['proxy']>
 type IOSBridgeEditor = NonNullable<SettingsConfigData['ios_bridge']>
+type TestEnvEditor = NonNullable<SettingsConfigData['test_env']>
 type RuntimeEditor = NonNullable<SettingsConfigData['runtime']>
 type AgentRequest = NonNullable<SettingsConfigUpsertRequest['agents']>[RoleName]
 type OpenAIRequest = NonNullable<SettingsConfigUpsertRequest['openai_compatible']>
@@ -80,6 +84,12 @@ const EMPTY_PROXY_EDITOR: ProxyEditor = {
 const EMPTY_IOS_BRIDGE_EDITOR: IOSBridgeEditor = {
   sudo_enabled: false,
   sudo_password: null,
+  sudo_password_configured: false,
+}
+
+const EMPTY_TEST_ENV_EDITOR: TestEnvEditor = {
+  bases: {},
+  allowed_exec: [],
 }
 
 const EMPTY_ORCHESTRATION_EDITOR: OrchestrationData = {
@@ -167,6 +177,22 @@ export function createEmptyIOSBridgeForm(): IOSBridgeForm {
   return {
     sudo_enabled: false,
     sudo_password: '',
+    sudo_password_configured: false,
+  }
+}
+
+export function createEmptyHttpBaseFormItem(): HttpBaseFormItem {
+  return {
+    name: '',
+    url: '',
+    headers: [],
+  }
+}
+
+export function createEmptyTestEnvForm(): TestEnvForm {
+  return {
+    bases: [],
+    allowed_exec_text: '',
   }
 }
 
@@ -180,6 +206,7 @@ export function createEmptySettingsForm(): SettingsFormState {
     agents: createEmptyAgentsForm(),
     proxy: createEmptyProxyConfigForm(),
     ios_bridge: createEmptyIOSBridgeForm(),
+    test_env: createEmptyTestEnvForm(),
     runtime: createEmptyRuntimeForm(),
     orchestration: createEmptyOrchestrationForm(),
   }
@@ -196,6 +223,7 @@ export function buildSettingsForm(data: SettingsConfigData): SettingsFormState {
     agents: buildAgentsForm(data.agents),
     proxy: buildProxyForm(data.proxy),
     ios_bridge: buildIOSBridgeForm(data.ios_bridge),
+    test_env: buildTestEnvForm(data.test_env),
     runtime: buildRuntimeForm(data.runtime),
     orchestration: buildOrchestrationForm(data.orchestration),
   }
@@ -215,7 +243,9 @@ export function buildSettingsRequest(form: SettingsFormState): SettingsConfigUps
     ios_bridge: {
       sudo_enabled: form.ios_bridge.sudo_enabled,
       sudo_password: emptyToNull(form.ios_bridge.sudo_password),
+      sudo_password_configured: form.ios_bridge.sudo_password_configured,
     },
+    test_env: buildTestEnvRequest(form.test_env),
     runtime: {
       max_tokens: parseInteger(form.runtime.max_tokens),
       temperature: parseNumber(form.runtime.temperature),
@@ -309,7 +339,48 @@ function buildIOSBridgeForm(iosBridge?: IOSBridgeEditor): IOSBridgeForm {
   const source = iosBridge ?? EMPTY_IOS_BRIDGE_EDITOR
   return {
     sudo_enabled: source.sudo_enabled ?? false,
-    sudo_password: source.sudo_password ?? '',
+    sudo_password: '',
+    sudo_password_configured: Boolean(source.sudo_password_configured),
+  }
+}
+
+function buildTestEnvForm(testEnv?: TestEnvEditor): TestEnvForm {
+  const source = testEnv ?? EMPTY_TEST_ENV_EDITOR
+  const bases = Object.entries(source.bases ?? {}).map(([name, base]) => ({
+    name,
+    url: base?.url ?? '',
+    headers: recordToStringMapEntries(base?.headers ?? {}),
+  }))
+  return {
+    bases,
+    allowed_exec_text: formatLineList(source.allowed_exec ?? []),
+  }
+}
+
+function buildTestEnvRequest(testEnv: TestEnvForm): NonNullable<SettingsConfigUpsertRequest['test_env']> {
+  const bases: NonNullable<SettingsConfigUpsertRequest['test_env']>['bases'] = {}
+  const seenNames = new Set<string>()
+  for (const item of testEnv.bases) {
+    const name = item.name.trim()
+    if (!name) {
+      throw new Error('test_env base name must not be empty')
+    }
+    if (seenNames.has(name)) {
+      throw new Error(`duplicate test_env base name: ${name}`)
+    }
+    seenNames.add(name)
+    const url = item.url.trim()
+    if (!url) {
+      throw new Error(`test_env base '${name}' url must not be empty`)
+    }
+    bases[name] = {
+      url,
+      headers: stringMapEntriesToRecord(item.headers, `test_env base '${name}' headers`),
+    }
+  }
+  return {
+    bases,
+    allowed_exec: parseLineList(testEnv.allowed_exec_text),
   }
 }
 

@@ -6,7 +6,7 @@ import { typedViFn } from '@/shared/testing/typedViFn'
 import RunDetailPage from '../pages/RunDetailPage.vue'
 import { i18n, setLocale } from '@/shared/i18n'
 
-const { getArtifactContentMock, cancelMock, reproduceMock } = vi.hoisted(() => ({
+const { getArtifactContentMock, cancelMock, reproduceMock, useRunEventsQueryMock } = vi.hoisted(() => ({
   getArtifactContentMock: vi.fn(async () => ({
     artifact_id: 'result',
     media_type: 'application/json',
@@ -16,6 +16,7 @@ const { getArtifactContentMock, cancelMock, reproduceMock } = vi.hoisted(() => (
   })),
   cancelMock: vi.fn(async () => ({ operation_id: 'op-1', status: 'running', cancel_requested: true })),
   reproduceMock: vi.fn(async () => ({ operation_id: 'op-1', status: 'succeeded', reproduction_entries: [{ id: 'r1' }] })),
+  useRunEventsQueryMock: vi.fn(),
 }))
 
 function buildDetailState() {
@@ -184,7 +185,7 @@ function buildDetailState() {
     repro_dir: '/tmp/repro',
     primary_artifact_ids: ['result'],
     artifact_manifest_version: 1,
-    schema_versions: { report: 'v1' },
+    schema_versions: { review_result: 'v1' },
     diagnostics_path: '/tmp/diagnostics.json',
     duration_ms: 4000,
     failure_category: null,
@@ -211,7 +212,7 @@ const artifactsState = ref({
   repro_dir: '/tmp/repro',
   primary_artifact_ids: ['result'],
   artifact_manifest_version: 1,
-  schema_versions: { report: 'v1' },
+  schema_versions: { review_result: 'v1' },
   diagnostics_path: '/tmp/diagnostics.json',
   duration_ms: 4000,
   failure_category: null,
@@ -228,7 +229,6 @@ const artifactsState = ref({
   ],
   reproduction_entries: [],
   upstream_review: null,
-  metadata: { case_count: 1 },
   primary_artifacts: [
     {
       artifact_id: 'result',
@@ -301,12 +301,103 @@ const eventsState = ref({
   operation_id: 'op-1',
   after_seq: 0,
   limit: 200,
-  next_after_seq: 4,
+  next_after_seq: 5,
   items: [
-    { seq: 1, operation_id: 'op-1', event_type: 'run_started', message: 'started', timestamp: '2026-01-01T00:00:01Z', data_json: { step: 1 } },
-    { seq: 2, operation_id: 'op-1', event_type: 'workflow_attempt_started', message: 'runner attempt started', timestamp: '2026-01-01T00:00:02Z', data_json: { attempt_index: 0 } },
-    { seq: 3, operation_id: 'op-1', event_type: 'judge_decision', message: 'judge requested another runner attempt', timestamp: '2026-01-01T00:00:03Z', data_json: { verdict: 'inconclusive', reason: 'Need a stable final screenshot', decision_type: 'retry_with_context' } },
-    { seq: 4, operation_id: 'op-1', event_type: 'workflow_retry_scheduled', message: 'judge requested another runner attempt', timestamp: '2026-01-01T00:00:04Z', data_json: { attempt_index: 0, retry_attempt: 1, retry_reason: 'Need a stable final screenshot', focus_items: ['Capture a stable final screenshot', 'Verify the settings header before stopping'], handoff_summary: 'This is retry attempt 1 for the same test case. Previous judge assessment: Need a stable final screenshot. Focus for this retry: Capture a stable final screenshot.' } },
+    {
+      seq: 1,
+      operation_id: 'op-1',
+      event_type: 'workflow_started',
+      message: 'workflow started',
+      timestamp: '2026-01-01T00:00:01Z',
+      agent_role: 'orchestration',
+      timeline_scope: 'parent_run',
+      timeline_phase: 'started',
+      summary: 'Workflow started for this case run.',
+      data_json: {
+        agent_role: 'orchestration',
+        timeline_scope: 'parent_run',
+        timeline_phase: 'started',
+        summary: 'Workflow started for this case run.',
+      },
+    },
+    {
+      seq: 2,
+      operation_id: 'op-1',
+      event_type: 'context_prepare_completed',
+      message: 'context prepared',
+      timestamp: '2026-01-01T00:00:02Z',
+      agent_role: 'context_prepare',
+      timeline_scope: 'parent_run',
+      timeline_phase: 'completed',
+      attempt_index: 0,
+      summary: 'Loaded device state and prepared runtime context.',
+      data_json: {
+        agent_role: 'context_prepare',
+        timeline_scope: 'parent_run',
+        timeline_phase: 'completed',
+        attempt_index: 0,
+        summary: 'Loaded device state and prepared runtime context.',
+      },
+    },
+    {
+      seq: 3,
+      operation_id: 'op-1',
+      event_type: 'runner_completed',
+      message: 'runner completed attempt 1',
+      timestamp: '2026-01-01T00:00:03Z',
+      agent_role: 'runner',
+      timeline_scope: 'parent_run',
+      timeline_phase: 'completed',
+      attempt_index: 0,
+      summary: 'Runner completed the first attempt.',
+      data_json: {
+        agent_role: 'runner',
+        timeline_scope: 'parent_run',
+        timeline_phase: 'completed',
+        attempt_index: 0,
+        summary: 'Runner completed the first attempt.',
+        step_count: 5,
+      },
+    },
+    {
+      seq: 4,
+      operation_id: 'op-1',
+      event_type: 'judge_decision_ready',
+      message: 'judge completed review',
+      timestamp: '2026-01-01T00:00:04Z',
+      agent_role: 'judge',
+      timeline_scope: 'parent_run',
+      timeline_phase: 'decision_ready',
+      attempt_index: 0,
+      summary: 'Judge concluded the case should finish.',
+      data_json: {
+        agent_role: 'judge',
+        timeline_scope: 'parent_run',
+        timeline_phase: 'decision_ready',
+        attempt_index: 0,
+        summary: 'Judge concluded the case should finish.',
+        verdict: 'failed',
+      },
+    },
+    {
+      seq: 5,
+      operation_id: 'op-1',
+      event_type: 'child_operation_submitted',
+      message: 'submitted optimize operation',
+      timestamp: '2026-01-01T00:00:05Z',
+      agent_role: 'optimize',
+      timeline_scope: 'parent_run',
+      timeline_phase: 'submitted',
+      child_operation_id: 'op-optimize-1',
+      summary: 'Submitted optimize follow-up operation.',
+      data_json: {
+        agent_role: 'optimize',
+        timeline_scope: 'parent_run',
+        timeline_phase: 'submitted',
+        child_operation_id: 'op-optimize-1',
+        summary: 'Submitted optimize follow-up operation.',
+      },
+    },
   ],
 })
 
@@ -336,6 +427,7 @@ const childrenState = ref({
 })
 
 const refetchMock = typedViFn(async () => ({ data: null }))
+const routerPushMock = vi.fn()
 const devicesState = ref([
   {
     device_ref: 'emulator-5554',
@@ -343,6 +435,30 @@ const devicesState = ref([
     platform: 'android',
   },
 ])
+
+const knowledgeCandidatesState = ref({
+  items: [
+    {
+      candidate_id: 'candidate-1',
+      app_id: 'demo-app',
+      status: 'pending_review',
+      submitted_at: '2026-01-01T00:00:00Z',
+      candidate: {
+        app_id: 'demo-app',
+        title: 'Login issue',
+        card_type: 'issue',
+        confidence: 0.82,
+        source: { kind: 'knowledge_agent', note: 'test' },
+        payload: {
+          symptom: 'login failed',
+          trigger: 'tap login',
+          workaround: 'retry',
+        },
+      },
+      evidence_refs: [],
+    },
+  ],
+})
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -352,6 +468,9 @@ vi.mock('vue-router', async () => {
       params: {
         operationId: 'op-1',
       },
+    }),
+    useRouter: () => ({
+      push: routerPushMock,
     }),
   }
 })
@@ -375,12 +494,7 @@ vi.mock('../queries/useRunArtifactsQuery', () => ({
 }))
 
 vi.mock('../queries/useRunEventsQuery', () => ({
-  useRunEventsQuery: () => ({
-    data: computed(() => eventsState.value),
-    isFetching: ref(false),
-    error: ref(null),
-    refetch: refetchMock,
-  }),
+  useRunEventsQuery: (...args: unknown[]) => useRunEventsQueryMock(...args),
 }))
 
 vi.mock('../queries/useRunArtifactChildrenQuery', () => ({
@@ -395,6 +509,14 @@ vi.mock('../queries/useRunArtifactChildrenQuery', () => ({
 vi.mock('@/features/devices/queries/useDevicesQuery', () => ({
   useDevicesQuery: () => ({
     data: computed(() => devicesState.value),
+    isFetching: ref(false),
+    error: ref(null),
+  }),
+}))
+
+vi.mock('@/features/apps/queries/useAppKnowledgeCandidatesQuery', () => ({
+  useAppKnowledgeCandidatesQuery: () => ({
+    data: computed(() => knowledgeCandidatesState.value),
     isFetching: ref(false),
     error: ref(null),
   }),
@@ -418,7 +540,118 @@ describe('RunDetailPage', () => {
     getArtifactContentMock.mockClear()
     cancelMock.mockClear()
     reproduceMock.mockClear()
+    useRunEventsQueryMock.mockReset()
+    routerPushMock.mockClear()
+    useRunEventsQueryMock.mockImplementation(() => ({
+      data: computed(() => eventsState.value),
+      isFetching: ref(false),
+      error: ref(null),
+      refetch: refetchMock,
+    }))
     detailState.value = buildDetailState()
+    eventsState.value = {
+      operation_id: 'op-1',
+      after_seq: 0,
+      limit: 200,
+      next_after_seq: 5,
+      items: [
+        {
+          seq: 1,
+          operation_id: 'op-1',
+          event_type: 'workflow_started',
+          message: 'workflow started',
+          timestamp: '2026-01-01T00:00:01Z',
+          agent_role: 'orchestration',
+          timeline_scope: 'parent_run',
+          timeline_phase: 'started',
+          summary: 'Workflow started for this case run.',
+          data_json: {
+            agent_role: 'orchestration',
+            timeline_scope: 'parent_run',
+            timeline_phase: 'started',
+            summary: 'Workflow started for this case run.',
+          },
+        },
+        {
+          seq: 2,
+          operation_id: 'op-1',
+          event_type: 'context_prepare_completed',
+          message: 'context prepared',
+          timestamp: '2026-01-01T00:00:02Z',
+          agent_role: 'context_prepare',
+          timeline_scope: 'parent_run',
+          timeline_phase: 'completed',
+          attempt_index: 0,
+          summary: 'Loaded device state and prepared runtime context.',
+          data_json: {
+            agent_role: 'context_prepare',
+            timeline_scope: 'parent_run',
+            timeline_phase: 'completed',
+            attempt_index: 0,
+            summary: 'Loaded device state and prepared runtime context.',
+          },
+        },
+        {
+          seq: 3,
+          operation_id: 'op-1',
+          event_type: 'runner_completed',
+          message: 'runner completed attempt 1',
+          timestamp: '2026-01-01T00:00:03Z',
+          agent_role: 'runner',
+          timeline_scope: 'parent_run',
+          timeline_phase: 'completed',
+          attempt_index: 0,
+          summary: 'Runner completed the first attempt.',
+          data_json: {
+            agent_role: 'runner',
+            timeline_scope: 'parent_run',
+            timeline_phase: 'completed',
+            attempt_index: 0,
+            summary: 'Runner completed the first attempt.',
+            step_count: 5,
+          },
+        },
+        {
+          seq: 4,
+          operation_id: 'op-1',
+          event_type: 'judge_decision_ready',
+          message: 'judge completed review',
+          timestamp: '2026-01-01T00:00:04Z',
+          agent_role: 'judge',
+          timeline_scope: 'parent_run',
+          timeline_phase: 'decision_ready',
+          attempt_index: 0,
+          summary: 'Judge concluded the case should finish.',
+          data_json: {
+            agent_role: 'judge',
+            timeline_scope: 'parent_run',
+            timeline_phase: 'decision_ready',
+            attempt_index: 0,
+            summary: 'Judge concluded the case should finish.',
+            verdict: 'failed',
+          },
+        },
+        {
+          seq: 5,
+          operation_id: 'op-1',
+          event_type: 'child_operation_submitted',
+          message: 'submitted optimize operation',
+          timestamp: '2026-01-01T00:00:05Z',
+          agent_role: 'optimize',
+          timeline_scope: 'parent_run',
+          timeline_phase: 'submitted',
+          child_operation_id: 'op-optimize-1',
+          summary: 'Submitted optimize follow-up operation.',
+          data_json: {
+            agent_role: 'optimize',
+            timeline_scope: 'parent_run',
+            timeline_phase: 'submitted',
+            child_operation_id: 'op-optimize-1',
+            summary: 'Submitted optimize follow-up operation.',
+          },
+        },
+      ],
+    }
     artifactsState.value = {
       operation_id: 'op-1',
       run_type: 'case_run',
@@ -436,7 +669,7 @@ describe('RunDetailPage', () => {
       repro_dir: '/tmp/repro',
       primary_artifact_ids: ['result'],
       artifact_manifest_version: 1,
-      schema_versions: { report: 'v1' },
+      schema_versions: { review_result: 'v1' },
       diagnostics_path: '/tmp/diagnostics.json',
       duration_ms: 4000,
       failure_category: null,
@@ -453,7 +686,6 @@ describe('RunDetailPage', () => {
       ],
       reproduction_entries: [],
       upstream_review: null,
-      metadata: { case_count: 1 },
       primary_artifacts: [
         {
           artifact_id: 'result',
@@ -527,6 +759,49 @@ describe('RunDetailPage', () => {
     document.body.innerHTML = ''
   })
 
+  it('navigates to case detail from the header action for case runs', async () => {
+    const wrapper = mount(RunDetailPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    const viewCaseButton = wrapper.findAll('button').find((button) => button.text() === 'View Case')
+    expect(viewCaseButton).toBeTruthy()
+    await viewCaseButton?.trigger('click')
+
+    expect(routerPushMock).toHaveBeenCalledWith({
+      name: 'tests-case-detail',
+      params: {
+        appId: 'demo-app',
+        planId: 'plan-1',
+        caseId: 'case-1',
+      },
+    })
+    expect(useRunEventsQueryMock).toHaveBeenCalledTimes(1)
+    expect(useRunEventsQueryMock.mock.calls[0]).toHaveLength(1)
+  })
+
+  it('does not show the case detail action for optimize runs', async () => {
+    detailState.value = {
+      ...buildDetailState(),
+      kind: 'optimize_case',
+      run_type: 'optimize_case',
+    }
+
+    const wrapper = mount(RunDetailPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.findAll('button').some((button) => button.text() === 'View Case')).toBe(false)
+  })
+
   it('renders summary and raw payload', async () => {
     const wrapper = mount(RunDetailPage, {
       global: {
@@ -581,14 +856,16 @@ describe('RunDetailPage', () => {
 
     await wrapper.findAll('button').find((button) => button.text() === 'Timeline')?.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('started')
-    expect(wrapper.text()).toContain('Attempt 1 started')
-    expect(wrapper.text()).toContain('Judge requested another runner attempt')
-    expect(wrapper.text()).toContain('Retry 1 scheduled')
-    expect(wrapper.text()).toContain('Retry reason: Need a stable final screenshot')
-    expect(wrapper.text()).toContain('Focus: Capture a stable final screenshot | Verify the settings header before stopping')
-    expect(wrapper.text()).toContain('Orchestration')
-    expect(wrapper.text()).toContain('Runtime')
+    expect(wrapper.text()).toContain('Orchestration · Started')
+    expect(wrapper.text()).toContain('Context Prepare · Completed')
+    expect(wrapper.text()).toContain('Runner · Completed')
+    expect(wrapper.text()).toContain('Judge · Decision Ready')
+    expect(wrapper.text()).toContain('Optimize · Submitted')
+    expect(wrapper.text()).toContain('Child operation: op-optimize-1')
+    expect(wrapper.text()).toContain('Debug')
+    expect(wrapper.text()).toContain('Event type')
+    expect(wrapper.text()).toContain('Workflow started for this case run.')
+    expect(wrapper.text()).not.toContain('runner completed attempt 1')
 
     await wrapper.findAll('button').find((button) => button.text() === 'Evidence')?.trigger('click')
     await flushPromises()
@@ -1044,5 +1321,73 @@ describe('RunDetailPage', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('field_diffs')
     expect(wrapper.text()).toContain('/tmp/run-1/optimize/field_diffs.json')
+  })
+
+  it('renders knowledge post-action summary with review link', async () => {
+    detailState.value = {
+      ...buildDetailState(),
+      kind: 'knowledge_post_action',
+      run_type: 'knowledge_post_action',
+      title: 'Knowledge post action',
+      verification_verdict: null,
+      result: {
+        summary: 'knowledge candidate submitted for pending review',
+        submitted: true,
+        skip_reason: null,
+        candidate_id: 'candidate-1',
+      },
+    }
+    artifactsState.value = {
+      ...artifactsState.value,
+      run_type: 'knowledge_post_action',
+      status: 'succeeded',
+    }
+
+    const wrapper = mount(RunDetailPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Knowledge Post-Action Summary')
+    expect(wrapper.text()).toContain('Candidate Submitted')
+    expect(wrapper.text()).toContain('candidate-1')
+    expect(wrapper.text()).toContain('Review Candidate')
+    expect(wrapper.html()).toContain('/apps/demo-app/knowledge/candidates?candidate_id=candidate-1')
+  })
+
+  it('renders skipped knowledge post-action summary with localized skip reason', async () => {
+    detailState.value = {
+      ...buildDetailState(),
+      kind: 'knowledge_post_action',
+      run_type: 'knowledge_post_action',
+      title: 'Knowledge post action',
+      verification_verdict: null,
+      result: {
+        summary: 'knowledge post action skipped: passed case',
+        submitted: false,
+        skip_reason: 'verdict_passed',
+        candidate_id: null,
+      },
+    }
+    artifactsState.value = {
+      ...artifactsState.value,
+      run_type: 'knowledge_post_action',
+      status: 'succeeded',
+    }
+
+    const wrapper = mount(RunDetailPage, {
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No Candidate Submitted')
+    expect(wrapper.text()).toContain('case passed')
+    expect(wrapper.text()).not.toContain('Review Candidate')
   })
 })

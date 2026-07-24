@@ -66,11 +66,12 @@ def build_screen_summary_text(screen: ScreenState) -> str:
 
 def build_clickable_elements_text(
     screen: ScreenState,
-    max_elements: int,
+    limit: int,
     *,
     source: str = "all",
+    offset: int = 0,
 ) -> str:
-    return build_targets_list_text(screen, max_elements=max_elements, source=cast(Any, source))
+    return build_targets_list_text(screen, offset=offset, limit=limit, source=cast(Any, source))
 
 
 def build_targets_seed_text(
@@ -89,59 +90,25 @@ def build_target_detail_payload(
     deps: RunnerStepDeps,
     *,
     target_id: int,
-    override: int | None = None,
-    remember: bool = False,
-) -> tuple[int, str]:
-    part_limit = resolve_target_lookup_limit(
-        deps,
-        target_id=target_id,
-        override=override,
-        remember=remember,
-    )
-    detail = build_target_detail_text(
+ ) -> str:
+    return build_target_detail_text(
         deps.screen,
         target_id=target_id,
-        max_elements=part_limit,
+        max_elements=_canonical_target_part_limit(deps),
     )
-    return part_limit, detail
 
 
-def resolve_target_part_limit(
-    deps: RunnerStepDeps,
-    *,
-    override: int | None = None,
-    remember: bool = False,
-) -> int:
-    if override is None:
-        return deps.target_part_limit_override or DEFAULT_TARGET_PART_LIMIT
-    part_limit = _validate_target_part_limit(override)
-    if remember:
-        deps.target_part_limit_override = part_limit
-    return part_limit
-
-
-def resolve_target_lookup_limit(
-    deps: RunnerStepDeps,
-    *,
-    target_id: int,
-    override: int | None = None,
-    remember: bool = False,
-) -> int:
-    part_limit = resolve_target_part_limit(deps, override=override, remember=remember)
-    if override is not None or target_id <= part_limit:
-        return part_limit
-    canonical_limit = _canonical_target_part_limit(deps)
-    if canonical_limit <= part_limit:
-        return part_limit
-    deps.target_part_limit_override = canonical_limit
-    return canonical_limit
+def resolve_target_part_limit(limit: int | None = None) -> int:
+    if limit is None:
+        return DEFAULT_TARGET_PART_LIMIT
+    return _validate_target_part_limit(limit)
 
 
 def resolve_target(deps: RunnerStepDeps, target_id: int) -> Any:
     return resolve_action_target(
         deps.screen,
         target_id=target_id,
-        max_elements=resolve_target_part_limit(deps),
+        max_elements=_canonical_target_part_limit(deps),
     )
 
 

@@ -1,0 +1,4 @@
+packages:
+  - "apps/web-ui"
+  - "sidecars/recording-bridge-local"
+  - "sidecars/ios-device-bridge"

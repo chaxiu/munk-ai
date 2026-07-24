@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 import yaml
 
+from munk.config.layered import effective_config_dict
 from munk.config.schema import MunkConfig
 from munk.storage_mode import default_profile_home
 
@@ -44,15 +45,20 @@ def workspace_config_path(workspace_root: Path | None) -> Path | None:
     return workspace_root / _WORKSPACE_CONFIG_DIR / _WORKSPACE_CONFIG_NAME
 
 
-def load_config_file(path: Path) -> MunkConfig:
+def load_raw_config_dict(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"config file not found: {path}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if raw is None:
-        raw = {}
+        return {}
     if not isinstance(raw, dict):
         raise ValueError(f"config root must be a mapping: {path}")
-    return MunkConfig.model_validate(raw)
+    return cast(dict[str, Any], raw)
+
+
+def load_config_file(path: Path) -> MunkConfig:
+    raw = load_raw_config_dict(path)
+    return MunkConfig.model_validate(effective_config_dict(raw))
 
 
 def resolve_config_file(

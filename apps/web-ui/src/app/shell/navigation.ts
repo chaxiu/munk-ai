@@ -2,6 +2,7 @@ import {
   Boxes,
   CalendarClock,
   Clapperboard,
+  Cloud,
   LayoutDashboard,
   PlayCircle,
   Package,
@@ -22,6 +23,7 @@ const sidebarIcons = {
   schedules: CalendarClock,
   assets: Package,
   apps: Boxes,
+  cloud: Cloud,
   settings: Settings,
 } as const
 

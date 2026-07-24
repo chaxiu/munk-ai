@@ -14,9 +14,19 @@ from munk.services.operations.models import (
     OperationKind,
     OperationRecord,
     OperationStatus,
+    ReconcileOperationResult,
     now_iso,
 )
 from munk.services.operations.paths import operations_db_path
+from munk.services.operations.payload_storage import (
+    LLM_EVENT_TYPES,
+    LLM_TEXT_KEY,
+    LLM_TEXT_PATH_KEY,
+    extract_llm_text_for_storage,
+    split_result_for_storage,
+    write_external_llm_text,
+    write_external_result,
+)
 from munk.services.operations.payloads import with_projected_fields
 from munk.services.operations.registry_claims import (
     cleanup_stale_claims_locked,
@@ -24,17 +34,24 @@ from munk.services.operations.registry_claims import (
     find_active_device_conflicts_locked,
     insert_claim_locked,
 )
+from munk.services.operations.lifecycle_reconcile import (
+    force_finalize_operation_tree,
+    iter_descendant_operations,
+    reconcile_orphaned_operations,
+    request_cancel_operation_tree,
+)
 from munk.services.operations.registry_projections import (
     platform_sql_expr,
     run_type_sql_expr,
     should_refresh_projection,
 )
 from munk.services.operations.registry_queries import (
+    build_count_operations_query,
     build_latest_plan_runs_query,
     build_list_operations_page_query,
 )
 from munk.services.operations.registry_schema import initialize_registry_schema
-from munk.services.operations.registry_serialization import dump_json, load_json, row_to_operation
+from munk.services.operations.registry_serialization import dump_json, load_json, row_to_event, row_to_operation
 
 _QUEUE_STARTUP_GRACE_SECONDS = 30
 _logger = logging.getLogger(__name__)
@@ -43,11 +60,16 @@ _logger = logging.getLogger(__name__)
 class OperationRegistry:
     def __init__(self, db_path: Path | None = None) -> None:
         self._db_path = db_path or operations_db_path()
+        self._operations_root = self._db_path.parent
         self._initialize()
 
     @property
     def db_path(self) -> Path:
         return self._db_path
+
+    @property
+    def operations_root(self) -> Path:
+        return self._operations_root
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
@@ -156,6 +178,18 @@ class OperationRegistry:
     ) -> tuple[list[OperationRecord], int]:
         run_type_expr = run_type_sql_expr()
         platform_expr = platform_sql_expr()
+        count_sql, count_params = build_count_operations_query(
+            status=status,
+            kind=kind,
+            device_ref=device_ref,
+            surface=surface,
+            verification_verdict=verification_verdict,
+            platform=platform,
+            query=query,
+            run_type=run_type,
+            run_type_expr=run_type_expr,
+            platform_expr=platform_expr,
+        )
         sql, params = build_list_operations_page_query(
             status=status,
             kind=kind,
@@ -169,23 +203,47 @@ class OperationRegistry:
             platform_expr=platform_expr,
         )
         with self._connect() as connection:
-            total_row = connection.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM ({sql}) filtered_operations
-                """,
-                params,
-            ).fetchone()
+            total_row = connection.execute(count_sql, count_params).fetchone()
         sql += """
-            ORDER BY datetime(created_at) DESC, operation_id DESC
+            ORDER BY created_at DESC, operation_id DESC
             LIMIT ? OFFSET ?
         """
         params.extend([limit, offset])
         with self._connect() as connection:
             rows = connection.execute(sql, params).fetchall()
-        records = [self._row_to_operation(row) for row in rows]
+        records = [self._row_to_operation(row, hydrate_payloads=False) for row in rows]
         total = int(total_row["total"]) if total_row is not None else 0
         return records, total
+
+    def count_operations(
+        self,
+        *,
+        status: OperationStatus | None = None,
+        kind: OperationKind | None = None,
+        device_ref: str | None = None,
+        surface: str | None = None,
+        verification_verdict: str | None = None,
+        platform: str | None = None,
+        query: str | None = None,
+        run_type: str | None = None,
+    ) -> int:
+        run_type_expr = run_type_sql_expr()
+        platform_expr = platform_sql_expr()
+        sql, params = build_count_operations_query(
+            status=status,
+            kind=kind,
+            device_ref=device_ref,
+            surface=surface,
+            verification_verdict=verification_verdict,
+            platform=platform,
+            query=query,
+            run_type=run_type,
+            run_type_expr=run_type_expr,
+            platform_expr=platform_expr,
+        )
+        with self._connect() as connection:
+            row = connection.execute(sql, params).fetchone()
+        return int(row["total"]) if row is not None else 0
 
     def list_latest_plan_runs(self, plan_refs: list[tuple[str, str]]) -> dict[tuple[str, str], OperationRecord]:
         sql, params, unique_refs = build_latest_plan_runs_query(plan_refs)
@@ -194,31 +252,20 @@ class OperationRegistry:
         with self._connect() as connection:
             rows = connection.execute(sql, params).fetchall()
 
+        allowed_refs = set(unique_refs)
         latest_runs: dict[tuple[str, str], OperationRecord] = {}
-        seen_refs = set(unique_refs)
         for row in rows:
-            record = self._row_to_operation(row)
+            record = self._row_to_operation(row, hydrate_payloads=False)
             key = (record.app_id or "", record.plan_id or "")
-            if key not in seen_refs or key in latest_runs:
+            if key not in allowed_refs:
                 continue
             latest_runs[key] = record
-            if len(latest_runs) == len(unique_refs):
-                break
         return latest_runs
 
     def update_operation(self, operation_id: str, **fields: Any) -> OperationRecord:
         if not fields:
             return self.get_operation(operation_id)
-        if should_refresh_projection(fields):
-            current = self.get_operation(operation_id)
-            projected = with_projected_fields(current.model_copy(update=fields))
-            fields = {
-                **fields,
-                "projected_run_type": projected.projected_run_type,
-                "projected_platform": projected.projected_platform,
-                "projected_title": projected.projected_title,
-                "projected_source_recording_id": projected.projected_source_recording_id,
-            }
+        fields = self._prepare_update_fields(operation_id, fields)
         assignments: list[str] = []
         values: list[Any] = []
         for key, value in fields.items():
@@ -272,6 +319,33 @@ class OperationRegistry:
     def cleanup_stale_claims_for_request(self, claim_request: DeviceClaimRequest) -> list[CleanupClaimResult]:
         return self.cleanup_stale_claims(claim_request=claim_request)
 
+    def reconcile_orphaned_operations(self) -> list[ReconcileOperationResult]:
+        return reconcile_orphaned_operations(self)
+
+    def iter_descendant_operations(self, root_operation_id: str) -> list[OperationRecord]:
+        return iter_descendant_operations(self, root_operation_id)
+
+    def force_finalize_operation_tree(
+        self,
+        root_operation_id: str,
+        *,
+        status: OperationStatus,
+        error_code: str,
+        error_message: str,
+    ) -> list[str]:
+        if status not in {"failed", "cancelled", "interrupted"}:
+            raise ValueError(f"unsupported force-finalize status: {status}")
+        return force_finalize_operation_tree(
+            self,
+            root_operation_id,
+            status=status,  # type: ignore[arg-type]
+            error_code=error_code,
+            error_message=error_message,
+        )
+
+    def request_cancel_operation_tree(self, root_operation_id: str) -> list[str]:
+        return request_cancel_operation_tree(self, root_operation_id)
+
     def append_event(
         self,
         operation_id: str,
@@ -281,6 +355,10 @@ class OperationRegistry:
         message: str | None,
         data_json: dict[str, Any] | None = None,
     ) -> OperationEventRecord:
+        stored_payload = dict(data_json or {})
+        external_llm_text: str | None = None
+        if event_type in LLM_EVENT_TYPES:
+            stored_payload, external_llm_text = extract_llm_text_for_storage(stored_payload)
         with self._connect() as connection:
             cursor = connection.execute(
                 """
@@ -292,20 +370,36 @@ class OperationRegistry:
                     timestamp,
                     event_type,
                     message,
-                    self._dump_json(data_json or {}),
+                    self._dump_json(stored_payload),
                 ),
             )
             row_id = cursor.lastrowid
             if row_id is None:
                 raise RuntimeError("failed to append operation event")
             seq = int(row_id)
+            if external_llm_text is not None:
+                text_path = write_external_llm_text(
+                    operation_id=operation_id,
+                    seq=seq,
+                    event_type=event_type,
+                    text=external_llm_text,
+                    root=self._operations_root,
+                )
+                stored_payload[LLM_TEXT_PATH_KEY] = text_path
+                connection.execute(
+                    "UPDATE operation_events SET data_json = ? WHERE seq = ?",
+                    (self._dump_json(stored_payload), seq),
+                )
+        hydrated = dict(stored_payload)
+        if external_llm_text is not None:
+            hydrated[LLM_TEXT_KEY] = external_llm_text
         return OperationEventRecord(
             seq=seq,
             operation_id=operation_id,
             timestamp=timestamp,
             event_type=event_type,
             message=message,
-            data_json=data_json or {},
+            data_json=hydrated,
         )
 
     def list_events(
@@ -327,17 +421,7 @@ class OperationRegistry:
                 """,
                 (operation_id, after_seq, limit),
             ).fetchall()
-        return [
-            OperationEventRecord(
-                seq=int(row["seq"]),
-                operation_id=str(row["operation_id"]),
-                timestamp=str(row["timestamp"]),
-                event_type=str(row["event_type"]),
-                message=str(row["message"]) if row["message"] is not None else None,
-                data_json=self._load_json(row["data_json"]),
-            )
-            for row in rows
-        ]
+        return [row_to_event(row, hydrate_payloads=True) for row in rows]
 
     def list_child_operations(self, parent_operation_id: str) -> list[OperationRecord]:
         self.get_operation(parent_operation_id)
@@ -377,7 +461,47 @@ class OperationRegistry:
     def _load_json(value: Any) -> Any:
         return load_json(value)
 
+    def _prepare_update_fields(self, operation_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        prepared = dict(fields)
+        if "result_json" in prepared:
+            inline_summary, external_payload = split_result_for_storage(
+                prepared["result_json"] if isinstance(prepared["result_json"], dict) else None
+            )
+            if external_payload is not None:
+                prepared["result_json"] = inline_summary
+                prepared["result_path"] = write_external_result(
+                    operation_id=operation_id,
+                    payload=external_payload,
+                    root=self._operations_root,
+                )
+            elif prepared.get("result_path") is None and "result_path" not in prepared:
+                # Keep an existing result_path unless the caller clears/replaces it.
+                pass
+        if should_refresh_projection(prepared):
+            current = self.get_operation(operation_id)
+            projected = with_projected_fields(current.model_copy(update=prepared))
+            prepared = {
+                **prepared,
+                "projected_run_type": projected.projected_run_type,
+                "projected_platform": projected.projected_platform,
+                "projected_title": projected.projected_title,
+                "projected_source_recording_id": projected.projected_source_recording_id,
+            }
+        return prepared
+
+    def _prepare_insert_record(self, record: OperationRecord) -> OperationRecord:
+        inline_summary, external_payload = split_result_for_storage(record.result_json)
+        if external_payload is None:
+            return record
+        result_path = write_external_result(
+            operation_id=record.operation_id,
+            payload=external_payload,
+            root=self._operations_root,
+        )
+        return record.model_copy(update={"result_json": inline_summary, "result_path": result_path})
+
     def _insert_operation_locked(self, connection: sqlite3.Connection, record: OperationRecord) -> None:
+        stored = self._prepare_insert_record(record)
         connection.execute(
             """
             INSERT INTO operations (
@@ -385,41 +509,43 @@ class OperationRegistry:
                 parent_operation_id, batch_id, position_index, position_label,
                 request_json, result_json, artifacts_json, progress_json,
                 projected_run_type, projected_platform, projected_title, projected_source_recording_id,
+                result_path,
                 pid, cancel_requested,
                 device_ref, resource_scope, conflict_reason,
                 error_code, error_message, created_at, started_at, finished_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                record.operation_id,
-                record.kind,
-                record.status,
-                record.verification_verdict,
-                record.app_id,
-                record.plan_id,
-                record.case_id,
-                record.parent_operation_id,
-                record.batch_id,
-                record.position_index,
-                record.position_label,
-                self._dump_json(record.request_json),
-                self._dump_json(record.result_json),
-                self._dump_json(record.artifacts_json),
-                self._dump_json(record.progress_json),
-                record.projected_run_type,
-                record.projected_platform,
-                record.projected_title,
-                record.projected_source_recording_id,
-                record.pid,
-                int(record.cancel_requested),
-                record.device_ref,
-                record.resource_scope,
-                record.conflict_reason,
-                record.error_code,
-                record.error_message,
-                record.created_at,
-                record.started_at,
-                record.finished_at,
+                stored.operation_id,
+                stored.kind,
+                stored.status,
+                stored.verification_verdict,
+                stored.app_id,
+                stored.plan_id,
+                stored.case_id,
+                stored.parent_operation_id,
+                stored.batch_id,
+                stored.position_index,
+                stored.position_label,
+                self._dump_json(stored.request_json),
+                self._dump_json(stored.result_json),
+                self._dump_json(stored.artifacts_json),
+                self._dump_json(stored.progress_json),
+                stored.projected_run_type,
+                stored.projected_platform,
+                stored.projected_title,
+                stored.projected_source_recording_id,
+                stored.result_path,
+                stored.pid,
+                int(stored.cancel_requested),
+                stored.device_ref,
+                stored.resource_scope,
+                stored.conflict_reason,
+                stored.error_code,
+                stored.error_message,
+                stored.created_at,
+                stored.started_at,
+                stored.finished_at,
             ),
         )
 
@@ -466,5 +592,5 @@ class OperationRegistry:
             load_json=self._load_json,
         )
 
-    def _row_to_operation(self, row: sqlite3.Row) -> OperationRecord:
-        return row_to_operation(row)
+    def _row_to_operation(self, row: sqlite3.Row, *, hydrate_payloads: bool = True) -> OperationRecord:
+        return row_to_operation(row, hydrate_payloads=hydrate_payloads)

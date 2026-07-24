@@ -19,6 +19,7 @@ const { pushMock, submitRunCaseMock, replaceCaseMock, resetReplaceCaseMock, rewr
       expected: ['Settings screen is visible'],
       procedure: ['Launch app', 'Tap settings entry'],
       post_action: ['Return to home'],
+      setup: [],
       is_core_case: true,
       budget: {
         max_steps: 10,
@@ -55,6 +56,7 @@ const caseDetailState = ref({
   expected: ['Settings is visible'],
   procedure: ['Tap settings'],
   post_action: ['Return to home'],
+  setup: [],
   ai_guidance: {
     objective_clarifications: ['Confirm the main settings screen is reached'],
     preflight_checks: ['User remains signed in'],
@@ -238,6 +240,24 @@ vi.mock('@/features/apps/queries/useAppDetailQuery', () => ({
   }),
 }))
 
+vi.mock('@/features/settings/queries/useSettingsConfigQuery', () => ({
+  useSettingsConfigQuery: () => ({
+    data: computed(() => ({
+      test_env: {
+        bases: {
+          test_backend: {
+            url: 'http://127.0.0.1:8080',
+            headers: { Authorization: 'Bearer token' },
+          },
+        },
+        allowed_exec: ['echo'],
+      },
+    })),
+    isFetching: ref(false),
+    error: ref(null),
+  }),
+}))
+
 vi.mock('@tanstack/vue-query', async () => {
   const actual = await vi.importActual<typeof import('@tanstack/vue-query')>('@tanstack/vue-query')
   return {
@@ -296,6 +316,7 @@ describe('CaseDetailPage', () => {
       expected: ['Settings is visible'],
       procedure: ['Tap settings'],
       post_action: ['Return to home'],
+      setup: [],
       ai_guidance: {
         objective_clarifications: ['Confirm the main settings screen is reached'],
         preflight_checks: ['User remains signed in'],
@@ -465,6 +486,7 @@ describe('CaseDetailPage', () => {
         expected: ['Settings is visible'],
         procedure: ['Launch app', 'Tap settings'],
         post_action: ['Return to home', 'Clear temp state'],
+        setup: [],
         is_core_case: false,
         budget: {
           max_steps: 15,

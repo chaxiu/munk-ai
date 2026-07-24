@@ -161,7 +161,6 @@ onBeforeUnmount(() => {
       <div class="meta-item"><span class="meta-label">{{ t('runDetail.fields.artifactManifestPath') }}</span><strong class="value-text">{{ artifacts?.artifact_manifest_path || '-' }}</strong></div>
       <div class="meta-item"><span class="meta-label">{{ t('runDetail.fields.reproDir') }}</span><strong class="value-text">{{ artifacts?.repro_dir || '-' }}</strong></div>
       <div class="meta-item full"><span class="meta-label">{{ t('runDetail.fields.schemaVersions') }}</span><pre class="json-block">{{ JSON.stringify(artifacts?.schema_versions ?? {}, null, 2) }}</pre></div>
-      <div class="meta-item full"><span class="meta-label">{{ t('runDetail.fields.manifestMetadata') }}</span><pre class="json-block">{{ JSON.stringify(artifacts?.metadata ?? {}, null, 2) }}</pre></div>
       <div class="meta-item full" v-if="(artifacts?.reproduction_entries ?? []).length > 0">
         <span class="meta-label">{{ t('runDetail.fields.reproductionEntries') }}</span>
         <pre class="json-block">{{ JSON.stringify(artifacts?.reproduction_entries ?? [], null, 2) }}</pre>

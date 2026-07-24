@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from munk.testing import AiGuidance, CaseBudget, CaseStartState
+from munk.testing import AiGuidance, CaseBudget, CaseStartState, CommandSetupStep, HttpSetupStep
 from munk.testing import TestCase as SharedTestCase
 
 from munk.orchestration import (
@@ -24,6 +24,7 @@ def test_testcase_defaults_match_main_repo_expectations() -> None:
     assert case.preconditions == []
     assert case.expected == []
     assert case.procedure == []
+    assert case.setup == []
     assert case.is_core_case is False
     assert case.start_state == CaseStartState()
 
@@ -66,6 +67,34 @@ def test_testcase_round_trip_includes_ai_guidance() -> None:
         "recovery_hints": [],
         "judge_hints": ["Do not treat loading spinner as failure"],
     }
+
+
+def test_testcase_round_trip_includes_setup_steps() -> None:
+    case = SharedTestCase(
+        case_id="case-1",
+        title="Title",
+        intent="Intent",
+        runner_goal="Runner goal",
+        setup=[
+            HttpSetupStep(
+                base="test_backend",
+                method="POST",
+                path="/api/seed",
+                body={"count": 2},
+            ),
+            CommandSetupStep(exec="echo", args=["hello"]),
+        ],
+    )
+
+    dumped = case.model_dump()
+    restored = SharedTestCase.model_validate(dumped)
+
+    assert len(restored.setup) == 2
+    assert isinstance(restored.setup[0], HttpSetupStep)
+    assert restored.setup[0].base == "test_backend"
+    assert restored.setup[0].body == {"count": 2}
+    assert isinstance(restored.setup[1], CommandSetupStep)
+    assert restored.setup[1].exec == "echo"
 
 
 def test_orchestration_models_capture_case_state_and_decision() -> None:

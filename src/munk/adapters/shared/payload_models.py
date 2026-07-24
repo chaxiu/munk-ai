@@ -17,6 +17,8 @@ from munk.adapters.shared.payload_models_catalog import (
 )
 from munk.adapters.shared.payload_models_device import (
     DeviceDescriptorData,
+    DeviceInstallData,
+    DeviceInstallRequest,
     DeviceListData,
     DeviceStateData,
     DeviceUnlockData,
@@ -58,6 +60,8 @@ __all__ = [
     "CaseSearchItemData",
     "DashboardSummaryData",
     "DeviceDescriptorData",
+    "DeviceInstallData",
+    "DeviceInstallRequest",
     "DeviceListData",
     "DeviceStateData",
     "DeviceUnlockData",

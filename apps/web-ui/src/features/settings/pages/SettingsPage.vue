@@ -7,6 +7,7 @@ import AgentConfigCard from '@/features/settings/components/AgentConfigCard.vue'
 import OrchestrationConfigForm from '@/features/settings/components/OrchestrationConfigForm.vue'
 import ProxyConfigForm from '@/features/settings/components/ProxyConfigForm.vue'
 import RuntimeConfigForm from '@/features/settings/components/RuntimeConfigForm.vue'
+import TestEnvConfigForm from '@/features/settings/components/TestEnvConfigForm.vue'
 import ProviderSectionForm from '@/features/settings/components/ProviderSectionForm.vue'
 import { useSettingsConfigMutation } from '@/features/settings/queries/useSettingsConfigMutation'
 import { useSettingsConfigQuery } from '@/features/settings/queries/useSettingsConfigQuery'
@@ -82,7 +83,11 @@ function activeSectionMissingRequiredFields(): boolean {
   if (form.proxy.enabled && !form.proxy.url.trim()) {
     return true
   }
-  if (form.ios_bridge.sudo_enabled && !form.ios_bridge.sudo_password.trim()) {
+  if (
+    form.ios_bridge.sudo_enabled
+    && !form.ios_bridge.sudo_password.trim()
+    && !form.ios_bridge.sudo_password_configured
+  ) {
     return true
   }
 
@@ -253,21 +258,36 @@ function isActiveProvider(kind: ProviderKind): boolean {
 
             <UiField
               :label="t('settings.fields.iosBridgeSudoPassword')"
-              :required="form.ios_bridge.sudo_enabled"
-              :optional="!form.ios_bridge.sudo_enabled"
+              :required="form.ios_bridge.sudo_enabled && !form.ios_bridge.sudo_password_configured"
+              :optional="!form.ios_bridge.sudo_enabled || form.ios_bridge.sudo_password_configured"
               :description="t('settings.fieldDescriptions.iosBridgeSudoPassword', {
                 requirement: form.ios_bridge.sudo_enabled
                   ? t('settings.fieldDescriptions.common.enabledRequired')
                   : t('settings.fieldDescriptions.common.disabledOptional'),
+                preserveRule: form.ios_bridge.sudo_password_configured
+                  ? t('settings.fieldDescriptions.common.secretConfiguredKeep')
+                  : t('settings.fieldDescriptions.common.secretEmptySkipped'),
               })"
             >
               <UiInput
                 v-model="form.ios_bridge.sudo_password"
                 type="password"
-                :placeholder="t('settings.placeholders.iosBridgeSudoPassword')"
+                :placeholder="form.ios_bridge.sudo_password_configured
+                  ? t('settings.fields.apiKeyConfigured')
+                  : t('settings.placeholders.iosBridgeSudoPassword')"
               />
             </UiField>
           </div>
+        </div>
+      </section>
+
+      <section class="grid gap-3">
+        <div class="grid gap-1">
+          <h2 class="text-lg font-semibold text-text-primary">{{ t('settings.sections.testEnv') }}</h2>
+          <p class="text-sm text-text-secondary">{{ t('settings.sections.testEnvDescription') }}</p>
+        </div>
+        <div class="rounded-2xl border border-border bg-surface-elevated px-4 py-4 md:px-5">
+          <TestEnvConfigForm :test-env="form.test_env" />
         </div>
       </section>
 

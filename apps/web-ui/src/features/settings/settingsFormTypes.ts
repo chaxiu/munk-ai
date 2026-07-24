@@ -1,3 +1,5 @@
+import type { StringMapEntry } from '@/shared/lib/stringMapForm'
+
 export type ProviderKind = 'openai_compatible' | 'gemini'
 export type OutputStrategy = 'auto' | 'prompted'
 export type SettleMode = 'strict' | 'ratio' | 'delay'
@@ -93,6 +95,18 @@ export type ProxyConfigForm = {
 export type IOSBridgeForm = {
   sudo_enabled: boolean
   sudo_password: string
+  sudo_password_configured: boolean
+}
+
+export type HttpBaseFormItem = {
+  name: string
+  url: string
+  headers: StringMapEntry[]
+}
+
+export type TestEnvForm = {
+  bases: HttpBaseFormItem[]
+  allowed_exec_text: string
 }
 
 export type OrchestrationForm = {
@@ -111,6 +125,7 @@ export type SettingsFormState = {
   agents: Record<RoleName, AgentForm>
   proxy: ProxyConfigForm
   ios_bridge: IOSBridgeForm
+  test_env: TestEnvForm
   runtime: RuntimeForm
   orchestration: OrchestrationForm
 }

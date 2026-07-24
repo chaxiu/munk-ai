@@ -35,6 +35,17 @@ vi.mock('@/features/apps/queries/useAppsQuery', () => ({
   }),
 }))
 
+vi.mock('@/features/cloud/queries/useCloudBoundAppMarker', () => ({
+  useCloudBoundAppMarker: () => ({
+    boundAppId: computed(() => 'demo-app'),
+    isBound: computed(() => true),
+    isDirty: computed(() => true),
+    role: computed(() => 'admin'),
+    isBoundApp: (appId: string | null | undefined) => appId === 'demo-app',
+    isDirtyApp: (appId: string | null | undefined) => appId === 'demo-app',
+  }),
+}))
+
 describe('AppsPage', () => {
   beforeEach(() => {
     setLocale('en-US')
@@ -53,6 +64,8 @@ describe('AppsPage', () => {
 
     expect(wrapper.text()).toContain('Demo App')
     expect(wrapper.text()).toContain('demo-app')
+    expect(wrapper.text()).toContain('Linked')
+    expect(wrapper.text()).toContain('Local changes')
     expect(wrapper.find('input[placeholder="For example demo-app"]').exists()).toBe(false)
 
     await wrapper.find('.primary-button').trigger('click')

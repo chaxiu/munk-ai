@@ -28,9 +28,21 @@ _EVENT_PAYLOAD_MODEL_PATHS: dict[str, tuple[str, str]] = {
     "agent_failed": ("munk.services.operations.lifecycle_event_payloads", "AgentRuntimeLifecycleEventPayload"),
     "context_prepare_started": ("munk.services.operations.lifecycle_event_payloads", "AgentRuntimeLifecycleEventPayload"),
     "context_prepare_completed": ("munk.services.operations.lifecycle_event_payloads", "AgentRuntimeLifecycleEventPayload"),
+    "context_prepare_failed": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareFailedEventPayload",
+    ),
+    "context_prepare_start_state_started": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareStartStateStartedEventPayload",
+    ),
+    "context_prepare_start_state_step": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareStartStateStepEventPayload",
+    ),
     "context_prepare_start_state_ready": (
         "munk.services.operations.lifecycle_event_payloads",
-        "AgentRuntimeLifecycleEventPayload",
+        "ContextPrepareStartStateReadyEventPayload",
     ),
     "context_prepare_params_resolved": (
         "munk.services.operations.lifecycle_event_payloads",
@@ -43,6 +55,18 @@ _EVENT_PAYLOAD_MODEL_PATHS: dict[str, tuple[str, str]] = {
     "context_prepare_perception_ready": (
         "munk.services.operations.lifecycle_event_payloads",
         "ContextPreparePerceptionReadyEventPayload",
+    ),
+    "context_prepare_setup_started": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareSetupStartedEventPayload",
+    ),
+    "context_prepare_setup_step": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareSetupStepEventPayload",
+    ),
+    "context_prepare_setup_ready": (
+        "munk.services.operations.lifecycle_event_payloads",
+        "ContextPrepareSetupReadyEventPayload",
     ),
     "operation_submitted": ("munk.services.operations.lifecycle_event_payloads", "OperationSubmittedEventPayload"),
     "operation_started": ("munk.services.operations.lifecycle_event_payloads", "OperationStartedEventPayload"),

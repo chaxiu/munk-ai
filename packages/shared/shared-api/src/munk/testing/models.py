@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
+
+JsonValue: TypeAlias = Any
 
 
 def empty_strings() -> list[str]:
@@ -50,6 +52,31 @@ class AiGuidance(BaseModel):
     judge_hints: list[str] = Field(default_factory=empty_guidance_items)
 
 
+class HttpSetupStep(BaseModel):
+    kind: Literal["http"] = "http"
+    base: str
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"] = "GET"
+    path: str = "/"
+    headers: dict[str, str] = Field(default_factory=dict)
+    query: dict[str, str] = Field(default_factory=dict)
+    body: JsonValue | None = None
+    expected_status: list[int] = Field(default_factory=lambda: [200])
+
+
+class CommandSetupStep(BaseModel):
+    kind: Literal["command"] = "command"
+    exec: str
+    args: list[str] = Field(default_factory=list)
+    expected_exit_code: int = 0
+
+
+SetupStep = Annotated[HttpSetupStep | CommandSetupStep, Field(discriminator="kind")]
+
+
+def empty_setup() -> list[SetupStep]:
+    return []
+
+
 class TestCase(BaseModel):
     __test__ = False
 
@@ -60,6 +87,7 @@ class TestCase(BaseModel):
     expected: list[str] = Field(default_factory=empty_strings)
     procedure: list[str] = Field(default_factory=empty_procedure)
     post_action: list[str] = Field(default_factory=empty_post_action)
+    setup: list[SetupStep] = Field(default_factory=empty_setup)
     is_core_case: bool = False
     runner_goal: str
     acceptance_criteria_indices: list[int] = Field(default_factory=empty_strings)

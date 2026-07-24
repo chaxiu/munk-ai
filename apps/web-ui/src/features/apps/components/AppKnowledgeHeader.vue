@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ArrowLeft, BookOpen, RefreshCcw, SquarePen } from '@lucide/vue'
+import { toRef } from 'vue'
 
+import CloudBoundAppBadges from '@/features/cloud/components/CloudBoundAppBadges.vue'
+import { useCloudBoundAppMarker } from '@/features/cloud/queries/useCloudBoundAppMarker'
 import AppBadge from '@/shared/components/AppBadge.vue'
 import AppCard from '@/shared/components/AppCard.vue'
 import UiButton from '@/shared/ui/UiButton.vue'
 
-defineProps<{
+const props = defineProps<{
   platform: string
   displayAppName: string
   appId: string
@@ -18,6 +21,8 @@ defineEmits<{
   openCandidates: []
   back: []
 }>()
+
+const { isBound, isDirty } = useCloudBoundAppMarker(toRef(props, 'appId'))
 </script>
 
 <template>
@@ -27,6 +32,7 @@ defineEmits<{
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-lg font-semibold text-text-primary">{{ $t('apps.knowledge.title') }}</h2>
           <AppBadge tone="neutral">{{ platform }}</AppBadge>
+          <CloudBoundAppBadges :bound="isBound" :dirty="isDirty" />
         </div>
         <p class="text-sm text-text-secondary">{{ displayAppName }} / {{ appId }}</p>
       </div>

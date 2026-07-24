@@ -50,7 +50,17 @@ function createSettingsData() {
   },
   ios_bridge: {
     sudo_enabled: true,
-    sudo_password: 'secret-pass',
+    sudo_password: null,
+    sudo_password_configured: true,
+  },
+  test_env: {
+    bases: {
+      test_backend: {
+        url: 'http://127.0.0.1:8080',
+        headers: { Authorization: 'Bearer token' },
+      },
+    },
+    allowed_exec: ['echo'],
   },
   runtime: {
     max_tokens: 8192,
@@ -169,7 +179,8 @@ describe('SettingsPage', () => {
       },
       ios_bridge: {
         sudo_enabled: true,
-        sudo_password: '',
+        sudo_password: null,
+        sudo_password_configured: false,
       },
     }
 
@@ -290,7 +301,17 @@ describe('SettingsPage', () => {
       },
       ios_bridge: {
         sudo_enabled: true,
-        sudo_password: 'secret-pass',
+        sudo_password: null,
+        sudo_password_configured: true,
+      },
+      test_env: {
+        bases: {
+          test_backend: {
+            url: 'http://127.0.0.1:8080',
+            headers: { Authorization: 'Bearer token' },
+          },
+        },
+        allowed_exec: ['echo'],
       },
       orchestration: {
         max_retry_attempts: 2,

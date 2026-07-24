@@ -43,7 +43,7 @@ const runsQuery = useRunsQuery(computed(() => ({
   offset: offset.value,
   runType: runTypeFilter.value === 'all' ? undefined : runTypeFilter.value,
   surface: 'run_center',
-  status: statusFilter.value === 'all' ? undefined : statusFilter.value as 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled',
+  status: statusFilter.value === 'all' ? undefined : statusFilter.value as 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted',
   deviceRef: deviceFilter.value.trim() || undefined,
   verificationVerdict: verdictFilter.value === 'all' ? undefined : verdictFilter.value,
   platform: platformFilter.value === 'all' ? undefined : platformFilter.value,
@@ -97,6 +97,7 @@ const statusOptions = computed(() => [
   { value: 'succeeded', label: t('runs.status.succeeded') },
   { value: 'failed', label: t('runs.status.failed') },
   { value: 'cancelled', label: t('runs.status.cancelled') },
+  { value: 'interrupted', label: t('runs.status.interrupted') },
 ])
 
 const verdictOptions = computed(() => [

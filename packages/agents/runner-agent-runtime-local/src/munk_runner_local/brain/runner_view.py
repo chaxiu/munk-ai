@@ -9,6 +9,7 @@ from munk.core.action_targets import (
     VISION_PART_MAX,
     ActionTarget,
     build_action_targets,
+    build_canonical_target_parts,
     build_target_parts,
     resolve_action_target,
 )
@@ -38,6 +39,7 @@ def build_targets_text(
         return "none"
     summary_lines = [
         "Use the integer after # as target_id for the seeded visible targets below.",
+        "box=[left,top,right,bottom] in screen pixels.",
         f"vision_window={len(parts.vision_targets)}/{parts.vision_total} limit={min(max(prompt_max_elements, 0), VISION_PART_MAX)}",
     ]
     vision_truncated = max(parts.vision_total - len(parts.vision_targets), 0)
@@ -51,7 +53,7 @@ def build_targets_text(
             "[VISION_TARGETS]",
             *vision_lines,
             "",
-            "tree_seed=omitted; use list_clickable_elements(source=tree) when structure-backed targets are needed",
+            "tree_seed=omitted; use list_clickable_elements(source=tree, offset=0, limit=40) for the first tree page, then advance with next_offset when structure-backed targets are needed",
         ]
     )
 
@@ -59,41 +61,37 @@ def build_targets_text(
 def build_targets_list_text(
     screen: ScreenState,
     *,
-    max_elements: int,
+    offset: int,
+    limit: int,
     source: Literal["all", "vision", "tree"] = "all",
 ) -> str:
-    parts = build_target_parts(
-        screen,
-        vision_limit=max(max_elements, 0),
-        tree_limit=max(max_elements, 0),
-    )
+    parts = build_canonical_target_parts(screen)
     include_vision = source in {"all", "vision"}
     include_tree = source in {"all", "tree"}
     visible_targets = [
-        *(parts.vision_targets if include_vision else []),
-        *(parts.tree_targets if include_tree else []),
+        *(_window_targets(parts.vision_targets, offset=offset, limit=limit) if include_vision else []),
+        *(_window_targets(parts.tree_targets, offset=offset, limit=limit) if include_tree else []),
     ]
     if not visible_targets:
         return "none"
-    summary_lines: list[str] = []
-    if source != "all":
-        summary_lines.append(f"source={source}")
+    summary_lines: list[str] = [f"source={source}", f"offset={max(offset, 0)}", f"limit={max(limit, 0)}"]
+    summary_lines.append("box=[left,top,right,bottom] in screen pixels.")
     if include_vision:
-        summary_lines.append(f"vision_window={len(parts.vision_targets)}/{parts.vision_total} limit={max(max_elements, 0)}")
-    vision_truncated = max(parts.vision_total - len(parts.vision_targets), 0)
-    if include_vision and vision_truncated > 0:
-        summary_lines.append(f"vision_truncated={vision_truncated}")
+        summary_lines.extend(_format_window_summary("vision", parts.vision_targets, offset=offset, limit=limit))
     if include_tree:
-        summary_lines.append(f"tree_window={len(parts.tree_targets)}/{parts.tree_total} limit={max(max_elements, 0)}")
-    tree_truncated = max(parts.tree_total - len(parts.tree_targets), 0)
-    if include_tree and tree_truncated > 0:
-        summary_lines.append(f"tree_truncated={tree_truncated}")
+        summary_lines.extend(_format_window_summary("tree", parts.tree_targets, offset=offset, limit=limit))
     sections: list[str] = [*summary_lines]
     if include_vision:
-        vision_lines = [_format_full_target_line(target) for target in parts.vision_targets] or ["none"]
+        vision_lines = [
+            _format_full_target_line(target)
+            for target in _window_targets(parts.vision_targets, offset=offset, limit=limit)
+        ] or ["none"]
         sections.extend(["", "[VISION_TARGETS]", *vision_lines])
     if include_tree:
-        tree_lines = [_format_full_target_line(target) for target in parts.tree_targets] or ["none"]
+        tree_lines = [
+            _format_full_target_line(target)
+            for target in _window_targets(parts.tree_targets, offset=offset, limit=limit)
+        ] or ["none"]
         sections.extend(["", "[TREE_TARGETS]", *tree_lines])
     return "\n".join(sections)
 
@@ -199,8 +197,35 @@ def _format_inline_state_parts(
     return parts
 
 
+def _window_targets(targets: list[ActionTarget], *, offset: int, limit: int) -> list[ActionTarget]:
+    normalized_offset = max(offset, 0)
+    normalized_limit = max(limit, 0)
+    if normalized_limit == 0:
+        return []
+    return targets[normalized_offset : normalized_offset + normalized_limit]
+
+
+def _format_window_summary(kind: str, targets: list[ActionTarget], *, offset: int, limit: int) -> list[str]:
+    total = len(targets)
+    window_targets = _window_targets(targets, offset=offset, limit=limit)
+    has_more = max(offset, 0) + len(window_targets) < total
+    window_value = _format_window_value(total=total, offset=offset, count=len(window_targets))
+    lines = [f"{kind}_window={window_value}", f"{kind}_has_more={str(has_more).lower()}"]
+    if has_more:
+        lines.append(f"{kind}_next_offset={max(offset, 0) + len(window_targets)}")
+    return lines
+
+
+def _format_window_value(*, total: int, offset: int, count: int) -> str:
+    if total <= 0 or count <= 0:
+        return f"none/{max(total, 0)}"
+    start = max(offset, 0) + 1
+    end = max(offset, 0) + count
+    return f"{start}-{end}/{total}"
+
+
 def _format_box(box: tuple[int, int, int, int]) -> str:
-    return f"@{box[0]},{box[1]},{box[2]},{box[3]}"
+    return f"box=[{box[0]},{box[1]},{box[2]},{box[3]}]"
 
 
 def _target_profile(target: ActionTarget):

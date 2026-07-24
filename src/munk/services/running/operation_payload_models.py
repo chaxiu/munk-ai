@@ -55,6 +55,7 @@ class RunPlansAggregate(BaseModel):
     succeeded_children: int
     failed_children: int
     cancelled_children: int
+    interrupted_children: int = 0
     completed_children: int
     current_child_operation_id: str | None = None
     current_child_plan_id: str | None = None

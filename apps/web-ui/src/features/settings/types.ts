@@ -2,6 +2,7 @@ export type {
   AgentForm,
   GeminiProviderFieldKey,
   GeminiSectionForm,
+  HttpBaseFormItem,
   IOSBridgeForm,
   OpenAIProviderFieldKey,
   OpenAISectionForm,
@@ -15,6 +16,7 @@ export type {
   RuntimeForm,
   SettingsFormState,
   SettleMode,
+  TestEnvForm,
   ThinkingMode,
 } from './settingsFormTypes'
 export {
@@ -28,6 +30,8 @@ export {
   createEmptyProxyConfigForm,
   createEmptyRuntimeForm,
   createEmptySettingsForm,
+  createEmptyHttpBaseFormItem,
+  createEmptyTestEnvForm,
 } from './settingsFormBuilders'
 export {
   getProviderFieldMeta,
