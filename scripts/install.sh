@@ -348,7 +348,7 @@ detect_target() {
       ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
       echo "munk installer for Windows is install.ps1 (target: windows-${normalized_arch})" >&2
-      echo "run: irm https://downloads.munk.sh/install.ps1 | iex" >&2
+      echo "run: \$env:MUNK_CHANNEL='beta'; irm https://downloads.munk.sh/install.ps1 | iex" >&2
       exit 1
       ;;
     *)
@@ -533,7 +533,12 @@ main() {
     RESOLVED_CHANNEL="$CHANNEL"
   fi
   if ! ARCHIVE_URL="$(manifest_value archive_url "$TARGET_KEY" "$VARIANT" 2>/dev/null)"; then
-    echo "no artifact found for target=${TARGET_KEY} variant=${VARIANT}" >&2
+    echo "no artifact found for target=${TARGET_KEY} variant=${VARIANT} (channel=${CHANNEL})" >&2
+    case "${CHANNEL}:${TARGET_KEY}" in
+      stable:linux-*|stable:windows-*)
+        echo "hint: try --channel beta (Linux/Windows preview builds publish to beta first)" >&2
+        ;;
+    esac
     exit 1
   fi
   if ! SHA256_URL="$(manifest_value sha256_url "$TARGET_KEY" "$VARIANT" 2>/dev/null)"; then

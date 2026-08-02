@@ -12,12 +12,21 @@
   irm https://downloads.munk.sh/install.ps1 | iex
 
 .EXAMPLE
+  $env:MUNK_CHANNEL = "beta"; irm https://downloads.munk.sh/install.ps1 | iex
+
+.EXAMPLE
   .\install.ps1 -Channel beta
 #>
 [CmdletBinding()]
 param(
     [ValidateSet("stable", "beta")]
-    [string]$Channel = "stable",
+    [string]$Channel = $(
+        if (-not [string]::IsNullOrWhiteSpace($env:MUNK_CHANNEL)) {
+            $env:MUNK_CHANNEL
+        } else {
+            "stable"
+        }
+    ),
 
     [string]$Version = "",
 
@@ -50,8 +59,12 @@ Options:
 
 Examples:
   irm https://downloads.munk.sh/install.ps1 | iex
+  `$env:MUNK_CHANNEL = "beta"; irm https://downloads.munk.sh/install.ps1 | iex
   .\install.ps1 -Channel beta
   .\install.ps1 -Channel stable
+
+Environment:
+  MUNK_CHANNEL             Optional default for -Channel when piping irm | iex
 "@
 }
 
@@ -93,7 +106,11 @@ function Get-ManifestValue {
             }
             $targetProperty = $artifacts.PSObject.Properties[$TargetKey]
             if ($null -eq $targetProperty) {
-                throw "no artifact found for target=$TargetKey"
+                $hint = ""
+                if ($TargetKey -like "windows-*" -or $TargetKey -like "linux-*") {
+                    $hint = " Hint: Windows/Linux preview builds publish to beta first (`$env:MUNK_CHANNEL='beta'; irm https://downloads.munk.sh/install.ps1 | iex)."
+                }
+                throw "no artifact found for target=$TargetKey.$hint"
             }
             $target = $targetProperty.Value
             $variantProperty = $target.PSObject.Properties[$VariantName]

@@ -23,23 +23,34 @@ Available on macOS, Linux, and Windows x86_64.
 
 Install Munk AI, run diagnostics, and start the local Web UI:
 
-macOS / Linux:
+macOS (stable):
 
 ```bash
-curl -fsSL https://downloads.munk.sh/install.sh | bash
+curl -fsSL https://get.munk.sh | bash
 munk doctor
 munk doctor --fix       # apply auto-fixable repairs (e.g. Playwright Chromium)
 munk serve --port 16888
 ```
 
-Windows (PowerShell):
+Linux (beta):
 
-```powershell
-irm https://downloads.munk.sh/install.ps1 | iex
+```bash
+curl -fsSL https://get.munk.sh | bash -s -- --channel beta
 munk doctor
 munk doctor --fix
 munk serve --port 16888
 ```
+
+Windows x86_64 (beta, PowerShell):
+
+```powershell
+$env:MUNK_CHANNEL = "beta"; irm https://downloads.munk.sh/install.ps1 | iex
+munk doctor
+munk doctor --fix
+munk serve --port 16888
+```
+
+Equivalent explicit installer URLs: `https://downloads.munk.sh/install.sh` and `https://downloads.munk.sh/install.ps1`.
 
 For docs and updates, visit [munk.sh](https://www.munk.sh/).
 

@@ -41,19 +41,25 @@ Channel: \`${CHANNEL}\`
 
 Install:
 
-macOS / Linux:
+macOS (stable default; use \`--channel beta\` for pre-release):
 
 \`\`\`bash
-curl -fsSL https://downloads.munk.sh/install.sh | bash
+curl -fsSL https://get.munk.sh | bash
 \`\`\`
 
-Windows (x86_64; Android + Web; no iOS):
+Linux (beta):
+
+\`\`\`bash
+curl -fsSL https://get.munk.sh | bash -s -- --channel beta
+\`\`\`
+
+Windows (x86_64 beta; Android + Web; no iOS):
 
 \`\`\`powershell
-irm https://downloads.munk.sh/install.ps1 | iex
+\$env:MUNK_CHANNEL = "beta"; irm https://downloads.munk.sh/install.ps1 | iex
 \`\`\`
 
-Primary distribution is Cloudflare R2 (\`downloads.munk.sh\`). This GitHub Release mirrors the same archives for browsing and manual download.
+Primary distribution is Cloudflare R2 (\`downloads.munk.sh\`; short URL \`get.munk.sh\` for the bash installer). This GitHub Release mirrors the same archives for browsing and manual download.
 EOF
 )"
 

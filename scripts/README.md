@@ -29,8 +29,8 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 - `build_review_knowledge.py`: build review knowledge assets
 - `generate_local_api_openapi.py`: generate/check Local API OpenAPI output
 - `generate_loop_local_api_openapi.py`: generate/check trimmed Local API OpenAPI for Munk Loop (`munk-loop/docs/munk-ai/local-api.loop.json`)
-- `install.sh`: installer entrypoint (macOS / Linux)
-- `install.ps1`: installer entrypoint (Windows x86_64)
+- `install.sh`: installer entrypoint (macOS / Linux; short URL `https://get.munk.sh`)
+- `install.ps1`: installer entrypoint (Windows x86_64; `https://downloads.munk.sh/install.ps1`, support `MUNK_CHANNEL=beta`)
 
 ## Public Release Flow
 
