@@ -17,12 +17,13 @@ from munk.artifacts import (
     ARTIFACT_ID_ARTIFACT_MANIFEST,
     ARTIFACT_ID_DIAGNOSTICS,
 )
-from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.artifact_manifest_models import ArtifactSchemaVersions
+from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.diagnostics_service import OperationDiagnosticsService
 from munk.services.machine_contracts import MachineCommandResponse, build_error_result, build_success_result
-from munk.services.operations.models import OperationRecord
+from munk.services.operations.active_device_leases import get_active_device_lease_registry
 from munk.services.operations.lifecycle_reconcile import should_force_cancel
+from munk.services.operations.models import OperationRecord
 from munk.services.operations.payloads import (
     attempt_usages_from_result_json,
     build_operation_detail_payload,
@@ -151,6 +152,10 @@ class OperationQueryService:
         try:
             registry = self._operation_service.registry
             registry.request_cancel_operation_tree(operation_id)
+            claims_released = registry.release_claims_operation_tree(operation_id)
+            revoked_leases = get_active_device_lease_registry().revoke_tree(
+                registry.operation_tree_ids(operation_id)
+            )
             record = registry.get_operation(operation_id)
             if should_force_cancel(record):
                 registry.force_finalize_operation_tree(
@@ -166,6 +171,9 @@ class OperationQueryService:
             "operation_id": record.operation_id,
             "status": record.status,
             "cancel_requested": record.cancel_requested,
+            "claims_released": claims_released > 0,
+            "claims_released_count": claims_released,
+            "device_leases_revoked": len(revoked_leases),
         }
         return build_success_result(command="runs_cancel", data=data)
 

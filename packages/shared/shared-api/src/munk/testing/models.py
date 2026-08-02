@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, TypeAlias
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 JsonValue: TypeAlias = Any
+
+_PAGE_ID_SENTINELS = frozenset({"none", "null", "undefined", "nil", "n/a", "na"})
 
 
 def empty_strings() -> list[str]:
@@ -27,6 +29,18 @@ def empty_guidance_items() -> list[str]:
     return []
 
 
+def normalize_case_page_id(value: str | None) -> str | None:
+    """Drop empty / LLM sentinel page ids so start-state prep does not navigate."""
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned.lower() in _PAGE_ID_SENTINELS:
+        return None
+    return cleaned
+
+
 class CaseBudget(BaseModel):
     max_steps: int | None = Field(default=None, gt=0)
     max_seconds: float | None = Field(default=None, gt=0)
@@ -41,6 +55,15 @@ class CaseStartState(BaseModel):
             "navigation support and is not validated against a central registry."
         ),
     )
+
+    @field_validator("page_id", mode="before")
+    @classmethod
+    def coerce_page_id(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return normalize_case_page_id(value)
+        return normalize_case_page_id(str(value))
 
 
 class AiGuidance(BaseModel):

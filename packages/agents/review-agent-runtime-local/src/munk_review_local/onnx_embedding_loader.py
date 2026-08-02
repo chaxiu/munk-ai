@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import onnxruntime as ort
+
+# Munk uses transformers for tokenizers only (ONNX Runtime runs the model).
+# Suppress the advisory warning about missing PyTorch/TensorFlow/Flax backends.
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 from transformers import AutoTokenizer
 
 _MEAN_POOLING_KEY = "pooling_mode_mean_tokens"

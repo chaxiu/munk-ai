@@ -146,7 +146,10 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
             completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
             tool_policy_lines=SHARED_RUNNER_RULE_LINES,
             action_bias_lines=(),
-            platform_capability_notes=(),
+            platform_capability_notes=(
+                "Soft-keyboard dismiss is not applicable on web; focused inputs are not soft keyboards.",
+                "Prefer dismiss_keyboard=false for edit_text unless a page-specific overlay must be closed.",
+            ),
             status_bar_filter_enabled=False,
             enabled_read_tools=("read_page_meta", "read_dom_summary", "read_focused_element"),
         )

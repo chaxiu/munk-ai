@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .constants import (
     DEFAULT_APP_KNOWLEDGE_BUILD_MANIFEST_NAME,
     DEFAULT_APP_KNOWLEDGE_DB_NAME,
@@ -10,7 +12,6 @@ from .constants import (
     default_app_knowledge_model_dir,
     knowledge_resource_root,
 )
-from .embedding_service import OnnxEmbeddingService
 from .knowledge_card_db import KnowledgeCardDb, KnowledgeCardDbError
 from .knowledge_card_index import KnowledgeCardIndexBuildResult, KnowledgeCardIndexService
 from .knowledge_card_retrieval import KnowledgeCardRetrievalService, row_to_knowledge_card_payload
@@ -36,3 +37,11 @@ __all__ = [
     "merge_ranked_candidates",
     "row_to_knowledge_card_payload",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "OnnxEmbeddingService":
+        from .embedding_service import OnnxEmbeddingService
+
+        return OnnxEmbeddingService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

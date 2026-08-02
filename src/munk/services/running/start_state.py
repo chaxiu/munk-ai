@@ -8,7 +8,7 @@ from typing import Any, Literal, Protocol
 from munk.app import AppTarget
 from munk.device import DeviceDriver, SupportsAppLifecycle, SupportsDeviceLockState, SupportsDeviceUnlock
 from munk.services.errors import StartStateError
-from munk.testing import TestCase
+from munk.testing import TestCase, normalize_case_page_id
 
 StartStateStepKind = Literal["unlock", "app_reset", "page_navigation"]
 StartStateStepOutcome = Literal["succeeded", "failed", "skipped"]
@@ -120,7 +120,8 @@ def _build_start_state_plan(case: TestCase) -> list[StartStateStepPlan]:
         StartStateStepPlan(step_kind="unlock"),
         StartStateStepPlan(step_kind="app_reset"),
     ]
-    if case.start_state.page_id is not None:
+    page_id = normalize_case_page_id(case.start_state.page_id)
+    if page_id is not None:
         plan.append(StartStateStepPlan(step_kind="page_navigation"))
     return plan
 
@@ -245,7 +246,7 @@ def _execute_page_navigation_step_diagnostic(
     step_index: int,
     step_total: int,
 ) -> tuple[StartStateStepDiagnostic, StartStateError | None]:
-    page_id = case.start_state.page_id
+    page_id = normalize_case_page_id(case.start_state.page_id)
     diagnostic = StartStateStepDiagnostic(
         step_index=step_index,
         step_total=step_total,

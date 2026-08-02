@@ -18,7 +18,7 @@ from munk.artifacts import (
 from munk.config import ResolvedConfig
 from munk.execution.models import CaseExecutionRequest, CaseExecutionResult, ExecutionOutcome
 from munk.services.diagnostics_models import OperationDiagnostics
-from munk.services.diagnostics_service import OperationDiagnosticsService
+from munk.services.diagnostics_service import OperationDiagnosticsService, format_exception_message
 
 RUNNER_RUNTIME_DIAGNOSTICS_STAGE = "runner_runtime"
 
@@ -100,7 +100,7 @@ def build_runner_failure_diagnostics(
         warning_summary=warning_summary,
         failure_category=diagnostics_service.classify_exception(exc),
         failure_stage=RUNNER_RUNTIME_DIAGNOSTICS_STAGE,
-        failure_message=str(exc),
+        failure_message=format_exception_message(exc),
         artifact_checks=build_runner_artifact_checks(diagnostics_service=diagnostics_service, artifacts=artifacts),
         contract_versions={},
         linked_operation_ids={},

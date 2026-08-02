@@ -500,6 +500,7 @@ def test_android_device_close_clears_runtime_log_state() -> None:
     assert device._log_pid is None  # type: ignore[attr-defined]
     assert device._log_session_started is False  # type: ignore[attr-defined]
     assert device._seen_log_keys == set()  # type: ignore[attr-defined]
+    assert device._device is None  # type: ignore[attr-defined]
 
 
 def test_android_device_close_is_idempotent() -> None:
@@ -512,6 +513,7 @@ def test_android_device_close_is_idempotent() -> None:
     assert device._log_package_name is None  # type: ignore[attr-defined]
     assert device._log_process_names == ()  # type: ignore[attr-defined]
     assert device._log_pid is None  # type: ignore[attr-defined]
+    assert device._device is None  # type: ignore[attr-defined]
     assert device._log_session_started is False  # type: ignore[attr-defined]
     assert device._seen_log_keys == set()  # type: ignore[attr-defined]
 

@@ -6,6 +6,7 @@ from .models import (
     HttpSetupStep,
     SetupStep,
     TestCase,
+    normalize_case_page_id,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "HttpSetupStep",
     "SetupStep",
     "TestCase",
+    "normalize_case_page_id",
 ]

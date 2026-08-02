@@ -50,7 +50,6 @@ class GeneratedTestCaseDraft(BaseModel):
     procedure: list[str] = Field(default_factory=empty_procedure)
     runner_goal: str
     start_mode: Literal["reset", "resume"] = "reset"
-    page_id: str | None = None
 
     @field_validator("title", "intent", "runner_goal")
     @classmethod
@@ -88,10 +87,6 @@ class GeneratedPlanSkeletonDraft(BaseModel):
         if self.target_case_count != outline_count:
             object.__setattr__(self, "target_case_count", outline_count)
         return self
-
-
-class GeneratedCaseAppendDraft(BaseModel):
-    case: GeneratedTestCaseDraft
 
 
 class GeneratedPlanFinalizeDraft(BaseModel):

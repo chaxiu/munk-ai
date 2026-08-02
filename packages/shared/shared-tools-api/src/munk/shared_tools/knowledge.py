@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, get_args
 
 from munk.app_knowledge import (
     KnowledgeCandidateDraft,
@@ -21,6 +21,8 @@ KNOWLEDGE_LIST_TOOL = "knowledge_list"
 KNOWLEDGE_SUBMIT_CANDIDATE_TOOL = "knowledge_submit_candidate"
 DEFAULT_MAX_SEARCH_RESULTS = 8
 DEFAULT_MAX_LIST_RESULTS = 20
+KNOWLEDGE_CARD_TYPE_VALUES: frozenset[str] = frozenset(get_args(KnowledgeCardType))
+KNOWLEDGE_CARD_TYPES_HINT = ",".join(sorted(KNOWLEDGE_CARD_TYPE_VALUES))
 
 
 class KnowledgeToolProvider(Protocol):
@@ -54,20 +56,73 @@ class KnowledgeToolDescriptions:
     submit_candidate: str = ""
 
 
+@dataclass(frozen=True)
+class ParsedKnowledgeCardTypes:
+    """Accepted enum values after discarding unknown tokens."""
+
+    accepted: tuple[KnowledgeCardType, ...]
+    ignored: tuple[str, ...]
+
+    @property
+    def filter_types(self) -> list[KnowledgeCardType] | None:
+        if not self.accepted:
+            return None
+        return list(self.accepted)
+
+
+def parse_knowledge_card_types(raw: str | None) -> ParsedKnowledgeCardTypes:
+    """Parse comma-separated card types; keep only known enum values.
+
+    Invalid tokens are discarded (not raised). When nothing valid remains,
+    the filter is treated as absent (search all types).
+    """
+    if raw is None:
+        return ParsedKnowledgeCardTypes(accepted=(), ignored=())
+    text = raw.strip()
+    if not text:
+        return ParsedKnowledgeCardTypes(accepted=(), ignored=())
+
+    accepted: list[KnowledgeCardType] = []
+    ignored: list[str] = []
+    seen: set[str] = set()
+    for part in text.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        normalized = token.lower()
+        if normalized in KNOWLEDGE_CARD_TYPE_VALUES:
+            if normalized not in seen:
+                seen.add(normalized)
+                accepted.append(normalized)  # type: ignore[arg-type]
+            continue
+        ignored.append(token)
+    return ParsedKnowledgeCardTypes(accepted=tuple(accepted), ignored=tuple(ignored))
+
+
+def parse_knowledge_card_type(raw: str | None) -> KnowledgeCardType | None:
+    """Parse a single card type; discard invalid values as None."""
+    parsed = parse_knowledge_card_types(raw)
+    if not parsed.accepted:
+        return None
+    return parsed.accepted[0]
+
+
 def build_knowledge_search_payload(
     *,
     app_id: str,
     query: str,
     items: Sequence[KnowledgeCard],
+    ignored_card_types: Sequence[str] = (),
 ) -> str:
-    return _json_payload(
-        {
-            "app_id": app_id,
-            "query": query.strip(),
-            "count": len(items),
-            "items": [_card_summary(item) for item in items],
-        }
-    )
+    payload: dict[str, Any] = {
+        "app_id": app_id,
+        "query": query.strip(),
+        "count": len(items),
+        "items": [_card_summary(item) for item in items],
+    }
+    if ignored_card_types:
+        payload["ignored_card_types"] = list(ignored_card_types)
+    return _json_payload(payload)
 
 
 def build_knowledge_get_payload(*, card_id: str, card: KnowledgeCard | None) -> str:
@@ -133,32 +188,49 @@ def register_knowledge_tools(
             return payload
         return recorder(deps, tool_name, arguments, payload)
 
-    @agent.tool
+    search_description = (
+        descriptions.search
+        or (
+            "Search knowledge cards by natural language query. "
+            "Do not pass app_id; the host binds the current app. "
+            f"Optional card_types is a comma-separated filter "
+            f"(allowed: {KNOWLEDGE_CARD_TYPES_HINT}); omit unless filtering. "
+            "Unknown types are ignored."
+        )
+    )
+    list_description = (
+        descriptions.list
+        or (
+            "List knowledge cards for the current app. "
+            "Do not pass app_id; the host binds the current app. "
+            f"Optional card_type is one of: {KNOWLEDGE_CARD_TYPES_HINT}; "
+            "unknown values are ignored."
+        )
+    )
+
+    @agent.tool(description=search_description)
     def knowledge_search(
         ctx: PydanticRunContext[Any],
-        app_id: str,
         query: str,
-        card_types: list[KnowledgeCardType] | None = None,
+        card_types: str | None = None,
         limit: int = DEFAULT_MAX_SEARCH_RESULTS,
     ) -> str:
         """Search knowledge cards by natural language query."""
         provider = provider_getter(ctx.deps)
+        parsed = parse_knowledge_card_types(card_types)
         arguments: dict[str, object] = {
-            "app_id": app_id,
+            "app_id": provider.expected_app_id,
             "query": query,
-            "card_types": card_types or [],
+            "card_types": card_types,
+            "accepted_card_types": list(parsed.accepted),
+            "ignored_card_types": list(parsed.ignored),
             "limit": limit,
         }
-        if not knowledge_app_id_matches(expected_app_id=provider.expected_app_id, received_app_id=app_id):
-            payload = build_knowledge_mismatch_payload(
-                expected_app_id=provider.expected_app_id,
-                received_app_id=app_id,
-            )
-            return _maybe_record(ctx.deps, KNOWLEDGE_SEARCH_TOOL, arguments, payload)
         payload = build_knowledge_search_payload(
             app_id=provider.expected_app_id,
             query=query,
-            items=provider.search(query, card_types=card_types, limit=limit),
+            items=provider.search(query, card_types=parsed.filter_types, limit=limit),
+            ignored_card_types=parsed.ignored,
         )
         return _maybe_record(ctx.deps, KNOWLEDGE_SEARCH_TOOL, arguments, payload)
 
@@ -170,30 +242,30 @@ def register_knowledge_tools(
         payload = build_knowledge_get_payload(card_id=card_id, card=provider.get(card_id))
         return _maybe_record(ctx.deps, KNOWLEDGE_GET_TOOL, arguments, payload)
 
-    @agent.tool
+    @agent.tool(description=list_description)
     def knowledge_list(
         ctx: PydanticRunContext[Any],
-        app_id: str,
-        card_type: KnowledgeCardType | None = None,
+        card_type: str | None = None,
         limit: int = DEFAULT_MAX_LIST_RESULTS,
     ) -> str:
         """List knowledge cards for the current app."""
         provider = provider_getter(ctx.deps)
-        arguments: dict[str, object] = {"app_id": app_id, "card_type": card_type, "limit": limit}
-        if not knowledge_app_id_matches(expected_app_id=provider.expected_app_id, received_app_id=app_id):
-            payload = build_knowledge_mismatch_payload(
-                expected_app_id=provider.expected_app_id,
-                received_app_id=app_id,
-            )
-            return _maybe_record(ctx.deps, KNOWLEDGE_LIST_TOOL, arguments, payload)
+        resolved_card_type = parse_knowledge_card_type(card_type)
+        arguments: dict[str, object] = {
+            "app_id": provider.expected_app_id,
+            "card_type": card_type,
+            "resolved_card_type": resolved_card_type,
+            "limit": limit,
+        }
         payload = build_knowledge_list_payload(
             app_id=provider.expected_app_id,
-            card_type=card_type,
-            items=provider.list(card_type=card_type, limit=limit),
+            card_type=resolved_card_type,
+            items=provider.list(card_type=resolved_card_type, limit=limit),
         )
         return _maybe_record(ctx.deps, KNOWLEDGE_LIST_TOOL, arguments, payload)
 
     if include_submit_candidate:
+
         @agent.tool
         def knowledge_submit_candidate(
             ctx: PydanticRunContext[Any],

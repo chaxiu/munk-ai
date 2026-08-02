@@ -9,6 +9,8 @@ from munk.shared_tools.knowledge import (
     build_knowledge_get_payload,
     build_knowledge_list_payload,
     build_knowledge_search_payload,
+    parse_knowledge_card_type,
+    parse_knowledge_card_types,
     register_knowledge_tools,
 )
 from pydantic import TypeAdapter
@@ -41,8 +43,10 @@ def _screen_card() -> KnowledgeCard:
 @dataclass(frozen=True)
 class _Provider:
     expected_app_id: str = "app-1"
+    last_search_card_types: object | None = None
 
     def search(self, query: str, *, card_types=None, limit: int = 8) -> list[KnowledgeCard]:  # noqa: ANN001
+        object.__setattr__(self, "last_search_card_types", card_types)
         return [_screen_card()]
 
     def get(self, card_id: str) -> KnowledgeCard | None:
@@ -54,14 +58,25 @@ class _Provider:
     def submit_candidate(self, submission: KnowledgeCandidateSubmission) -> KnowledgeCandidateRecord:
         return KnowledgeCandidateRecord.model_validate(
             {
-            "candidate_id": "candidate-1",
-            "app_id": submission.app_id,
-            "status": "pending_review",
-            "submitted_at": "2026-06-06T00:00:00Z",
-            "candidate": submission.candidate.model_dump(mode="python"),
-            "evidence_refs": submission.evidence_refs,
+                "candidate_id": "candidate-1",
+                "app_id": submission.app_id,
+                "status": "pending_review",
+                "submitted_at": "2026-06-06T00:00:00Z",
+                "candidate": submission.candidate.model_dump(mode="python"),
+                "evidence_refs": submission.evidence_refs,
             }
         )
+
+
+def test_parse_knowledge_card_types_keeps_valid_and_discards_invalid() -> None:
+    parsed = parse_knowledge_card_types("screen,Foo,FLOW,screen")
+    assert parsed.filter_types == ["screen", "flow"]
+    assert parsed.ignored == ("Foo",)
+    assert parse_knowledge_card_types(None).filter_types is None
+    assert parse_knowledge_card_types("").filter_types is None
+    assert parse_knowledge_card_types("Nope,Bad").filter_types is None
+    assert parse_knowledge_card_type("Screen") == "screen"
+    assert parse_knowledge_card_type("Nope") is None
 
 
 def test_build_knowledge_search_payload_contains_summary() -> None:
@@ -69,6 +84,16 @@ def test_build_knowledge_search_payload_contains_summary() -> None:
     assert '"count": 1' in payload
     assert '"query": "首页"' in payload
     assert '"card_id": "screen-home"' in payload
+
+
+def test_build_knowledge_search_payload_includes_ignored_types_when_present() -> None:
+    payload = build_knowledge_search_payload(
+        app_id="app-1",
+        query="首页",
+        items=[_screen_card()],
+        ignored_card_types=["Foo"],
+    )
+    assert '"ignored_card_types": ["Foo"]' in payload
 
 
 def test_build_knowledge_get_payload_contains_full_card() -> None:
@@ -94,29 +119,36 @@ def test_register_knowledge_tools_returns_stable_payloads() -> None:
     get_tool = cast(Callable[..., str], tools["knowledge_get"].function)
     list_tool = cast(Callable[..., str], tools["knowledge_list"].function)
 
-    search_payload = search_tool(SimpleNamespace(deps=deps), app_id="app-1", query="首页")
+    search_payload = search_tool(SimpleNamespace(deps=deps), query="首页")
     get_payload = get_tool(SimpleNamespace(deps=deps), card_id="screen-home")
-    list_payload = list_tool(SimpleNamespace(deps=deps), app_id="app-1", card_type="screen")
+    list_payload = list_tool(SimpleNamespace(deps=deps), card_type="screen")
 
     assert '"card_id": "screen-home"' in search_payload
     assert '"found": true' in get_payload
     assert '"card_type": "screen"' in list_payload
+    assert "app_id" not in tools["knowledge_search"].function_schema.json_schema["properties"]
+    assert "app_id" not in tools["knowledge_list"].function_schema.json_schema["properties"]
+    assert tools["knowledge_search"].function_schema.json_schema["properties"]["card_types"]["anyOf"][0][
+        "type"
+    ] == "string"
 
 
-def test_register_knowledge_tools_rejects_mismatched_app_id() -> None:
+def test_register_knowledge_tools_discards_invalid_card_types() -> None:
     agent: Agent[object, str] = Agent(model="test", output_type=str, defer_model_check=True)
     register_knowledge_tools(agent, provider_getter=lambda deps: deps.provider)
     tools = agent._function_toolset.tools
-    deps = SimpleNamespace(provider=_Provider())
-
+    provider = _Provider()
+    deps = SimpleNamespace(provider=provider)
     search_tool = cast(Callable[..., str], tools["knowledge_search"].function)
-    list_tool = cast(Callable[..., str], tools["knowledge_list"].function)
 
-    search_payload = search_tool(SimpleNamespace(deps=deps), app_id="other-app", query="首页")
-    list_payload = list_tool(SimpleNamespace(deps=deps), app_id="other-app")
+    payload = search_tool(
+        SimpleNamespace(deps=deps),
+        query="首页",
+        card_types="screen,Foo,FLOW",
+    )
 
-    assert 'app_id mismatch: expected app-1, got other-app' in search_payload
-    assert 'app_id mismatch: expected app-1, got other-app' in list_payload
+    assert provider.last_search_card_types == ["screen", "flow"]
+    assert '"ignored_card_types": ["Foo"]' in payload
 
 
 def test_register_knowledge_tools_can_skip_submit_candidate() -> None:

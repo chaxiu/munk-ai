@@ -95,6 +95,21 @@ def request_cancel_operation_tree(registry: OperationRegistry, root_operation_id
     return cancelled_ids
 
 
+def release_claims_operation_tree(registry: OperationRegistry, root_operation_id: str) -> int:
+    """Release device claims for root and descendants immediately (cancel hot path)."""
+    root = registry.get_operation(root_operation_id)
+    targets = [root, *iter_descendant_operations(registry, root_operation_id)]
+    released = 0
+    for record in targets:
+        released += registry.release_claims(record.operation_id)
+    return released
+
+
+def operation_tree_ids(registry: OperationRegistry, root_operation_id: str) -> list[str]:
+    root = registry.get_operation(root_operation_id)
+    return [root.operation_id, *[item.operation_id for item in iter_descendant_operations(registry, root_operation_id)]]
+
+
 def reconcile_orphaned_operations(registry: OperationRegistry) -> list[ReconcileOperationResult]:
     candidates = [
         *registry.list_operations(limit=10_000, status="queued"),

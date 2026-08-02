@@ -15,6 +15,7 @@ from munk.services.errors import SetupExecutionError, StartStateError
 from munk.services.events import RunEventSink
 from munk.services.ios import IOSDeviceBridgeDiagnosticsContext
 from munk.services.models import RunPaths, RunStartParams
+from munk.services.operations.active_device_leases import bind_operation_device
 from munk.services.operations.runtime_event_sinks import TrackerAgentRuntimeTimelineSink
 from munk.services.operations.service import OperationTracker
 from munk.services.perception_runtime import build_perception_provider_for_runtime
@@ -125,6 +126,10 @@ def build_runner_host_bundle(
             tracker=tracker,
         )
         device = factory.create_device(device_ref=params.device_ref, app_target=request.app_target)
+        device = bind_operation_device(
+            operation_id=tracker.operation_id if tracker is not None else None,
+            device=device,
+        )
         emitter.emit_progress(
             event_type="context_prepare_device_ready",
             message="context prepare created device runtime",

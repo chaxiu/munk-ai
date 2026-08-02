@@ -15,7 +15,7 @@ from munk.judging.models import (
     JudgeRuntimeOutput,
 )
 from munk.services.diagnostics_models import OperationDiagnostics
-from munk.services.diagnostics_service import OperationDiagnosticsService
+from munk.services.diagnostics_service import OperationDiagnosticsService, format_exception_message
 
 from .runtime_host import JudgeHostManagedPaths
 
@@ -157,7 +157,7 @@ class JudgeArtifactMaterializer:
             tool_calls=self._load_tool_calls(context.managed_paths.tool_calls_path),
             runtime_id=runtime_id,
             failure_exc=exc,
-            failure_message=str(exc),
+            failure_message=format_exception_message(exc),
             status="failed",
         )
         self._diagnostics_service.write(host_paths.diagnostics_path, diagnostics)

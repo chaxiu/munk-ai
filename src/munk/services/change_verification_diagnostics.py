@@ -100,7 +100,7 @@ class ChangeVerificationDiagnosticsManager:
         failure_stage: str | None,
         failure_message: str | None,
     ) -> Path:
-        failure_dir = _resolve_failure_dir(request)
+        failure_dir = resolve_verify_failure_dir(result=result)
         diagnostics_path = failure_dir / "diagnostics.json"
         diagnostics = self._build_verify_diagnostics(
             request=request,
@@ -112,6 +112,7 @@ class ChangeVerificationDiagnosticsManager:
             failure_category=failure_category,
             failure_stage=failure_stage,
             failure_message=failure_message,
+            plan_run_dir=failure_dir,
         )
         self._diagnostics_service.write(diagnostics_path, diagnostics)
         self._artifact_updater({ARTIFACT_ID_DIAGNOSTICS: str(diagnostics_path)})
@@ -129,15 +130,16 @@ class ChangeVerificationDiagnosticsManager:
         failure_category: DiagnosticsFailureCategory | None,
         failure_stage: str | None,
         failure_message: str | None,
+        plan_run_dir: Path | None = None,
     ) -> OperationDiagnostics:
         provider, model, role_models, config_fingerprint = self._diagnostics_service.resolve_provider_model(
             resolved_config=self._resolved_config,
             roles=("plan", "runner", "judge"),
         )
-        plan_run_dir = _resolve_failure_dir(request) if result is None else result.summary_path.parent
-        summary_path = plan_run_dir / "plan_execution.json"
-        report_path = plan_run_dir / "report.json"
-        manifest_path = plan_run_dir / "artifact_manifest.json"
+        resolved_plan_run_dir = plan_run_dir or resolve_verify_failure_dir(result=result)
+        summary_path = resolved_plan_run_dir / "plan_execution.json"
+        report_path = resolved_plan_run_dir / "report.json"
+        manifest_path = resolved_plan_run_dir / "artifact_manifest.json"
         checks = [
             self._diagnostics_service.build_json_artifact_check(
                 artifact_id="plan_execution",
@@ -161,13 +163,13 @@ class ChangeVerificationDiagnosticsManager:
                 [
                     self._diagnostics_service.build_json_artifact_check(
                         artifact_id="upstream_review_result",
-                        path=plan_run_dir / "upstream_review_result.json",
+                        path=resolved_plan_run_dir / "upstream_review_result.json",
                         required_fields=("risk_summary", "findings"),
                         expected_schema_version=REVIEW_RESULT_SCHEMA_VERSION,
                     ),
                     self._diagnostics_service.build_json_artifact_check(
                         artifact_id="review_orchestration",
-                        path=plan_run_dir / "review_orchestration.json",
+                        path=resolved_plan_run_dir / "review_orchestration.json",
                         required_fields=("review_hints", "required_cases"),
                         expected_schema_version=upstream_review.contract.schema_version,
                     ),
@@ -256,10 +258,18 @@ def _load_contract_versions(
     return contract_versions
 
 
-def _resolve_failure_dir(request: ChangeVerificationRequest) -> Path:
-    if request.artifact_path is not None:
-        request.artifact_path.mkdir(parents=True, exist_ok=True)
-        return request.artifact_path
+def resolve_verify_failure_dir(*, result: PlanExecutionResult | None) -> Path:
+    """Resolve the directory for verify_change failure diagnostics.
+
+    ChangeVerificationRequest.artifact_path is an *input* installable (APK/IPA/bundle),
+    the same semantics as PlanExecutionRequest / CaseExecutionRequest. It is not an
+    operation output root (unlike ReviewRequest.artifact_path).
+
+    Prefer co-locating diagnostics with plan-execution outputs when a result exists;
+    otherwise allocate a dedicated verify failure run directory.
+    """
+    if result is not None:
+        return result.summary_path.parent
     return create_unique_run_dir(prefix="verify_change_run")
 
 

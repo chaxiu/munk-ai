@@ -129,13 +129,15 @@ class HighLevelInputHandler:
         )
         if not input_execution.executed:
             return from_atomic_result(action, input_execution)
-        if action.dismiss_keyboard is not False:
+        dismiss_requested = action.dismiss_keyboard is not False
+        soft_keyboard_applicable = self._supports_soft_keyboard_dismiss()
+        if dismiss_requested and soft_keyboard_applicable:
             self._dismiss_keyboard_once(screen, recent_input=True)
         snapshot = capture_observation("post_action_final")
         text_applied = screen_contains_text(snapshot.screen, action.text or "")
         keyboard_ok = self._keyboard_requirement_satisfied(
             snapshot.screen,
-            dismiss_keyboard=action.dismiss_keyboard is not False,
+            dismiss_keyboard=dismiss_requested,
         )
         recovery_attempted = False
         recovery_parts: list[str] = []
@@ -157,7 +159,7 @@ class HighLevelInputHandler:
                     if retry_input.executed:
                         input_execution = retry_input
                         recovery_parts.append("refocus_and_retry")
-            if action.dismiss_keyboard is not False and not keyboard_ok:
+            if dismiss_requested and soft_keyboard_applicable and not keyboard_ok:
                 dismiss_result = self._dismiss_keyboard_once(snapshot.screen, recent_input=True)
                 if dismiss_result.keyboard_dismissed:
                     recovery_parts.append("dismiss_keyboard")
@@ -165,12 +167,12 @@ class HighLevelInputHandler:
             text_applied = screen_contains_text(snapshot.screen, action.text or "")
             keyboard_ok = self._keyboard_requirement_satisfied(
                 snapshot.screen,
-                dismiss_keyboard=action.dismiss_keyboard is not False,
+                dismiss_keyboard=dismiss_requested,
             )
         warning_code, warning_message = self._build_edit_text_replace_warning(
             text_applied=text_applied,
             keyboard_ok=keyboard_ok,
-            dismiss_keyboard=action.dismiss_keyboard is not False,
+            dismiss_keyboard=dismiss_requested and soft_keyboard_applicable,
         )
         return from_atomic_result(
             action,
@@ -181,17 +183,18 @@ class HighLevelInputHandler:
                 action.text or "",
                 text_applied=text_applied,
                 keyboard_ok=keyboard_ok,
-                dismiss_keyboard=action.dismiss_keyboard is not False,
+                dismiss_keyboard=dismiss_requested,
+                soft_keyboard_applicable=soft_keyboard_applicable,
             ),
             recovery_attempted=recovery_attempted,
             recovery_summary=", ".join(recovery_parts) if recovery_parts else None,
-            keyboard_dismissed=keyboard_ok if action.dismiss_keyboard is not False else False,
-            keyboard_dismiss_summary=(
-                "keyboard dismissed"
-                if action.dismiss_keyboard is not False and keyboard_ok
-                else "keyboard still visible"
-                if action.dismiss_keyboard is not False
-                else "keyboard dismissal skipped"
+            keyboard_dismissed=(
+                keyboard_ok if dismiss_requested and soft_keyboard_applicable else False
+            ),
+            keyboard_dismiss_summary=self._build_edit_text_replace_keyboard_summary(
+                dismiss_keyboard=dismiss_requested,
+                soft_keyboard_applicable=soft_keyboard_applicable,
+                keyboard_ok=keyboard_ok,
             ),
             warning_code=warning_code,
             warning_message=warning_message,
@@ -204,6 +207,9 @@ class HighLevelInputHandler:
         *,
         recent_input: bool = False,
     ) -> HighLevelActionResult:
+        unsupported = self._unsupported_soft_keyboard_dismiss_result()
+        if unsupported is not None:
+            return unsupported
         if not self._keyboard_likely_visible(screen, recent_input=recent_input):
             return self._build_keyboard_result(
                 executed=True,
@@ -212,10 +218,7 @@ class HighLevelInputHandler:
                 keyboard_dismissed=False,
                 keyboard_dismiss_summary="keyboard not detected; skip dismiss",
             )
-        dismiss_driver = self._driver
-        if not isinstance(dismiss_driver, SupportsSoftKeyboardDismiss):
-            raise ActionExecutionError("driver does not support dismiss_soft_keyboard")
-        dismiss_driver.dismiss_soft_keyboard()
+        self._invoke_dismiss_soft_keyboard()
         current = capture_observation("post_action_retry").screen
         still_visible = self._keyboard_likely_visible(current)
         return self._build_keyboard_result(
@@ -263,6 +266,9 @@ class HighLevelInputHandler:
     def _keyboard_requirement_satisfied(self, screen: ScreenState, *, dismiss_keyboard: bool) -> bool:
         if not dismiss_keyboard:
             return True
+        if not self._supports_soft_keyboard_dismiss():
+            # Desktop/web drivers have no soft-keyboard contract; do not fail edit_text on it.
+            return True
         return not self._keyboard_likely_visible(screen, recent_input=True)
 
     def _dismiss_keyboard_once(
@@ -271,6 +277,9 @@ class HighLevelInputHandler:
         *,
         recent_input: bool = False,
     ) -> HighLevelActionResult:
+        unsupported = self._unsupported_soft_keyboard_dismiss_result()
+        if unsupported is not None:
+            return unsupported
         if not self._keyboard_likely_visible(screen, recent_input=recent_input):
             return self._build_keyboard_result(
                 executed=True,
@@ -279,16 +288,33 @@ class HighLevelInputHandler:
                 keyboard_dismissed=False,
                 keyboard_dismiss_summary="keyboard not detected; skip dismiss",
             )
-        dismiss_driver = self._driver
-        if not isinstance(dismiss_driver, SupportsSoftKeyboardDismiss):
-            raise ActionExecutionError("driver does not support dismiss_soft_keyboard")
-        dismiss_driver.dismiss_soft_keyboard()
+        self._invoke_dismiss_soft_keyboard()
         return self._build_keyboard_result(
             executed=True,
             postcheck_passed=True,
             postcheck_summary="keyboard dismiss attempted",
             keyboard_dismissed=True,
             keyboard_dismiss_summary="keyboard dismiss attempted",
+        )
+
+    def _supports_soft_keyboard_dismiss(self) -> bool:
+        return isinstance(self._driver, SupportsSoftKeyboardDismiss)
+
+    def _invoke_dismiss_soft_keyboard(self) -> None:
+        dismiss_driver = self._driver
+        if not isinstance(dismiss_driver, SupportsSoftKeyboardDismiss):
+            raise ActionExecutionError("driver does not support dismiss_soft_keyboard")
+        dismiss_driver.dismiss_soft_keyboard()
+
+    def _unsupported_soft_keyboard_dismiss_result(self) -> HighLevelActionResult | None:
+        if self._supports_soft_keyboard_dismiss():
+            return None
+        return self._build_keyboard_result(
+            executed=True,
+            postcheck_passed=True,
+            postcheck_summary="soft keyboard dismiss not supported by driver",
+            keyboard_dismissed=False,
+            keyboard_dismiss_summary="soft keyboard dismiss not supported by driver",
         )
 
     @staticmethod
@@ -322,11 +348,29 @@ class HighLevelInputHandler:
         text_applied: bool,
         keyboard_ok: bool,
         dismiss_keyboard: bool,
+        soft_keyboard_applicable: bool,
     ) -> str:
         parts = [f"text_applied={text!r}" if text_applied else f"text_missing={text!r}"]
-        if dismiss_keyboard:
+        if dismiss_keyboard and soft_keyboard_applicable:
             parts.append("keyboard_dismissed" if keyboard_ok else "keyboard_still_visible")
+        elif dismiss_keyboard:
+            parts.append("keyboard_dismiss_not_applicable")
         return "; ".join(parts)
+
+    @staticmethod
+    def _build_edit_text_replace_keyboard_summary(
+        *,
+        dismiss_keyboard: bool,
+        soft_keyboard_applicable: bool,
+        keyboard_ok: bool,
+    ) -> str:
+        if not dismiss_keyboard:
+            return "keyboard dismissal skipped"
+        if not soft_keyboard_applicable:
+            return "soft keyboard dismiss not supported by driver"
+        if keyboard_ok:
+            return "keyboard dismissed"
+        return "keyboard still visible"
 
     def _keyboard_likely_visible(self, screen: ScreenState, *, recent_input: bool = False) -> bool:
         visibility_driver = self._driver

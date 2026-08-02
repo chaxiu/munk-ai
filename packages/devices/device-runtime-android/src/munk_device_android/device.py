@@ -252,6 +252,8 @@ class AndroidDevice:
 
     def close(self) -> None:
         self.stop_log_session()
+        # Drop the uiautomator2 handle so post-cancel / post-close IO fails closed.
+        self._device = None  # type: ignore[assignment]
 
     def _resolve_log_package_name(self) -> str | None:
         if self._app_target is not None and self._app_target.android is not None:

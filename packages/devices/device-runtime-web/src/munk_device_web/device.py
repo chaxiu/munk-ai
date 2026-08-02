@@ -211,8 +211,9 @@ class WebDevice:
             raise ValueError(f"playwright browser '{browser_type_name}' is not available")
         self._playwright_manager = manager
         self._playwright = playwright
-        if self._device_ref:
-            self._browser = browser_type.connect_over_cdp(self._device_ref)
+        # Logical refs like "web" are not CDP endpoints; only connect when ref looks like a URL.
+        if _is_cdp_endpoint(self._device_ref):
+            self._browser = browser_type.connect_over_cdp(self._device_ref.strip())
             return
         self._browser = browser_type.launch(headless=_parse_bool(self._app_target.launch_context.get("headless"), False))
 
@@ -287,6 +288,13 @@ def _decode_png_to_bgr(payload: bytes) -> BgrImage:
     if image is None:
         raise ValueError("failed to decode playwright screenshot")
     return cast(BgrImage, image)
+
+
+def _is_cdp_endpoint(device_ref: str | None) -> bool:
+    if device_ref is None:
+        return False
+    normalized = device_ref.strip().lower()
+    return normalized.startswith(("http://", "https://", "ws://", "wss://"))
 
 
 def _origin_from_url(url: str | None) -> str | None:

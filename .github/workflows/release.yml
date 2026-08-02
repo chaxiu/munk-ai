@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       channel:
@@ -30,8 +33,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      publish: ${{ steps.meta.outputs.publish }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
+      stamp: ${{ steps.meta.outputs.stamp }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync Python workspace
+        run: uv sync --project . --frozen --extra test
+
+      - name: Resolve release metadata
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            uv run --project . --extra test python scripts/ci/stamp_release_version.py \
+              --tag "${REF_NAME}" \
+              --github-output "${GITHUB_OUTPUT}"
+            {
+              echo "publish=true"
+              echo "dry_run=false"
+              echo "stamp=true"
+            } >> "${GITHUB_OUTPUT}"
+          else
+            uv run --project . --extra test python scripts/ci/stamp_release_version.py \
+              --from-pyproject \
+              --github-output "${GITHUB_OUTPUT}"
+            CHANNEL="${INPUT_CHANNEL}"
+            PUBLISH="${INPUT_PUBLISH}"
+            DRY_RUN="${INPUT_DRY_RUN}"
+            {
+              echo "channel=${CHANNEL}"
+              echo "publish=${PUBLISH}"
+              echo "dry_run=${DRY_RUN}"
+              echo "stamp=false"
+            } >> "${GITHUB_OUTPUT}"
+          fi
+          echo "Resolved release metadata:"
+          echo "  version=$(grep '^version=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)"
+          echo "  channel=$(grep '^channel=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)"
+          echo "  publish=$(grep '^publish=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)"
+          echo "  dry_run=$(grep '^dry_run=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)"
+          echo "  stamp=$(grep '^stamp=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)"
+
   build:
     name: build-${{ matrix.target_key }}
+    needs: resolve
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     environment: release
@@ -86,6 +155,12 @@ jobs:
       - name: Sync Python workspace
         run: uv sync --project . --frozen --extra test
 
+      - name: Stamp release version from tag
+        if: needs.resolve.outputs.stamp == 'true'
+        run: |
+          uv run --project . --extra test python scripts/ci/stamp_release_version.py \
+            --tag "${{ github.ref_name }}"
+
       - name: Install Node workspace
         run: pnpm install --frozen-lockfile
 
@@ -134,8 +209,10 @@ jobs:
 
   publish:
     name: publish
-    needs: build
-    if: ${{ inputs.publish }}
+    needs:
+      - resolve
+      - build
+    if: needs.resolve.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -153,6 +230,12 @@ jobs:
 
       - name: Sync Python workspace
         run: uv sync --project . --frozen --extra test
+
+      - name: Stamp release version from tag
+        if: needs.resolve.outputs.stamp == 'true'
+        run: |
+          uv run --project . --extra test python scripts/ci/stamp_release_version.py \
+            --tag "${{ github.ref_name }}"
 
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
@@ -180,17 +263,23 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
           R2_REGION: ${{ secrets.R2_REGION }}
           R2_PREFIX: ${{ secrets.R2_PREFIX }}
-          R2_CHANNEL: ${{ inputs.channel }}
+          R2_CHANNEL: ${{ needs.resolve.outputs.channel }}
         run: |
           R2_ENV="$(bash scripts/ci/materialize_r2_publish_env.sh)"
           echo "r2_env=${R2_ENV}" >> "$GITHUB_OUTPUT"
 
       - name: Publish release artifacts
         env:
-          CHANNEL: ${{ inputs.channel }}
-          DRY_RUN: ${{ inputs.dry_run }}
+          CHANNEL: ${{ needs.resolve.outputs.channel }}
+          DRY_RUN: ${{ needs.resolve.outputs.dry_run }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
+          ACTUAL_VERSION="$(uv run --project . --extra test python -c 'from pathlib import Path; from munk.runtime_distribution.release_publish_config import load_release_version; print(load_release_version(Path.cwd()))')"
+          if [[ "${ACTUAL_VERSION}" != "${EXPECTED_VERSION}" ]]; then
+            echo "publish version mismatch: expected=${EXPECTED_VERSION} actual=${ACTUAL_VERSION}" >&2
+            exit 1
+          fi
           ARGS=(
             --artifact-dir dist/runtime-build/release-artifacts
             --config-file "${{ steps.r2.outputs.r2_env }}"

@@ -11,11 +11,12 @@ from .constants import (
 )
 from .knowledge_db import resolve_runtime_review_db_path
 from .knowledge_source import review_knowledge_root
-from .service import ReviewService
 
 
 class LocalReviewRuntime:
     def __init__(self, *, resolved_config: Any) -> None:
+        from .service import ReviewService
+
         self._service = ReviewService(resolved_config=resolved_config)
 
     def review(self, request, *, context, cancel_controller=None):  # noqa: ANN001

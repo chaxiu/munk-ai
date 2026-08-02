@@ -6,7 +6,10 @@ from munk.services.doctor_service import DoctorService
 
 
 def doctor_command(*, fix: bool = False) -> None:
-    result = DoctorService().run(fix=fix)
+    on_progress = _echo_progress if fix else None
+    if fix:
+        typer.echo("applying auto-fixable runtime repairs...")
+    result = DoctorService().run(fix=fix, on_progress=on_progress)
     if not result.ok:
         for item in result.missing_items:
             typer.echo(item)
@@ -20,3 +23,7 @@ def doctor_command(*, fix: bool = False) -> None:
         typer.echo(f"playwright chromium: {result.playwright_diagnostics.browsers_dir}")
         for note in result.playwright_diagnostics.notes:
             typer.echo(note)
+
+
+def _echo_progress(message: str) -> None:
+    typer.echo(message)

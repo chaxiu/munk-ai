@@ -23,13 +23,29 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
   - Allowlist: build manifests + `apps` / `assets` / `packages` / `scripts` / `sidecars` / `src`
   - Default `--delete` preserves destination `.git`; pass `--delete-excluded` to also clean excluded junk
 - `ci/`: helpers used by the public-repo GitHub Actions release workflow
-  - examples: `materialize_macos_signing.sh`, `materialize_r2_publish_env.sh`
+  - examples: `materialize_macos_signing.sh`, `materialize_r2_publish_env.sh`, `stamp_release_version.py`
 - `update_uv_locks.py`: refresh workspace locks
 - `verify_standalone_runtime.py`: verify assembled runtime
 - `build_review_knowledge.py`: build review knowledge assets
 - `generate_local_api_openapi.py`: generate/check Local API OpenAPI output
 - `generate_loop_local_api_openapi.py`: generate/check trimmed Local API OpenAPI for Munk Loop (`munk-loop/docs/munk-ai/local-api.loop.json`)
 - `install.sh`: installer entrypoint
+
+## Public Release Flow
+
+Release CI lives only in the public repo (`.github/` is protected by `sync_public_repo.sh`).
+
+1. Sync private → public and push `main`:
+   ```bash
+   ./scripts/sync_public_repo.sh
+   cd public/munk-ai
+   # review, commit, push main
+   ```
+2. Tag on the public repo to publish:
+   - `v0.33.0` → stamp working-tree `pyproject.toml` to `0.33.0` → R2 `stable`
+   - `v0.33.0b1` / `v0.33.0rc1` → stamp → R2 `beta`
+3. Tag is the release-version authority for that CI run. CI rewrites the job working tree only (does not push commits back).
+4. `workflow_dispatch` remains for dry-run / manual republish and does not stamp; it reads the checked-out `pyproject.toml` and uses the selected channel.
 
 ## Subdirectories
 

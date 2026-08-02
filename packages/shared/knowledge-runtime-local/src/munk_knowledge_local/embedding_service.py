@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .errors import KnowledgeEmbeddingError
-from .onnx_embedding_loader import OnnxEmbeddingModel
+
+if TYPE_CHECKING:
+    from .onnx_embedding_loader import OnnxEmbeddingModel
 
 
 class OnnxEmbeddingService:
@@ -59,6 +62,8 @@ class OnnxEmbeddingService:
     def _get_model(self) -> OnnxEmbeddingModel:
         if self._model is not None:
             return self._model
+        from .onnx_embedding_loader import OnnxEmbeddingModel
+
         onnx_path = self._model_dir / self._onnx_file
         if not onnx_path.exists():
             raise KnowledgeEmbeddingError(f"knowledge embedding model not found: expected {onnx_path}")

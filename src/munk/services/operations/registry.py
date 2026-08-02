@@ -6,6 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from munk.services.errors import DeviceConflictError, OperationNotFoundError
+from munk.services.operations.lifecycle_reconcile import (
+    force_finalize_operation_tree,
+    iter_descendant_operations,
+    operation_tree_ids,
+    reconcile_orphaned_operations,
+    release_claims_operation_tree,
+    request_cancel_operation_tree,
+)
 from munk.services.operations.models import (
     CleanupClaimResult,
     DeviceClaimConflict,
@@ -33,12 +41,6 @@ from munk.services.operations.registry_claims import (
     find_active_device_conflict_locked,
     find_active_device_conflicts_locked,
     insert_claim_locked,
-)
-from munk.services.operations.lifecycle_reconcile import (
-    force_finalize_operation_tree,
-    iter_descendant_operations,
-    reconcile_orphaned_operations,
-    request_cancel_operation_tree,
 )
 from munk.services.operations.registry_projections import (
     platform_sql_expr,
@@ -345,6 +347,12 @@ class OperationRegistry:
 
     def request_cancel_operation_tree(self, root_operation_id: str) -> list[str]:
         return request_cancel_operation_tree(self, root_operation_id)
+
+    def release_claims_operation_tree(self, root_operation_id: str) -> int:
+        return release_claims_operation_tree(self, root_operation_id)
+
+    def operation_tree_ids(self, root_operation_id: str) -> list[str]:
+        return operation_tree_ids(self, root_operation_id)
 
     def append_event(
         self,

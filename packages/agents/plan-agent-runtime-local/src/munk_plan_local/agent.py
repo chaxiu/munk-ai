@@ -14,10 +14,10 @@ from munk.config.schema import OutputStrategy
 from munk.planning.models import ChangePlanInput, RequirementInput
 
 from .draft_models import (
-    GeneratedCaseAppendDraft,
     GeneratedCaseOutlineDraft,
     GeneratedPlanFinalizeDraft,
     GeneratedPlanSkeletonDraft,
+    GeneratedTestCaseDraft,
 )
 from .prompt_builders import (
     APPEND_SYSTEM_PROMPT,
@@ -34,6 +34,8 @@ from .prompt_builders import (
 from .prompt_rendering import format_numbered_acceptance_criteria, format_optional_section, render_review_contract
 from .shared_tools import PlanAppKnowledgeDeps, register_plan_app_knowledge_tools
 
+PLAN_SKELETON_OUTPUT_RETRIES = 3
+
 
 class PydanticAiPlanAgent:
     def __init__(
@@ -47,7 +49,7 @@ class PydanticAiPlanAgent:
     ) -> None:
         self.max_cases = max_cases
         skeleton_output_spec = build_structured_output_spec(GeneratedPlanSkeletonDraft, output_strategy=output_strategy)
-        append_output_spec = build_structured_output_spec(GeneratedCaseAppendDraft, output_strategy=output_strategy)
+        append_output_spec = build_structured_output_spec(GeneratedTestCaseDraft, output_strategy=output_strategy)
         finalize_output_spec = build_structured_output_spec(GeneratedPlanFinalizeDraft, output_strategy=output_strategy)
         settings = cast(Any, {"temperature": temperature, "max_tokens": max_tokens})
 
@@ -60,9 +62,10 @@ class PydanticAiPlanAgent:
                 skeleton_output_spec.system_prompt_suffix,
             ),
             name="pydantic_plan_skeleton_agent",
+            output_retries=PLAN_SKELETON_OUTPUT_RETRIES,
             model_settings=settings,
         )
-        self._append_agent = Agent[PlanAppKnowledgeDeps, GeneratedCaseAppendDraft](
+        self._append_agent = Agent[PlanAppKnowledgeDeps, GeneratedTestCaseDraft](
             model=cast(Any, model),
             deps_type=PlanAppKnowledgeDeps,
             output_type=append_output_spec.output_type,
@@ -163,7 +166,7 @@ class PydanticAiPlanAgent:
         case_index: int,
         existing_cases: list[TestCase],
         outline: GeneratedCaseOutlineDraft,
-    ) -> GeneratedCaseAppendDraft:
+    ) -> GeneratedTestCaseDraft:
         prompt = build_append_prompt(
             heading=f"Plan the next {platform} test case for the following app and requirement.",
             metadata_lines=[
@@ -209,7 +212,7 @@ class PydanticAiPlanAgent:
         case_index: int,
         existing_cases: list[TestCase],
         outline: GeneratedCaseOutlineDraft,
-    ) -> GeneratedCaseAppendDraft:
+    ) -> GeneratedTestCaseDraft:
         changed_files = ", ".join(change_input.changed_files) if change_input.changed_files else "none"
         prompt = build_append_prompt(
             heading=f"Plan the next {platform} change-driven verification case for the following app and code change.",

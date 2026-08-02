@@ -18,7 +18,7 @@ from munk.services.diagnostics_models import (
     DiagnosticsFailureCategory,
     OperationDiagnostics,
 )
-from munk.services.diagnostics_service import OperationDiagnosticsService
+from munk.services.diagnostics_service import OperationDiagnosticsService, format_exception_message
 from munk.services.reviewing.runtime_host import ReviewHostManagedPaths
 
 REVIEW_RUNTIME_DIAGNOSTICS_STAGE = "review_runtime"
@@ -115,7 +115,7 @@ class ReviewArtifactMaterializer:
             warning_summary=[],
             prompt_hit_count=0,
             failure_category=self._diagnostics_service.classify_exception(exc),
-            failure_message=str(exc),
+            failure_message=format_exception_message(exc),
             status="failed",
         )
         self._diagnostics_service.write(host_paths.diagnostics_path, diagnostics)

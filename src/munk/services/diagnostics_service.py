@@ -16,6 +16,22 @@ if TYPE_CHECKING:
     from munk.config.schema import AgentRole
 
 
+def format_exception_message(exc: BaseException, *, max_chars: int = 2000) -> str:
+    """Surface the exception message plus explicit `__cause__` chain for diagnostics."""
+    parts: list[str] = [str(exc).strip() or type(exc).__name__]
+    cause = exc.__cause__
+    seen: set[int] = {id(exc)}
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        detail = str(cause).strip() or type(cause).__name__
+        parts.append(f"caused by {type(cause).__name__}: {detail}")
+        cause = cause.__cause__
+    message = " | ".join(parts)
+    if len(message) <= max_chars:
+        return message
+    return f"{message[: max_chars - 3]}..."
+
+
 class OperationDiagnosticsService:
     def write(self, path: Path, diagnostics: OperationDiagnostics) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -26,6 +26,11 @@ from .prompt_rendering import (
     summarize_context_text,
 )
 
+# Keep this tiny: injected into every skeleton/append user prompt.
+UI_ONLY_LINES: tuple[str, ...] = (
+    "- UI-only: cases must be runnable on device/browser. Rewrite file/annotation/wiring ACs into visible UI outcomes; never inspect source or diff.",
+)
+
 SKELETON_SYSTEM_PROMPT = "\n".join(
     [
         "You are a planning agent for app UI testing.",
@@ -50,7 +55,6 @@ APPEND_SYSTEM_PROMPT = "\n".join(
         "expected must contain at least one user-observable, verifiable outcome; do not use filler text.",
         "procedure is optional and should be omitted unless there is clear value in preserving a short step outline.",
         "Always set start_mode='reset'.",
-        "Return page_id as null. Do not infer, generate, or guess any page identifier.",
         "Do not generate judge/report fields.",
         "Do not decide is_core_case; humans maintain that separately.",
         "Avoid duplicating already-generated cases.",
@@ -113,6 +117,7 @@ def build_skeleton_prompt(
                     "- Keep the plan compact and focused on distinct coverage.",
                     "- Avoid duplicate case titles or overlapping coverage.",
                     "- Do not generate concrete case bodies in this step.",
+                    *UI_ONLY_LINES,
                     *PLAN_KNOWLEDGE_GUIDANCE_LINES,
                 ]
             ),
@@ -173,13 +178,14 @@ def build_change_skeleton_prompt(
                     f"- Output case_outlines with 1 to {max_cases} distinct entries.",
                     "- Each case_outlines item must include title and acceptance_criteria_indices.",
                     "- Use 0-based acceptance_criteria_indices that refer to the numbered acceptance criteria list.",
-                    "- Cover each acceptance criterion with at least one case_outlines entry when possible.",
+                    "- Cover each AC via UI outcomes when possible; never emit a source-inspection case to tick an AC.",
                     "- Avoid duplicate case titles or overlapping verification paths.",
                     "- Prioritize changed behaviors and nearby regression risks.",
                     "- Treat upstream review as risk focus and required coverage guidance, not as runtime verdict.",
                     "- Avoid restating the entire requirement; focus on the changed scope.",
                     "- Do not duplicate already-required review cases; focus on supplemental change-driven coverage.",
                     "- Do not generate concrete case bodies in this step.",
+                    *UI_ONLY_LINES,
                     *PLAN_CHANGE_KNOWLEDGE_GUIDANCE_LINES,
                 ]
             ),
@@ -246,7 +252,7 @@ def build_append_prompt(
                     "- Provide at least one expected result, and keep every expected result concrete and observable on the app UI.",
                     "- Use procedure only when a short step outline adds clear value.",
                     "- Set start_mode to 'reset'.",
-                    "- Return page_id as null. Do not infer, generate, or guess any page identifier.",
+                    *UI_ONLY_LINES,
                     *PLAN_KNOWLEDGE_GUIDANCE_LINES,
                 ]
             ),

@@ -7,7 +7,12 @@ from munk.testing import TestCase
 
 from munk.planning.models import RequirementPlan
 
-from .draft_models import GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft, GeneratedPlanFinalizeDraft, GeneratedPlanSkeletonDraft
+from .draft_models import (
+    GeneratedCaseOutlineDraft,
+    GeneratedPlanFinalizeDraft,
+    GeneratedPlanSkeletonDraft,
+    GeneratedTestCaseDraft,
+)
 
 
 class PlannerWorkflowService:
@@ -18,11 +23,11 @@ class PlannerWorkflowService:
         app_id: str,
         source: str,
         version: str,
-        build_test_case: Callable[[GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft], TestCase],
+        build_test_case: Callable[[GeneratedTestCaseDraft, GeneratedCaseOutlineDraft], TestCase],
         create_plan_skeleton: Callable[[], GeneratedPlanSkeletonDraft],
         append_case: Callable[
             [GeneratedPlanSkeletonDraft, int, list[TestCase], GeneratedCaseOutlineDraft],
-            GeneratedCaseAppendDraft,
+            GeneratedTestCaseDraft,
         ],
         finalize_plan: Callable[[GeneratedPlanSkeletonDraft, list[TestCase]], GeneratedPlanFinalizeDraft],
         event_callback: Callable[[str, str | None, dict[str, Any]], None] | None = None,
@@ -61,8 +66,8 @@ class PlannerWorkflowService:
                     "case_title": outline.title,
                 },
             )
-            append_draft = append_case(skeleton, case_index, list(appended_cases), outline)
-            case = build_test_case(append_draft, outline)
+            case_draft = append_case(skeleton, case_index, list(appended_cases), outline)
+            case = build_test_case(case_draft, outline)
             appended_cases.append(case)
             self._emit(
                 event_callback,

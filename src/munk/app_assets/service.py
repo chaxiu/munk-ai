@@ -5,6 +5,11 @@ from pathlib import Path
 
 from munk.app_assets.models import AppProfile
 from munk.app_assets.storage import AppRegistry
+from munk.app_knowledge import (
+    AppKnowledgeImportDocument,
+    build_app_knowledge_index,
+    validate_app_knowledge_document,
+)
 from munk.planning.index_store import PlanCaseIndexStore
 from munk.planning.storage import PlanStore
 
@@ -22,6 +27,11 @@ class AppDetail:
     app_knowledge_content: str | None
     app_knowledge_exists: bool
     usage: AppUsageSummary
+
+
+def empty_app_knowledge_document_json(app_id: str) -> str:
+    """Canonical empty knowledge import document for a newly created app."""
+    return AppKnowledgeImportDocument(app_id=app_id, cards=[]).model_dump_json(indent=2)
 
 
 class AppAssetService:
@@ -78,6 +88,30 @@ class AppAssetService:
             app_knowledge_content=app_knowledge_content,
             app_knowledge_exists=app_knowledge_exists,
             usage=usage,
+        )
+
+    def persist_knowledge_on_create(
+        self,
+        *,
+        profile: AppProfile,
+        app_knowledge_content: str | None,
+    ) -> None:
+        """Always write app_knowledge.json on create; seed empty cards when content is omitted."""
+        content = (app_knowledge_content or "").strip()
+        if content:
+            validate_app_knowledge_document(content, expected_app_id=profile.app_id)
+            payload = content
+        else:
+            payload = empty_app_knowledge_document_json(profile.app_id)
+        self._app_registry.save_knowledge(
+            profile.app_id,
+            payload,
+            ref=profile.app_knowledge_ref,
+        )
+        build_app_knowledge_index(
+            app_id=profile.app_id,
+            assets_root=self._app_registry.root_dir,
+            ref=profile.app_knowledge_ref,
         )
 
     def assert_app_deletable(self, app_id: str) -> None:

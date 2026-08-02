@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 from munk.agent_base.llm import llm_transcript_observer_scope
+from munk.artifacts import (
+    ARTIFACT_ID_ARTIFACT_MANIFEST,
+    ARTIFACT_ID_DIAGNOSTICS,
+)
 from munk.config import ResolvedConfig, resolve_orchestration_policy
 from munk.device import SupportsClose
 from munk.execution.models import CaseExecutionRequest, CaseExecutionResult, ExecutionOutcome
@@ -22,12 +26,9 @@ from munk.services.events import (
 )
 from munk.services.judge_runtime import resolve_judge_runtime
 from munk.services.logging_service import setup_logging
-from munk.artifacts import (
-    ARTIFACT_ID_ARTIFACT_MANIFEST,
-    ARTIFACT_ID_DIAGNOSTICS,
-)
-from munk.services.operations.llm_timeline import build_llm_timeline_observer
 from munk.services.models import RunPaths, RunStatus
+from munk.services.operations.active_device_leases import unbind_operation_device
+from munk.services.operations.llm_timeline import build_llm_timeline_observer
 from munk.services.operations.service import OperationTracker
 from munk.services.orchestration import CaseOrchestrationRequest, DeterministicOrchestrationEngine
 from munk.services.orchestration.materializer import OrchestrationArtifactMaterializer
@@ -296,13 +297,16 @@ class RunService:
     def _close_runtime_device(context) -> None:  # noqa: ANN001
         if context is None:
             return
+        operation_id = getattr(context, "operation_id", None)
         device = getattr(context, "device", None)
-        if not isinstance(device, SupportsClose):
-            return
         try:
-            device.close()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("runtime_device_close_failed error=%s", exc)
+            if isinstance(device, SupportsClose):
+                try:
+                    device.close()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("runtime_device_close_failed error=%s", exc)
+        finally:
+            unbind_operation_device(operation_id=operation_id, device=device)
 
     def _write_case_request(self, session: RunExecutionSession) -> None:
         paths = session.paths

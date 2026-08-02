@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,7 +31,7 @@ from munk.services.change_verification_support import (
     ChangeVerificationProgressReporter,
     SupportsChangeVerificationTracker,
 )
-from munk.services.diagnostics_service import OperationDiagnosticsService
+from munk.services.diagnostics_service import OperationDiagnosticsService, format_exception_message
 from munk.services.operations.command_helpers import merge_scene_usages
 from munk.services.plan_execution_service import PlanExecutionService
 from munk.services.running.service import RunService
@@ -41,6 +42,8 @@ from munk.services.verify_change_event_payloads import (
 )
 from munk.testing import CaseBudget, CaseStartState, TestCase
 from munk.token_usage import TokenUsage
+
+logger = logging.getLogger(__name__)
 
 
 def default_change_plan_id(prefix: str = "change") -> str:
@@ -174,16 +177,24 @@ class ChangeVerificationService:
                 total_usage=merge_scene_usages(planning_usage, result.token_usage),
             )
         except Exception as exc:
-            self._diagnostics_manager.write_failure_diagnostics(
-                request=request,
-                result=result,
-                upstream_review=upstream_review,
-                started_at=started_at,
-                duration_ms=self._diagnostics_service.elapsed_ms(timer_start),
-                failure_category=self._diagnostics_service.classify_exception(exc),
-                failure_stage="change_verification",
-                failure_message=str(exc),
-            )
+            try:
+                self._diagnostics_manager.write_failure_diagnostics(
+                    request=request,
+                    result=result,
+                    upstream_review=upstream_review,
+                    started_at=started_at,
+                    duration_ms=self._diagnostics_service.elapsed_ms(timer_start),
+                    failure_category=self._diagnostics_service.classify_exception(exc),
+                    failure_stage="change_verification",
+                    failure_message=format_exception_message(exc),
+                )
+            except Exception as diagnostics_error:
+                # Failure diagnostics must never replace the original verify exception.
+                logger.warning(
+                    "failed to write verify_change failure diagnostics: %s",
+                    diagnostics_error,
+                    exc_info=True,
+                )
             raise
 
     def _prepare_plan(

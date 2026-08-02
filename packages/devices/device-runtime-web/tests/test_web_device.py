@@ -402,6 +402,15 @@ def test_web_device_uses_cdp_when_device_ref_is_provided(monkeypatch) -> None:
     assert browser_type.launch_calls == []
 
 
+def test_web_device_launches_when_device_ref_is_logical_name(monkeypatch) -> None:
+    device, _page, browser_type = build_device(monkeypatch, device_ref="web")
+
+    device.window_size()
+
+    assert browser_type.cdp_calls == []
+    assert browser_type.launch_calls == [False]
+
+
 def test_web_device_satisfies_protocols(monkeypatch) -> None:
     device, _page, _browser_type = build_device(monkeypatch)
 

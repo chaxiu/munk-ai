@@ -30,7 +30,7 @@ from munk.services.errors import (
 )
 
 from .agent import PydanticAiPlanAgent
-from .draft_models import GeneratedCaseAppendDraft, GeneratedCaseOutlineDraft, GeneratedPlanSkeletonDraft
+from .draft_models import GeneratedCaseOutlineDraft, GeneratedPlanSkeletonDraft, GeneratedTestCaseDraft
 from .workflow import PlannerWorkflowService
 
 
@@ -332,12 +332,11 @@ class PlanRuntimeService:
 
     def _build_test_case(
         self,
-        append_draft: GeneratedCaseAppendDraft,
+        case_draft: GeneratedTestCaseDraft,
         outline: GeneratedCaseOutlineDraft,
         *,
         ac_count: int = 0,
     ) -> TestCase:
-        case_draft = append_draft.case
         case = TestCase(
             case_id=self._case_id_factory(),
             title=_require_text(outline.title, field_name="title"),
@@ -346,7 +345,8 @@ class PlanRuntimeService:
             expected=_clean_text_list(case_draft.expected),
             procedure=_clean_text_list(case_draft.procedure),
             runner_goal=_require_text(case_draft.runner_goal, field_name="runner_goal"),
-            start_state=CaseStartState(mode=case_draft.start_mode, page_id=_clean_optional_text(case_draft.page_id)),
+            # page_id is Host-owned (navigators / app assets), never planner-filled.
+            start_state=CaseStartState(mode=case_draft.start_mode, page_id=None),
             acceptance_criteria_indices=normalize_case_acceptance_criteria_indices(
                 outline.acceptance_criteria_indices,
                 ac_count=ac_count,
@@ -389,10 +389,3 @@ def _require_text(value: str, *, field_name: str) -> str:
 
 def _clean_text_list(values: list[str]) -> list[str]:
     return [item.strip() for item in values if item.strip()]
-
-
-def _clean_optional_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    return cleaned or None
