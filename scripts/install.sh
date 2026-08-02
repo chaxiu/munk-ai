@@ -316,24 +316,43 @@ validate_channel() {
   esac
 }
 
-detect_target() {
-  local os_name arch_name
-  os_name="$(uname -s)"
-  arch_name="$(uname -m)"
-  if [[ "$os_name" != "Darwin" ]]; then
-    echo "munk installer currently supports macOS only" >&2
-    exit 1
-  fi
+normalize_arch_name() {
+  local arch_name="$1"
   case "$arch_name" in
     arm64|aarch64)
-      TARGET_KEY="darwin-arm64"
+      printf 'arm64\n'
       ;;
     x86_64|amd64)
-      echo "munk installer currently supports macOS ARM64 only" >&2
+      printf 'x86_64\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+detect_target() {
+  local os_name arch_name normalized_arch
+  os_name="$(uname -s)"
+  arch_name="$(uname -m)"
+  if ! normalized_arch="$(normalize_arch_name "$arch_name")"; then
+    echo "unsupported architecture: ${arch_name}" >&2
+    exit 1
+  fi
+  case "$os_name" in
+    Darwin)
+      TARGET_KEY="darwin-${normalized_arch}"
+      ;;
+    Linux)
+      TARGET_KEY="linux-${normalized_arch}"
+      ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      # Reserved for a future Windows installer (install.ps1 / windows-* artifacts).
+      echo "munk installer does not support Windows yet (planned: windows-${normalized_arch})" >&2
       exit 1
       ;;
     *)
-      echo "unsupported macOS architecture: ${arch_name}" >&2
+      echo "unsupported operating system: ${os_name}" >&2
       exit 1
       ;;
   esac
@@ -428,10 +447,28 @@ extract_runtime_root() {
   printf '%s\n' "$extracted_root"
 }
 
+sha256_file() {
+  local file_path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+    return
+  fi
+  if command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$file_path" | awk '{print $NF}'
+    return
+  fi
+  echo "missing required command: sha256sum, shasum, or openssl" >&2
+  exit 1
+}
+
 verify_checksum() {
   local expected actual
   expected="$(awk '{print $1}' "$SHA256_PATH")"
-  actual="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
+  actual="$(sha256_file "$ARCHIVE_PATH")"
   if [[ "$expected" != "$actual" ]]; then
     echo "archive checksum mismatch" >&2
     exit 1
@@ -442,12 +479,38 @@ verify_checksum() {
   fi
 }
 
+extract_archive() {
+  local archive_path="$1"
+  local extract_dir="$2"
+  local archive_basename archive_lower
+  archive_basename="$(basename "$archive_path")"
+  archive_lower="$(printf '%s' "$archive_basename" | tr '[:upper:]' '[:lower:]')"
+
+  case "$archive_lower" in
+    *.tar.gz|*.tgz)
+      require_command tar
+      tar -xzf "$archive_path" -C "$extract_dir"
+      ;;
+    *.zip)
+      if [[ "$(uname -s)" == "Darwin" ]] && command -v ditto >/dev/null 2>&1; then
+        ditto -x -k "$archive_path" "$extract_dir"
+      else
+        require_command unzip
+        unzip -q "$archive_path" -d "$extract_dir"
+      fi
+      ;;
+    *)
+      echo "unsupported archive format: ${archive_basename}" >&2
+      exit 1
+      ;;
+  esac
+}
+
 main() {
   parse_args "$@"
   validate_channel
   require_command curl
   require_command python3
-  require_command shasum
   require_command mktemp
   require_command find
   require_command awk
@@ -501,7 +564,7 @@ main() {
   verify_checksum
 
   echo "extracting runtime"
-  ditto -x -k "$ARCHIVE_PATH" "$EXTRACT_DIR"
+  extract_archive "$ARCHIVE_PATH" "$EXTRACT_DIR"
   EXTRACTED_ROOT="$(extract_runtime_root "$EXTRACT_DIR")"
   mv "$EXTRACTED_ROOT" "$STAGING_DIR/runtime"
 

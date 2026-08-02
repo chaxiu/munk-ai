@@ -2,14 +2,16 @@
 # Sync the public open-source subset into public/munk-ai (or --target).
 #
 # Filter layers (rsync first-match wins):
-#   1) Policy denylist  — private-only paths (open-source boundary)
-#   2) .gitignore       — local noise / large resources (single source of truth)
-#   3) Allowlist        — root build manifests + public source trees
-#   4) exclude *        — drop every other top-level path (cloud/, dawnchat/, …)
+#   1) Protect filters  — destination-owned paths (e.g. public .github/)
+#   2) Policy denylist  — private-only paths (open-source boundary)
+#   3) .gitignore       — local noise / large resources (single source of truth)
+#   4) Allowlist        — root build manifests + public source trees
+#   5) exclude *        — drop every other top-level path (cloud/, dawnchat/, …)
 #
 # Default uses --delete only (destination .git is preserved because it is
 # excluded). Optional --delete-excluded temporarily moves destination .git
 # aside, then restores it, so leaked noise can be cleaned safely.
+# Public-repo-owned `.github/` is always protected (even with --delete-excluded).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -50,11 +52,19 @@ OPTIONAL_DIRS=(
   "examples"
 )
 
+# Destination-owned paths that must survive sync (including --delete-excluded).
+# Release CI lives only on the public repo; private sync must never overwrite it.
+PUBLIC_OWNED_PROTECT=(
+  "--filter=P /.github/"
+  "--filter=P /.github/***"
+)
+
 # Open-source policy denylist (Layer B). Paths are relative to SOURCE_ROOT.
 # Top-level private trees such as cloud/ are also dropped by the final --exclude=*;
 # keep explicit entries so the boundary stays visible.
 POLICY_EXCLUDES=(
   "--exclude=/cloud/"
+  "--exclude=/.github/"
   "--exclude=/scripts/generate_loop_local_api_openapi.py"
 )
 
@@ -69,11 +79,16 @@ Options:
   --target PATH        Override the target repository path.
   --dry-run            Show the rsync plan without writing changes.
   --delete-excluded    Also delete destination paths matching exclude rules
-                       (safe for .git: it is moved aside and restored).
+                       (safe for .git: it is moved aside and restored;
+                       public .github/ is always protected).
   --help               Show this help message.
 
 Filter model:
-  policy denylist  ->  .gitignore  ->  public allowlist  ->  exclude *
+  protect (.github/)  ->  policy denylist  ->  .gitignore  ->  public allowlist  ->  exclude *
+
+Note:
+  Destination .github/ is owned by the public repository (Release CI).
+  Sync never copies or deletes it.
 EOF
 }
 
@@ -161,6 +176,7 @@ if [[ ${DRY_RUN} -eq 1 ]]; then
 fi
 
 RSYNC_FILTERS=(
+  "${PUBLIC_OWNED_PROTECT[@]}"
   "${POLICY_EXCLUDES[@]}"
   "--exclude-from=${GITIGNORE_PATH}"
 )

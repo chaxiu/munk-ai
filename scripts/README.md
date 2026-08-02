@@ -18,8 +18,11 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 - `sync_public_repo.sh`: sync the public-repo allowlist into `public/munk-ai`
   - Reuses root `.gitignore` for local noise / large resources
   - Policy denylist for private paths (explicitly includes top-level `cloud/`)
+  - Protects destination `.github/` (public-repo-owned Release CI; never overwritten)
   - Allowlist: build manifests + `apps` / `assets` / `packages` / `scripts` / `sidecars` / `src`
   - Default `--delete` preserves destination `.git`; pass `--delete-excluded` to also clean excluded junk
+- `ci/`: helpers used by the public-repo GitHub Actions release workflow
+  - examples: `materialize_macos_signing.sh`, `materialize_r2_publish_env.sh`
 - `update_uv_locks.py`: refresh workspace locks
 - `verify_standalone_runtime.py`: verify assembled runtime
 - `build_review_knowledge.py`: build review knowledge assets

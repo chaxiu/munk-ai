@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to publish
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+        default: beta
+      publish:
+        description: Upload artifacts and update channel pointer on R2
+        required: true
+        type: boolean
+        default: false
+      dry_run:
+        description: When publishing, only print the upload plan
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build-${{ matrix.target_key }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_key: darwin-arm64
+            runner: macos-15
+            platform: macos
+            timeout_minutes: 180
+            skip_sign: false
+          - target_key: darwin-x86_64
+            runner: macos-15-intel
+            platform: macos
+            timeout_minutes: 180
+            skip_sign: false
+          - target_key: linux-x86_64
+            runner: ubuntu-24.04
+            platform: linux
+            timeout_minutes: 120
+            skip_sign: true
+          - target_key: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux
+            timeout_minutes: 120
+            skip_sign: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Linux archive tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Materialize macOS signing inputs
+        if: matrix.platform == 'macos'
+        id: signing
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          P12_BASE64: ${{ secrets.P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          SIGNING_ENV="$(bash scripts/ci/materialize_macos_signing.sh)"
+          echo "signing_env=${SIGNING_ENV}" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble release runtime (macOS signed)
+        if: matrix.platform == 'macos'
+        run: |
+          python3 scripts/assemble_standalone_runtime.py \
+            --force \
+            --signing-env-file "${{ steps.signing.outputs.signing_env }}"
+
+      - name: Assemble release runtime (Linux unsigned)
+        if: matrix.platform == 'linux'
+        run: |
+          python3 scripts/assemble_standalone_runtime.py \
+            --force \
+            --skip-sign \
+            --skip-notarize
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target_key }}
+          path: dist/runtime-build/release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish
+    needs: build
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist/runtime-build/release-artifacts-raw
+          merge-multiple: false
+
+      - name: Flatten artifacts into one directory
+        run: |
+          set -euo pipefail
+          DEST="dist/runtime-build/release-artifacts"
+          mkdir -p "${DEST}"
+          find dist/runtime-build/release-artifacts-raw -type f \( -name '*.release.json' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.sha256' \) -print -exec cp -f {} "${DEST}/" \;
+          echo "Flattened artifacts:"
+          ls -lah "${DEST}"
+
+      - name: Materialize R2 publish env
+        id: r2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          R2_REGION: ${{ secrets.R2_REGION }}
+          R2_PREFIX: ${{ secrets.R2_PREFIX }}
+          R2_CHANNEL: ${{ inputs.channel }}
+        run: |
+          R2_ENV="$(bash scripts/ci/materialize_r2_publish_env.sh)"
+          echo "r2_env=${R2_ENV}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release artifacts
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --artifact-dir dist/runtime-build/release-artifacts
+            --config-file "${{ steps.r2.outputs.r2_env }}"
+            --channel "${CHANNEL}"
+            --install-script scripts/install.sh
+          )
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            ARGS+=(--dry-run)
+          fi
+          python3 scripts/publish_release_artifacts.py "${ARGS[@]}"

@@ -351,7 +351,9 @@ def _build_release_assembly_context(
     selection = resolve_workspace_selection(build_config=build_config, project_root=ROOT_DIR)
     section_names = {section["name"] for section in selection.workspace_sections}
     selected_project_names = {project.name for project in selection.selected_projects}
-    ios_bridge_enabled = "munk-device-ios-runtime" in selected_project_names
+    ios_bridge_enabled = (
+        host_target.platform == "macos" and "munk-device-ios-runtime" in selected_project_names
+    )
     review_enabled = "review" in section_names
     recording_enabled = "recording" in section_names
     runtime_root = target.runtime_root.resolve()

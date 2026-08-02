@@ -27,9 +27,12 @@ def discover_release_artifacts(*, artifact_dir: Path, version: str) -> list[Rele
         arch = payload.get("arch")
         if not all(isinstance(value, str) and value for value in [archive_path_raw, variant, platform, arch]):
             raise RuntimeError(f"invalid release metadata: missing required fields in {metadata_path}")
-        archive_path = Path(archive_path_raw)
-        if not archive_path.exists():
-            raise RuntimeError(f"release archive path does not exist: {archive_path}")
+        archive_path = _resolve_release_archive_path(
+            artifact_dir=artifact_dir,
+            metadata_path=metadata_path,
+            payload=payload,
+            archive_path_raw=archive_path_raw,
+        )
         descriptors.append(_build_release_artifact_descriptor(
             version=version,
             metadata_path=metadata_path,
@@ -43,6 +46,36 @@ def discover_release_artifacts(*, artifact_dir: Path, version: str) -> list[Rele
         raise RuntimeError(f"no release metadata files found in {artifact_dir}")
     _validate_release_artifacts(descriptors)
     return descriptors
+
+
+def _resolve_release_archive_path(
+    *,
+    artifact_dir: Path,
+    metadata_path: Path,
+    payload: dict[str, Any],
+    archive_path_raw: str,
+) -> Path:
+    archive_path = Path(archive_path_raw)
+    if archive_path.exists():
+        return archive_path
+    # CI aggregation downloads archives next to metadata; absolute build-machine
+    # paths in release.json will not exist on the publish runner.
+    candidates: list[Path] = []
+    archive_name = payload.get("archive_name")
+    if isinstance(archive_name, str) and archive_name.strip():
+        candidates.append(metadata_path.parent / archive_name.strip())
+        candidates.append(artifact_dir / archive_name.strip())
+    basename = Path(archive_path_raw).name
+    if basename:
+        candidates.append(metadata_path.parent / basename)
+        candidates.append(artifact_dir / basename)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise RuntimeError(
+        f"release archive path does not exist: {archive_path} "
+        f"(also checked colocated candidates under {artifact_dir})"
+    )
 
 
 def _build_release_artifact_descriptor(
