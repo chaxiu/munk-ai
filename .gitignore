@@ -27,6 +27,8 @@ node_modules/
 # Build / Temp
 .cache/
 build/
+!config/build/
+!config/build/**
 dist/
 tmp/
 .tmp/

@@ -19,6 +19,7 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
   - Reuses root `.gitignore` for local noise / large resources
   - Policy denylist for private paths (explicitly includes top-level `cloud/`)
   - Protects destination `.github/` (public-repo-owned Release CI; never overwritten)
+  - Explicitly keeps `config/build/` even though `.gitignore` has a broad `build/` rule
   - Allowlist: build manifests + `apps` / `assets` / `packages` / `scripts` / `sidecars` / `src`
   - Default `--delete` preserves destination `.git`; pass `--delete-excluded` to also clean excluded junk
 - `ci/`: helpers used by the public-repo GitHub Actions release workflow

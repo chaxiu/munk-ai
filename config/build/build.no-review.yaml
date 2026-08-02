@@ -1,0 +1,31 @@
+perception:
+  provider_name: full
+  install_mode: editable
+  api_path: ../../packages/shared/perception-api
+  provider_path: ../../packages/shared/perception-sdk-full
+
+judge:
+  runtime_name: local
+  install_mode: editable
+  runtime_path: ../../packages/agents/judge-agent-runtime-local
+
+optimize:
+  runtime_name: local
+  install_mode: editable
+  runtime_path: ../../packages/agents/optimize-agent-runtime-local
+
+plan:
+  runtime_name: local
+  install_mode: editable
+  runtime_path: ../../packages/agents/plan-agent-runtime-local
+
+runner:
+  runtime_name: local
+  install_mode: editable
+  runtime_path: ../../packages/agents/runner-agent-runtime-local
+
+recording:
+  runtime_name: local
+  install_mode: editable
+  api_path: ../../packages/agents/recording-agent-api
+  runtime_path: ../../packages/agents/recording-agent-runtime-local

@@ -1,0 +1,38 @@
+{
+  "python_build_standalone": {
+    "release_tag": "20260414",
+    "python_version": "3.10.20",
+    "archive_flavor": "install_only"
+  },
+  "android_platform_tools": {
+    "version": "37.0.0",
+    "platforms": {
+      "macos": {
+        "url": "https://dl.google.com/android/repository/platform-tools_r37.0.0-darwin.zip",
+        "sha256": "094a1395683c509fd4d48667da0d8b5ef4d42b2abfcd29f2e8149e2f989357c7"
+      },
+      "linux": {
+        "url": "https://dl.google.com/android/repository/platform-tools_r37.0.0-linux.zip",
+        "sha256": "198ae156ab285fa555987219af237b31102fefe8b9d2bc274708a8d4f2865a07"
+      },
+      "windows": {
+        "url": "https://dl.google.com/android/repository/platform-tools_r37.0.0-win.zip",
+        "sha256": "4fe305812db074cea32903a489d061eb4454cbc90a49e8fea677f4b7af764918"
+      }
+    }
+  },
+  "icon_detect_model": {
+    "manifest_url": "https://downloads.munk.sh/models/detect/detect.json",
+    "name": "detect.onnx",
+    "version": "2026-06-01",
+    "url": "https://downloads.munk.sh/models/detect/detect.onnx",
+    "sha256": "2917650807842f5a7a51d46e142d80f27ea3cdefa9e12bb1fe40d6bfe5ef4b24"
+  },
+  "knowledge_embed_model": {
+    "manifest_url": "https://downloads.munk.sh/models/embed/nomic-embed-text-v1.5.json",
+    "name": "nomic-embed-text-v1.5.zip",
+    "version": "2026-06-08",
+    "url": "https://downloads.munk.sh/models/embed/nomic-embed-text-v1.5.zip",
+    "sha256": "81140ed3f09ac4fbef9f9f4f473cfca78e29f6fb335d6f9a85762c312f2698c4"
+  }
+}

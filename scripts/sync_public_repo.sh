@@ -59,6 +59,14 @@ PUBLIC_OWNED_PROTECT=(
   "--filter=P /.github/***"
 )
 
+# Must be included before --exclude-from=.gitignore because root .gitignore has
+# a broad `build/` rule that would otherwise drop config/build/.
+CONFIG_BUILD_INCLUDES=(
+  "--include=/config/"
+  "--include=/config/build/"
+  "--include=/config/build/***"
+)
+
 # Open-source policy denylist (Layer B). Paths are relative to SOURCE_ROOT.
 # Top-level private trees such as cloud/ are also dropped by the final --exclude=*;
 # keep explicit entries so the boundary stays visible.
@@ -177,6 +185,7 @@ fi
 
 RSYNC_FILTERS=(
   "${PUBLIC_OWNED_PROTECT[@]}"
+  "${CONFIG_BUILD_INCLUDES[@]}"
   "${POLICY_EXCLUDES[@]}"
   "--exclude-from=${GITIGNORE_PATH}"
 )
