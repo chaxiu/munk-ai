@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: Release channel to publish
+        description: Release channel to publish (final versions -> stable; pre-release versions -> beta)
         required: true
         type: choice
         options:
-          - beta
           - stable
-        default: beta
+          - beta
+        default: stable
       publish:
         description: Upload artifacts and update channel pointer on R2
         required: true
@@ -152,7 +152,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Sync Python workspace
-        run: uv sync --project . --frozen
+        run: uv sync --project . --frozen --extra test
 
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
@@ -200,4 +200,4 @@ jobs:
           if [[ "${DRY_RUN}" == "true" ]]; then
             ARGS+=(--dry-run)
           fi
-          uv run --project . python scripts/publish_release_artifacts.py "${ARGS[@]}"
+          uv run --project . --extra test python scripts/publish_release_artifacts.py "${ARGS[@]}"
