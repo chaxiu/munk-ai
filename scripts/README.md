@@ -29,7 +29,8 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 - `build_review_knowledge.py`: build review knowledge assets
 - `generate_local_api_openapi.py`: generate/check Local API OpenAPI output
 - `generate_loop_local_api_openapi.py`: generate/check trimmed Local API OpenAPI for Munk Loop (`munk-loop/docs/munk-ai/local-api.loop.json`)
-- `install.sh`: installer entrypoint
+- `install.sh`: installer entrypoint (macOS / Linux)
+- `install.ps1`: installer entrypoint (Windows x86_64)
 
 ## Public Release Flow
 
@@ -45,8 +46,10 @@ Release CI lives only in the public repo (`.github/` is protected by `sync_publi
    - `v0.33.0` → stamp working-tree `pyproject.toml` to `0.33.0` → R2 `stable` + GitHub Release
    - `v0.33.0b1` / `v0.33.0rc1` → stamp → R2 `beta` + GitHub prerelease
 3. Tag is the release-version authority for that CI run. CI rewrites the job working tree only (does not push commits back).
-4. Successful publishes upload the same archives to Cloudflare R2 (`downloads.munk.sh`, used by `install.sh`) and attach them to the matching GitHub Release for browsing / manual download.
+4. Successful publishes upload the same archives to Cloudflare R2 (`downloads.munk.sh`, used by `install.sh` / `install.ps1`) and attach them to the matching GitHub Release for browsing / manual download. Installer scripts are published at both `install/install.sh|install.ps1` and root `install.sh|install.ps1`.
 5. `workflow_dispatch` remains for dry-run / manual republish and does not stamp; it reads the checked-out `pyproject.toml` and uses the selected channel. Dry-run skips both R2 mutation and GitHub Release creation.
+
+Supported release targets today: `darwin-arm64`, `darwin-x86_64`, `linux-x86_64`, `linux-arm64`, `windows-x86_64`. Windows supports Android and Web; iOS device bridge requires macOS.
 
 ## Subdirectories
 

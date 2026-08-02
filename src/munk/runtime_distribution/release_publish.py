@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from .release_publish_artifacts import (
+    build_installer_uploads,
     build_release_uploads,
     build_version_manifest,
     channel_object_key,
     discover_release_artifacts,
     immutable_cache_control,
     install_object_key,
+    install_ps1_object_key,
+    install_script_root_object_key,
     no_cache_control,
     public_url_for_key,
     release_object_key,
@@ -35,6 +38,7 @@ __all__ = [
     "ReleaseArtifactDescriptor",
     "UploadObject",
     "VERSION_MANIFEST_SCHEMA_VERSION",
+    "build_installer_uploads",
     "build_release_uploads",
     "build_signed_put_request",
     "build_version_manifest",
@@ -42,6 +46,8 @@ __all__ = [
     "discover_release_artifacts",
     "immutable_cache_control",
     "install_object_key",
+    "install_ps1_object_key",
+    "install_script_root_object_key",
     "is_non_final_version",
     "load_publish_config",
     "load_release_version",

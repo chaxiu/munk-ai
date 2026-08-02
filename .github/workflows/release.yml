@@ -128,10 +128,23 @@ jobs:
             platform: linux
             timeout_minutes: 120
             skip_sign: true
+          - target_key: windows-x86_64
+            runner: windows-2022
+            platform: windows
+            timeout_minutes: 180
+            skip_sign: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Enable Windows long paths
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
+          git config --system core.longpaths true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -153,15 +166,18 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Sync Python workspace
+        shell: bash
         run: uv sync --project . --frozen --extra test
 
       - name: Stamp release version from tag
         if: needs.resolve.outputs.stamp == 'true'
+        shell: bash
         run: |
           uv run --project . --extra test python scripts/ci/stamp_release_version.py \
             --tag "${{ github.ref_name }}"
 
       - name: Install Node workspace
+        shell: bash
         run: pnpm install --frozen-lockfile
 
       - name: Install Linux archive tools
@@ -198,6 +214,28 @@ jobs:
             --force \
             --skip-sign \
             --skip-notarize
+
+      - name: Assemble release runtime (Windows unsigned)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          uv run --project . --extra test python scripts/assemble_standalone_runtime.py \
+            --force \
+            --skip-sign \
+            --skip-notarize
+
+      - name: Smoke assembled Windows runtime
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          LAUNCHER="dist/runtime-release/bin/munk.cmd"
+          if [[ ! -f "${LAUNCHER}" ]]; then
+            echo "missing Windows launcher: ${LAUNCHER}" >&2
+            exit 1
+          fi
+          cmd.exe //c "${LAUNCHER}" version
+          cmd.exe //c "${LAUNCHER}" doctor
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -287,6 +325,7 @@ jobs:
             --config-file "${{ steps.r2.outputs.r2_env }}"
             --channel "${CHANNEL}"
             --install-script scripts/install.sh
+            --install-ps1-script scripts/install.ps1
           )
           if [[ "${DRY_RUN}" == "true" ]]; then
             ARGS+=(--dry-run)

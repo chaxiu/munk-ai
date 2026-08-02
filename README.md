@@ -16,14 +16,28 @@ Built to turn natural-language intent into product-level validation.
 
 ## Get Started
 
-Available on macOS today.
+Available on macOS, Linux, and Windows x86_64.
+
+- macOS / Linux: Android, iOS (macOS only), and Web
+- Windows: Android and Web (no iOS device bridge)
 
 Install Munk AI, run diagnostics, and start the local Web UI:
 
+macOS / Linux:
+
 ```bash
-curl -fsSL https://get.munk.sh | sh
+curl -fsSL https://downloads.munk.sh/install.sh | bash
 munk doctor
 munk doctor --fix       # apply auto-fixable repairs (e.g. Playwright Chromium)
+munk serve --port 16888
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://downloads.munk.sh/install.ps1 | iex
+munk doctor
+munk doctor --fix
 munk serve --port 16888
 ```
 

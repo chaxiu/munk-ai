@@ -41,8 +41,16 @@ Channel: \`${CHANNEL}\`
 
 Install:
 
+macOS / Linux:
+
 \`\`\`bash
 curl -fsSL https://downloads.munk.sh/install.sh | bash
+\`\`\`
+
+Windows (x86_64; Android + Web; no iOS):
+
+\`\`\`powershell
+irm https://downloads.munk.sh/install.ps1 | iex
 \`\`\`
 
 Primary distribution is Cloudflare R2 (\`downloads.munk.sh\`). This GitHub Release mirrors the same archives for browsing and manual download.

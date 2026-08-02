@@ -347,8 +347,8 @@ detect_target() {
       TARGET_KEY="linux-${normalized_arch}"
       ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-      # Reserved for a future Windows installer (install.ps1 / windows-* artifacts).
-      echo "munk installer does not support Windows yet (planned: windows-${normalized_arch})" >&2
+      echo "munk installer for Windows is install.ps1 (target: windows-${normalized_arch})" >&2
+      echo "run: irm https://downloads.munk.sh/install.ps1 | iex" >&2
       exit 1
       ;;
     *)

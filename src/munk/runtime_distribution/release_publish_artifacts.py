@@ -198,6 +198,58 @@ def install_object_key(*, prefix: str = "") -> str:
     return _join_object_key(prefix, "install/install.sh")
 
 
+def install_ps1_object_key(*, prefix: str = "") -> str:
+    return _join_object_key(prefix, "install/install.ps1")
+
+
+def install_script_root_object_key(*, filename: str, prefix: str = "") -> str:
+    return _join_object_key(prefix, filename)
+
+
+def build_installer_uploads(
+    *,
+    prefix: str = "",
+    installer_body: bytes | None = None,
+    installer_ps1_body: bytes | None = None,
+) -> list[UploadObject]:
+    uploads: list[UploadObject] = []
+    if installer_body is not None:
+        uploads.extend(
+            [
+                UploadObject(
+                    key=install_object_key(prefix=prefix),
+                    body=installer_body,
+                    content_type="text/x-shellscript; charset=utf-8",
+                    cache_control=no_cache_control(),
+                ),
+                UploadObject(
+                    key=install_script_root_object_key(filename="install.sh", prefix=prefix),
+                    body=installer_body,
+                    content_type="text/x-shellscript; charset=utf-8",
+                    cache_control=no_cache_control(),
+                ),
+            ]
+        )
+    if installer_ps1_body is not None:
+        uploads.extend(
+            [
+                UploadObject(
+                    key=install_ps1_object_key(prefix=prefix),
+                    body=installer_ps1_body,
+                    content_type="text/plain; charset=utf-8",
+                    cache_control=no_cache_control(),
+                ),
+                UploadObject(
+                    key=install_script_root_object_key(filename="install.ps1", prefix=prefix),
+                    body=installer_ps1_body,
+                    content_type="text/plain; charset=utf-8",
+                    cache_control=no_cache_control(),
+                ),
+            ]
+        )
+    return uploads
+
+
 def _join_object_key(prefix: str, suffix: str) -> str:
     normalized_prefix = prefix.strip("/")
     normalized_suffix = suffix.strip("/")
@@ -212,6 +264,7 @@ def build_release_uploads(
     version: str,
     artifacts: list[ReleaseArtifactDescriptor],
     installer_body: bytes | None = None,
+    installer_ps1_body: bytes | None = None,
 ) -> list[UploadObject]:
     version_manifest = build_version_manifest(
         version=version,
@@ -246,15 +299,13 @@ def build_release_uploads(
             ),
         ]
     )
-    if installer_body is not None:
-        uploads.append(
-            UploadObject(
-                key=install_object_key(prefix=config.normalized_prefix),
-                body=installer_body,
-                content_type="text/x-shellscript; charset=utf-8",
-                cache_control=no_cache_control(),
-            )
+    uploads.extend(
+        build_installer_uploads(
+            prefix=config.normalized_prefix,
+            installer_body=installer_body,
+            installer_ps1_body=installer_ps1_body,
         )
+    )
     return uploads
 
 
