@@ -214,8 +214,10 @@ jobs:
       - build
     if: needs.resolve.outputs.publish == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: release
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -290,3 +292,20 @@ jobs:
             ARGS+=(--dry-run)
           fi
           uv run --project . --extra test python scripts/publish_release_artifacts.py "${ARGS[@]}"
+
+      - name: Publish GitHub Release
+        if: needs.resolve.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          CHANNEL: ${{ needs.resolve.outputs.channel }}
+          ARTIFACT_DIR: dist/runtime-build/release-artifacts
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            export TAG="${{ github.ref_name }}"
+          else
+            export TAG="v${VERSION}"
+          fi
+          bash scripts/ci/publish_github_release.sh
