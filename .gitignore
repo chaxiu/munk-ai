@@ -34,7 +34,8 @@ tmp/
 .tmp/
 .dbg/
 development-log/
-public/
+# Root-only: nested checkout used by sync_public_repo.sh (not apps/*/public).
+/public/
 
 # IDE / Local runtime data
 .trae/
