@@ -1186,6 +1186,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/verify/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verify Readiness */
+        get: operations["verify_readiness_v1_verify_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/verify/readiness/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Readiness Probe */
+        post: operations["verify_readiness_probe_v1_verify_readiness_probe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7679,6 +7713,22 @@ export interface components {
              */
             ok: true;
         };
+        /** SuccessResponse[VerifyReadinessData] */
+        SuccessResponse_VerifyReadinessData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["VerifyReadinessData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
         /** TestCase */
         TestCase: {
             /** Acceptance Criteria Indices */
@@ -7926,6 +7976,34 @@ export interface components {
             /** Plan Id */
             plan_id: string;
             plan_result: components["schemas"]["GeneratedPlanResult"];
+        };
+        /** VerifyReadinessData */
+        VerifyReadinessData: {
+            /** Api Key Configured */
+            api_key_configured: boolean;
+            /** Missing */
+            missing?: string[];
+            /** Model */
+            model?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Ready */
+            ready: boolean;
+            /** Runner Configured */
+            runner_configured: boolean;
+            vision_preflight: components["schemas"]["VisionPreflightData"];
+        };
+        /** VisionPreflightData */
+        VisionPreflightData: {
+            /** Checked At */
+            checked_at?: string | null;
+            /** Message */
+            message?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_run" | "cached_ok" | "ok" | "failed";
         };
         /** WebAppIdentity */
         WebAppIdentity: {
@@ -13099,6 +13177,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_readiness_v1_verify_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_VerifyReadinessData_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_readiness_probe_v1_verify_readiness_probe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_VerifyReadinessData_"];
                 };
             };
             /** @description Internal Server Error */

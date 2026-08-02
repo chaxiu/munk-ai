@@ -255,3 +255,19 @@ class RecordingReplayData(BaseModel):
 
 class RecordingSessionData(BaseModel):
     session: RecordingSession
+
+
+class VisionPreflightData(BaseModel):
+    status: Literal["not_run", "cached_ok", "ok", "failed"]
+    checked_at: str | None = None
+    message: str | None = None
+
+
+class VerifyReadinessData(BaseModel):
+    ready: bool
+    runner_configured: bool
+    api_key_configured: bool
+    provider: str | None = None
+    model: str | None = None
+    vision_preflight: VisionPreflightData
+    missing: list[str] = Field(default_factory=list)

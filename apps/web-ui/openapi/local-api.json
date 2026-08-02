@@ -20978,6 +20978,43 @@
         "title": "SuccessResponse[SettingsConfigData]",
         "type": "object"
       },
+      "SuccessResponse_VerifyReadinessData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/VerifyReadinessData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[VerifyReadinessData]",
+        "type": "object"
+      },
       "TestCase": {
         "properties": {
           "acceptance_criteria_indices": {
@@ -21807,6 +21844,103 @@
           "artifacts"
         ],
         "title": "VerifyChangeOperationResultPayload",
+        "type": "object"
+      },
+      "VerifyReadinessData": {
+        "properties": {
+          "api_key_configured": {
+            "title": "Api Key Configured",
+            "type": "boolean"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "runner_configured": {
+            "title": "Runner Configured",
+            "type": "boolean"
+          },
+          "vision_preflight": {
+            "$ref": "#/components/schemas/VisionPreflightData"
+          }
+        },
+        "required": [
+          "ready",
+          "runner_configured",
+          "api_key_configured",
+          "vision_preflight"
+        ],
+        "title": "VerifyReadinessData",
+        "type": "object"
+      },
+      "VisionPreflightData": {
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "status": {
+            "enum": [
+              "not_run",
+              "cached_ok",
+              "ok",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "VisionPreflightData",
         "type": "object"
       },
       "WebAppIdentity": {
@@ -28963,6 +29097,62 @@
           }
         },
         "summary": "Verify Change"
+      }
+    },
+    "/v1/verify/readiness": {
+      "get": {
+        "operationId": "verify_readiness_v1_verify_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_VerifyReadinessData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Verify Readiness"
+      }
+    },
+    "/v1/verify/readiness/probe": {
+      "post": {
+        "operationId": "verify_readiness_probe_v1_verify_readiness_probe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_VerifyReadinessData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Verify Readiness Probe"
       }
     }
   }

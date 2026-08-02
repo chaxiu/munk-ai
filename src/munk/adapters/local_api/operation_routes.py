@@ -24,6 +24,8 @@ from munk.adapters.local_api.response_models import (
     RunArtifactChildrenData,
     RunArtifactContentData,
     SuccessResponse,
+    VerifyReadinessData,
+    VisionPreflightData,
 )
 from munk.adapters.shared.dashboard_queries import build_dashboard_summary_payload
 from munk.adapters.shared.machine_requests import (
@@ -44,6 +46,7 @@ from munk.adapters.shared.payload_models import (
 from munk.services.artifact_manifest_service import ArtifactManifestService
 from munk.services.operations.models import OperationKind, OperationStatus
 from munk.services.operations.registry import OperationRegistry
+from munk.services.verify_readiness_service import VerifyReadinessService
 
 from .route_helpers import (
     artifact_error_response,
@@ -201,6 +204,50 @@ def build_operation_router(context: LocalApiAppContext) -> APIRouter:
             background_submitter=context.background_operation_supervisor.submit if not wait and not detach else None,
         )
         return machine_route_response(response, command_response)
+
+    @router.get(
+        "/v1/verify/readiness",
+        response_model=SuccessResponse[VerifyReadinessData],
+        responses={500: {"model": ErrorResponse}},
+    )
+    def verify_readiness(response: Response) -> dict[str, object] | JSONResponse:
+        try:
+            result = VerifyReadinessService(workspace_root=context.workspace_root).get()
+        except Exception as exc:  # noqa: BLE001
+            return error_response(
+                status_code=500,
+                command="verify_readiness_get",
+                code="verify_readiness_get_failed",
+                message=str(exc),
+            )
+        response.status_code = 200
+        return {
+            "ok": True,
+            "command": "verify_readiness_get",
+            "data": _verify_readiness_data(result).model_dump(mode="json"),
+        }
+
+    @router.post(
+        "/v1/verify/readiness/probe",
+        response_model=SuccessResponse[VerifyReadinessData],
+        responses={500: {"model": ErrorResponse}},
+    )
+    def verify_readiness_probe(response: Response) -> dict[str, object] | JSONResponse:
+        try:
+            result = VerifyReadinessService(workspace_root=context.workspace_root).probe()
+        except Exception as exc:  # noqa: BLE001
+            return error_response(
+                status_code=500,
+                command="verify_readiness_probe",
+                code="verify_readiness_probe_failed",
+                message=str(exc),
+            )
+        response.status_code = 200
+        return {
+            "ok": True,
+            "command": "verify_readiness_probe",
+            "data": _verify_readiness_data(result).model_dump(mode="json"),
+        }
 
     @router.post(
         "/v1/review",
@@ -492,3 +539,22 @@ def build_operation_router(context: LocalApiAppContext) -> APIRouter:
         )
 
     return router
+
+
+def _verify_readiness_data(result: object) -> VerifyReadinessData:
+    from munk.services.verify_readiness_service import VerifyReadinessResult
+
+    assert isinstance(result, VerifyReadinessResult)
+    return VerifyReadinessData(
+        ready=result.ready,
+        runner_configured=result.runner_configured,
+        api_key_configured=result.api_key_configured,
+        provider=result.provider,
+        model=result.model,
+        vision_preflight=VisionPreflightData(
+            status=result.vision_preflight.status,
+            checked_at=result.vision_preflight.checked_at,
+            message=result.vision_preflight.message,
+        ),
+        missing=list(result.missing),
+    )

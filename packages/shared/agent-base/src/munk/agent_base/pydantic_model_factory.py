@@ -317,24 +317,34 @@ def _should_retry_preflight_with_jpeg(exc: Exception, *, runtime_config: object 
     return any(signal in text for signal in signals)
 
 
-def _is_cached_vision_support_success(resolved: ResolvedModelConfig) -> bool:
+def get_vision_preflight_cache_status(
+    resolved: ResolvedModelConfig,
+) -> tuple[bool, str | None]:
+    """Return (cached_ok, checked_at_iso) for the resolved runner model. Does not call the LLM."""
     payload = _load_preflight_cache()
     if payload is None:
-        return False
+        return False, None
     key = _vision_preflight_cache_key(resolved)
     entry = payload.get("entries", {}).get(key)
     if not isinstance(entry, dict):
-        return False
+        return False, None
     checked_at_raw = entry.get("checked_at")
     if not isinstance(checked_at_raw, str):
-        return False
+        return False, None
     try:
         checked_at = datetime.fromisoformat(checked_at_raw)
     except ValueError:
-        return False
+        return False, None
     if checked_at.tzinfo is None:
         checked_at = checked_at.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) - checked_at <= _VISION_PREFLIGHT_CACHE_TTL
+    if datetime.now(timezone.utc) - checked_at > _VISION_PREFLIGHT_CACHE_TTL:
+        return False, checked_at.isoformat()
+    return True, checked_at.isoformat()
+
+
+def _is_cached_vision_support_success(resolved: ResolvedModelConfig) -> bool:
+    cached_ok, _checked_at = get_vision_preflight_cache_status(resolved)
+    return cached_ok
 
 
 def _record_cached_vision_support_success(resolved: ResolvedModelConfig) -> None:
