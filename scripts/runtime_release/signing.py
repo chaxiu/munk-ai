@@ -83,6 +83,8 @@ class KeychainSession:
     path: Path
     password: str
     temp_dir: Path
+    previous_search_list: tuple[str, ...] = ()
+    previous_default_keychain: str | None = None
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -176,6 +178,8 @@ def _prepare_signing_keychain(signing_config: ReleaseSigningConfig) -> KeychainS
     temp_dir = Path(tempfile.mkdtemp(prefix="munk-signing-keychain-"))
     keychain_path = temp_dir / "munk-signing.keychain-db"
     keychain_password = secrets.token_urlsafe(24)
+    previous_search_list = _list_user_keychains()
+    previous_default_keychain = _default_user_keychain()
     _run_subprocess(
         ["security", "create-keychain", "-p", keychain_password, str(keychain_path)],
         cwd=ROOT_DIR,
@@ -217,16 +221,78 @@ def _prepare_signing_keychain(signing_config: ReleaseSigningConfig) -> KeychainS
         ],
         cwd=ROOT_DIR,
     )
+    # GitHub Actions runners require the temporary keychain to be in the search
+    # list; --keychain alone is not enough for codesign identity resolution.
+    search_list = [str(keychain_path), *previous_search_list]
+    _run_subprocess(
+        ["security", "list-keychains", "-d", "user", "-s", *search_list],
+        cwd=ROOT_DIR,
+    )
+    _run_subprocess(
+        ["security", "default-keychain", "-d", "user", "-s", str(keychain_path)],
+        cwd=ROOT_DIR,
+    )
+    _run_subprocess(
+        ["security", "unlock-keychain", "-p", keychain_password, str(keychain_path)],
+        cwd=ROOT_DIR,
+    )
     if not _identity_exists(signing_config.signing_identity, keychain_path=keychain_path):
         raise RuntimeError(f"imported keychain does not expose signing identity: {signing_config.signing_identity}")
-    return KeychainSession(path=keychain_path, password=keychain_password, temp_dir=temp_dir)
+    return KeychainSession(
+        path=keychain_path,
+        password=keychain_password,
+        temp_dir=temp_dir,
+        previous_search_list=previous_search_list,
+        previous_default_keychain=previous_default_keychain,
+    )
 
 
 def _cleanup_signing_keychain(session: KeychainSession) -> None:
     try:
+        if session.previous_search_list:
+            _run_subprocess(
+                ["security", "list-keychains", "-d", "user", "-s", *session.previous_search_list],
+                cwd=ROOT_DIR,
+                check=False,
+            )
+        if session.previous_default_keychain:
+            _run_subprocess(
+                ["security", "default-keychain", "-d", "user", "-s", session.previous_default_keychain],
+                cwd=ROOT_DIR,
+                check=False,
+            )
         _run_subprocess(["security", "delete-keychain", str(session.path)], cwd=ROOT_DIR, check=False)
     finally:
         shutil.rmtree(session.temp_dir, ignore_errors=True)
+
+
+def _list_user_keychains() -> tuple[str, ...]:
+    completed = _run_subprocess(
+        ["security", "list-keychains", "-d", "user"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        check=False,
+    )
+    paths: list[str] = []
+    for raw_line in f"{completed.stdout}\n{completed.stderr}".splitlines():
+        line = raw_line.strip().strip('"')
+        if line:
+            paths.append(line)
+    return tuple(paths)
+
+
+def _default_user_keychain() -> str | None:
+    completed = _run_subprocess(
+        ["security", "default-keychain", "-d", "user"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        check=False,
+    )
+    for raw_line in f"{completed.stdout}\n{completed.stderr}".splitlines():
+        line = raw_line.strip().strip('"')
+        if line:
+            return line
+    return None
 
 
 def _identity_exists(signing_identity: str, *, keychain_path: Path | None) -> bool:
