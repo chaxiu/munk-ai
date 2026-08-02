@@ -226,16 +226,16 @@ jobs:
 
       - name: Smoke assembled Windows runtime
         if: matrix.platform == 'windows'
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          LAUNCHER="dist/runtime-release/bin/munk.cmd"
-          if [[ ! -f "${LAUNCHER}" ]]; then
-            echo "missing Windows launcher: ${LAUNCHER}" >&2
-            exit 1
-          fi
-          cmd.exe //c "${LAUNCHER}" version
-          cmd.exe //c "${LAUNCHER}" doctor
+          $launcher = Join-Path $PWD "dist\runtime-release\bin\munk.cmd"
+          if (-not (Test-Path -LiteralPath $launcher)) {
+            throw "missing Windows launcher: $launcher"
+          }
+          & $launcher version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $launcher doctor
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
