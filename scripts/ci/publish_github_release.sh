@@ -73,5 +73,5 @@ else
 fi
 
 echo "GitHub Release published: ${TAG}"
-gh release view "${TAG}" --json url,tagName,isPrerelease,isLatest,assets \
-  --jq '{url, tagName, isPrerelease, isLatest, assets: [.assets[].name]}'
+gh release view "${TAG}" --json url,tagName,isPrerelease,assets \
+  --jq '{url, tagName, isPrerelease, assets: [.assets[].name]}'
