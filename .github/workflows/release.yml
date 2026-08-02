@@ -84,7 +84,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Sync Python workspace
-        run: uv sync --project . --frozen
+        run: uv sync --project . --frozen --extra test
+
+      - name: Install Node workspace
+        run: pnpm install --frozen-lockfile
 
       - name: Install Linux archive tools
         if: matrix.platform == 'linux'
@@ -109,14 +112,14 @@ jobs:
       - name: Assemble release runtime (macOS signed)
         if: matrix.platform == 'macos'
         run: |
-          uv run --project . python scripts/assemble_standalone_runtime.py \
+          uv run --project . --extra test python scripts/assemble_standalone_runtime.py \
             --force \
             --signing-env-file "${{ steps.signing.outputs.signing_env }}"
 
       - name: Assemble release runtime (Linux unsigned)
         if: matrix.platform == 'linux'
         run: |
-          uv run --project . python scripts/assemble_standalone_runtime.py \
+          uv run --project . --extra test python scripts/assemble_standalone_runtime.py \
             --force \
             --skip-sign \
             --skip-notarize
