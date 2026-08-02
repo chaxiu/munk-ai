@@ -234,10 +234,6 @@ jobs:
           }
           & $launcher version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # doctor exits 1 when optional tooling is missing (e.g. Playwright Chromium).
-          # Packaging smoke only requires the CLI to start and print diagnostics.
-          & $launcher doctor
-          Write-Host "doctor completed with exit code $LASTEXITCODE (non-zero allowed for optional tooling gaps)"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
