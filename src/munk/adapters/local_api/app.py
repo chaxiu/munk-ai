@@ -14,6 +14,7 @@ from munk.adapters.local_api.cloud_auth_routes import build_cloud_auth_router
 from munk.adapters.local_api.cloud_sync_routes import build_cloud_sync_router
 from munk.adapters.local_api.config_routes import build_config_router
 from munk.adapters.local_api.device_routes import build_device_router
+from munk.adapters.local_api.interactive_routes import build_interactive_router
 from munk.adapters.local_api.knowledge_routes import build_knowledge_router
 from munk.adapters.local_api.mcp_mount import build_local_api_mcp_servers, mount_local_api_mcp
 from munk.adapters.local_api.operation_routes import build_operation_router
@@ -27,6 +28,7 @@ from munk.adapters.local_api.ui_routes import (
     recording_ui_index_response,
     recording_ui_static_response,
 )
+from munk.services.interactive import InteractiveService
 from munk.services.recording.session_service import RecordingSessionService
 
 DEFAULT_LOCAL_API_HOST = "127.0.0.1"
@@ -51,6 +53,7 @@ def create_local_api_app(
     *,
     start_recording_bridge: bool = True,
     recording_service: RecordingSessionService | None = None,
+    interactive_service: InteractiveService | None = None,
     enable_mcp: bool = True,
     mcp_host: str = DEFAULT_LOCAL_API_HOST,
     mcp_port: int = DEFAULT_LOCAL_API_PORT,
@@ -60,6 +63,7 @@ def create_local_api_app(
         workspace_root=Path.cwd(),
         start_recording_bridge=start_recording_bridge,
         recording_service=recording_service,
+        interactive_service=interactive_service,
     )
     mcp_servers = build_local_api_mcp_servers(
         context,
@@ -108,6 +112,12 @@ def create_local_api_app(
     app.include_router(build_cloud_sync_router())
     app.include_router(build_config_router())
     app.include_router(build_device_router())
+    app.include_router(
+        build_interactive_router(
+            service_factory=context.get_interactive_service,
+            workspace_root=lambda: context.workspace_root,
+        )
+    )
     app.include_router(build_knowledge_router())
     app.include_router(build_plan_router())
     app.include_router(build_recording_router(service_factory=context.get_recording_service))

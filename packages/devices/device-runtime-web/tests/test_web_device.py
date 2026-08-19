@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from threading import get_ident
 from types import SimpleNamespace
 from typing import Callable, cast
 
@@ -13,6 +14,7 @@ from munk.device import (
     DeviceDriver,
     SupportsAppLifecycle,
     SupportsClose,
+    SupportsElementTargetAction,
     SupportsRuntimeLogs,
     SupportsTextClear,
 )
@@ -55,6 +57,58 @@ class FakeKeyboard:
         self.press_calls.append(key)
 
 
+class FakeLocator:
+    def __init__(self, page: "FakePage") -> None:
+        self.page = page
+        self.fill_calls: list[str] = []
+        self.click_calls = 0
+        self.select_calls: list[str] = []
+        self.check_calls = 0
+        self.uncheck_calls = 0
+        self.dispatch_calls: list[str] = []
+        self._value = ""
+        self._checked = False
+
+    @property
+    def first(self) -> "FakeLocator":
+        return self
+
+    def click(self) -> None:
+        self.click_calls += 1
+
+    def fill(self, text: str) -> None:
+        self.fill_calls.append(text)
+        self._value = text
+
+    def select_option(self, text: str) -> None:
+        self.select_calls.append(text)
+        self._value = text
+
+    def check(self) -> None:
+        self.check_calls += 1
+        self._checked = True
+
+    def uncheck(self) -> None:
+        self.uncheck_calls += 1
+        self._checked = False
+
+    def dispatch_event(self, name: str) -> None:
+        self.dispatch_calls.append(name)
+
+    def press(self, key: str) -> None:
+        self.page.keyboard.press(key)
+
+    def input_value(self) -> str:
+        return self._value
+
+    def is_checked(self) -> bool:
+        return self._checked
+
+    def evaluate(self, script: str) -> object:
+        del script
+        return self._value
+
+
 class FakePage:
     def __init__(self) -> None:
         self.mouse = FakeMouse()
@@ -74,7 +128,11 @@ class FakePage:
                     "role": "button",
                     "text": "hello",
                     "name": "hello",
+                    "attr_name": None,
                     "resource_id": "confirm",
+                    "input_type": None,
+                    "value": None,
+                    "test_id": None,
                     "clickable": True,
                     "checkable": False,
                     "checked": False,
@@ -82,7 +140,27 @@ class FakePage:
                     "focused": False,
                     "selected": False,
                     "scrollable": False,
-                }
+                },
+                {
+                    "node_id": "node-1",
+                    "bounds": [10, 80, 210, 120],
+                    "tag_name": "input",
+                    "role": None,
+                    "text": None,
+                    "name": "Due date",
+                    "attr_name": "dueDate",
+                    "resource_id": None,
+                    "input_type": "date",
+                    "value": "",
+                    "test_id": "due-date",
+                    "clickable": True,
+                    "checkable": False,
+                    "checked": False,
+                    "enabled": True,
+                    "focused": False,
+                    "selected": False,
+                    "scrollable": False,
+                },
             ],
         }
         self.viewport_size = {"width": 1280, "height": 720}
@@ -90,9 +168,19 @@ class FakePage:
         self.go_back_calls: list[str] = []
         self.listeners: dict[str, list[Callable[[object], None]]] = {}
         self.active_text = "prefilled value"
+        self.last_locator: FakeLocator | None = None
+        self.locator_calls: list[str] = []
+        self.screenshot_thread_ids: list[int] = []
+        self.goto_thread_ids: list[int] = []
+
+    def locator(self, selector: str) -> FakeLocator:
+        self.locator_calls.append(selector)
+        self.last_locator = FakeLocator(self)
+        return self.last_locator
 
     def screenshot(self, *, type: str) -> bytes:  # noqa: A002
         assert type == "png"
+        self.screenshot_thread_ids.append(get_ident())
         image = np.zeros((2, 3, 3), dtype=np.uint8)
         image[:, :] = (1, 2, 3)
         ok, payload = cv2.imencode(".png", image)
@@ -103,6 +191,7 @@ class FakePage:
         return self._title
 
     def goto(self, url: str, *, wait_until: str) -> None:
+        self.goto_thread_ids.append(get_ident())
         self.goto_calls.append((url, wait_until))
         self.url = url
 
@@ -157,6 +246,7 @@ class FakeBrowser:
         self.page = page
         self.contexts: list[FakeContext] = []
         self.closed = False
+        self.close_thread_ids: list[int] = []
 
     def new_context(self, *, viewport: dict[str, int]) -> FakeContext:
         del viewport
@@ -165,6 +255,7 @@ class FakeBrowser:
         return context
 
     def close(self) -> None:
+        self.close_thread_ids.append(get_ident())
         self.closed = True
 
 
@@ -173,8 +264,10 @@ class FakeBrowserType:
         self.browser = browser
         self.launch_calls: list[bool] = []
         self.cdp_calls: list[str] = []
+        self.launch_thread_ids: list[int] = []
 
     def launch(self, *, headless: bool) -> FakeBrowser:
+        self.launch_thread_ids.append(get_ident())
         self.launch_calls.append(headless)
         return self.browser
 
@@ -419,6 +512,39 @@ def test_web_device_satisfies_protocols(monkeypatch) -> None:
     assert isinstance(cast(object, device), SupportsClose)
     assert isinstance(cast(object, device), SupportsRuntimeLogs)
     assert isinstance(cast(object, device), SupportsTextClear)
+    assert isinstance(cast(object, device), SupportsElementTargetAction)
+
+
+def test_web_device_fill_element_uses_value_fill_for_date(monkeypatch) -> None:
+    device, page, _browser_type = build_device(monkeypatch)
+    handle = {
+        "kind": "dom",
+        "selector": '[data-testid="due-date"]',
+        "node_id": "node-1",
+        "fill_mode": "value",
+        "input_type": "date",
+        "tag": "input",
+    }
+
+    device.fill_element(handle, "2025-05-15", mode="value")
+    filled_locator = page.last_locator
+
+    assert page.keyboard.type_calls == []
+    assert filled_locator is not None
+    assert filled_locator.fill_calls == ["2025-05-15"]
+    assert filled_locator.input_value() == "2025-05-15"
+    assert "input" in filled_locator.dispatch_calls
+    assert "change" in filled_locator.dispatch_calls
+
+
+def test_web_device_click_element_uses_locator(monkeypatch) -> None:
+    device, page, _browser_type = build_device(monkeypatch)
+
+    device.click_element({"kind": "dom", "selector": '[data-munk-node-id="node-0"]', "node_id": "node-0"})
+
+    assert page.last_locator is not None
+    assert page.last_locator.click_calls == 1
+    assert page.mouse.click_calls == []
 
 
 def test_web_device_close_releases_context_browser_and_playwright(monkeypatch) -> None:
@@ -439,3 +565,23 @@ def test_web_device_close_releases_context_browser_and_playwright(monkeypatch) -
     assert device._browser is None  # type: ignore[attr-defined]
     assert device._playwright is None  # type: ignore[attr-defined]
     assert device._playwright_manager is None  # type: ignore[attr-defined]
+    assert device._affinity.shut_down is True  # type: ignore[attr-defined]
+
+
+def test_web_device_playwright_calls_run_on_owner_thread(monkeypatch) -> None:
+    device, page, browser_type = build_device(monkeypatch)
+    caller_ident = get_ident()
+    owner_ident = device._affinity.owner_thread_ident  # type: ignore[attr-defined]
+    assert caller_ident != owner_ident
+
+    device.app_start("https://example.com")
+    image = device.screenshot_bgr()
+    browser = cast(FakeBrowser, device._browser)  # type: ignore[attr-defined]
+    device.close()
+
+    assert tuple(int(v) for v in image[0, 0]) == (1, 2, 3)
+    assert browser_type.launch_thread_ids == [owner_ident]
+    assert page.goto_thread_ids == [owner_ident]
+    assert page.screenshot_thread_ids == [owner_ident]
+    assert browser.close_thread_ids == [owner_ident]
+    assert device._affinity.shut_down is True  # type: ignore[attr-defined]

@@ -19,11 +19,11 @@ const items = computed(() => sidebarNavigationItems.map((item) => ({
     <div class="flex items-center gap-3 px-2 py-1">
       <img
         src="/brand/logo-ui-40.png"
-        alt="Munk AI logo"
+        alt="Munk Test logo"
         class="h-10 w-10 shrink-0 rounded-lg"
       >
       <div class="min-w-0">
-        <strong class="block truncate text-base font-semibold text-text-primary">Munk AI</strong>
+        <strong class="block truncate text-base font-semibold text-text-primary">Munk Test</strong>
         <span class="block truncate text-xs font-medium uppercase tracking-[0.14em] text-text-tertiary">Local UI</span>
       </div>
     </div>

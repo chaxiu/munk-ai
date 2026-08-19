@@ -7,6 +7,13 @@ from typing import Literal
 from munk.agent_base.action import Action, ActionType
 from munk.agent_base.base import ScreenState
 from munk.app import AppTarget
+from munk.config.defaults import (
+    DEFAULT_VL_FALLBACK_IMAGE_FORMAT,
+    DEFAULT_VL_IMAGE_FORMAT,
+    DEFAULT_VL_JPEG_QUALITY,
+    DEFAULT_VL_WEBP_QUALITY,
+)
+from munk.core.action_target_models import TargetHandle
 from munk.perception.image import BgrImage
 
 InteractiveSessionStatus = Literal[
@@ -18,6 +25,7 @@ InteractiveSessionStatus = Literal[
     "expired",
 ]
 InteractiveStepKind = Literal["observation", "action"]
+InteractiveTreeStatus = Literal["ok", "missing", "error"]
 
 
 def now_iso() -> str:
@@ -26,13 +34,16 @@ def now_iso() -> str:
 
 @dataclass(frozen=True)
 class InteractiveTargetSummary:
-    target_id: int
+    target_ref: str
+    channel: str
+    index: int
     label: str | None
     kind: str | None
     source: str
     box: tuple[int, int, int, int]
     resource_id: str | None = None
     text: str | None = None
+    handle: TargetHandle | None = None
 
 
 @dataclass(frozen=True)
@@ -44,12 +55,18 @@ class InteractiveObservation:
     summary: str
     vl_max_side: int
     annotated_image_bgr: BgrImage | None = None
+    tree_status: InteractiveTreeStatus = "ok"
+    tree_error: str | None = None
+    vl_image_format: str = DEFAULT_VL_IMAGE_FORMAT
+    vl_fallback_image_format: str = DEFAULT_VL_FALLBACK_IMAGE_FORMAT
+    vl_webp_quality: int = DEFAULT_VL_WEBP_QUALITY
+    vl_jpeg_quality: int = DEFAULT_VL_JPEG_QUALITY
 
 
 @dataclass(frozen=True)
 class InteractiveActionRequest:
     action: Action
-    target_id: int | None = None
+    target_ref: str | None = None
     resource_id: str | None = None
     label: str | None = None
 

@@ -11,11 +11,11 @@ STATUS_BAR_MAX_HEIGHT_RATIO = 0.04
 
 SHARED_RUNNER_MISSION_LINES = (
     "Decide exactly one next action for the current test step, not the whole case.",
-    "Use the objective, procedure, history, current screen, and seeded numbered targets to choose the highest-confidence action that advances the test.",
+    "Use the objective, procedure, history, current screen, and seeded target_ref values (vN / tN) to choose the highest-confidence action that advances the test.",
 )
 SHARED_RUNNER_COMPLETION_CONTRACT_LINES = ("Return exactly one structured action and no extra text.",)
 SHARED_RUNNER_RULE_LINES = (
-    "Prefer a direct action on a visible numbered target.",
+    "Prefer a direct action on a visible seeded target_ref (vN / tN).",
     "If the expected result is already satisfied, use stop.",
     "If a procedure exists, advance the next incomplete procedure step instead of stopping early.",
     "Do not guess or click semantically similar controls when the intended target is not visible.",
@@ -35,6 +35,7 @@ class PlatformRunnerProfile:
     platform_capability_notes: tuple[str, ...]
     status_bar_filter_enabled: bool
     enabled_read_tools: tuple[str, ...] = ()
+    default_tree_seed_limit: int = 0
 
     def display_kind(self, target: object) -> str:
         semantic_role = _normalized_text(_target_attr(target, "semantic_role"))
@@ -149,9 +150,14 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
             platform_capability_notes=(
                 "Soft-keyboard dismiss is not applicable on web; focused inputs are not soft keyboards.",
                 "Prefer dismiss_keyboard=false for edit_text unless a page-specific overlay must be closed.",
+                "Use set_value with #t* for date/time/select/checkbox/switch and prefer it for structure text fields.",
+                "edit_text is only for real text input (append/replace/keyboard); never use it for check/select/date.",
+                "Date/time values must use ISO form (YYYY-MM-DD / HH:mm). Never invent CSS selectors.",
+                "Use #v* only for icons/custom visuals without a clear structure node.",
             ),
             status_bar_filter_enabled=False,
             enabled_read_tools=("read_page_meta", "read_dom_summary", "read_focused_element"),
+            default_tree_seed_limit=40,
         )
     if normalized == "ios":
         return PlatformRunnerProfile(
@@ -161,8 +167,15 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
             completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
             tool_policy_lines=SHARED_RUNNER_RULE_LINES,
             action_bias_lines=(),
-            platform_capability_notes=(),
+            platform_capability_notes=(
+                "Prefer #t* for structure-backed iOS controls (TextField/Button/Switch).",
+                "Use set_value with #t* for Switch and prefer it for TextField value setting.",
+                "edit_text is only for real text input; never use it for Switch/checkbox-like controls.",
+                "TextField/Switch fill/read uses accessibility node APIs; never invent CSS or web selectors.",
+                "Use #v* only for icons/custom visuals without a clear structure node.",
+            ),
             status_bar_filter_enabled=False,
+            default_tree_seed_limit=40,
         )
     return PlatformRunnerProfile(
         platform="android",
@@ -171,8 +184,15 @@ def get_runner_profile(platform: str | None) -> PlatformRunnerProfile:
         completion_contract_lines=SHARED_RUNNER_COMPLETION_CONTRACT_LINES,
         tool_policy_lines=SHARED_RUNNER_RULE_LINES,
         action_bias_lines=(),
-        platform_capability_notes=(),
+        platform_capability_notes=(
+            "Prefer #t* for structure-backed Android controls (EditText/Button/CheckBox/Switch).",
+            "Use set_value with #t* for CheckBox/Switch and prefer it for EditText value setting.",
+            "edit_text is only for real text input; never use it for CheckBox/Switch.",
+            "EditText fill/read uses accessibility node APIs; never invent CSS or web selectors.",
+            "Use #v* only for icons/custom visuals without a clear structure node.",
+        ),
         status_bar_filter_enabled=True,
+        default_tree_seed_limit=40,
     )
 
 

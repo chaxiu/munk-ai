@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from munk.agent_base.action import Action
+from munk.agent_base.action.structure_handle import is_structure_element_handle
+from munk.core.action_targets import is_text_input_target, requires_set_value_action
 
 from munk_runner_local.brain.pydantic_runner_models import RunnerStepDeps
 from munk_runner_local.brain.pydantic_runner_output_models import (
@@ -12,6 +14,7 @@ from munk_runner_local.brain.pydantic_runner_output_models import (
     RevealMoreActionSubmission,
     RunnerActionOutput,
     ScrollUntilTextActionSubmission,
+    SetValueActionSubmission,
     SimpleActionSubmission,
     SwipeActionSubmission,
     WaitActionSubmission,
@@ -32,11 +35,16 @@ def materialize_runner_action(
     submission: RunnerActionOutput,
 ) -> Action:
     if isinstance(submission, ClickActionSubmission):
-        target = resolve_target(deps, submission.target_id)
-        action = Action.click(target.box, summary=submission.summary)
+        target = resolve_target(deps, submission.target_ref)
+        action = Action.click(
+            target.box,
+            summary=submission.summary,
+            handle=target.handle,
+            target_ref=submission.target_ref,
+        )
         arguments = target_arguments(
             {
-                "target_id": submission.target_id,
+                "target_ref": submission.target_ref,
                 "summary": submission.summary,
             },
             target,
@@ -44,15 +52,17 @@ def materialize_runner_action(
         return record_materialized_action(deps, "click", arguments, action)
 
     if isinstance(submission, LongPressActionSubmission):
-        target = resolve_target(deps, submission.target_id)
+        target = resolve_target(deps, submission.target_ref)
         action = Action.long_press(
             target.box,
             duration=submission.duration_sec,
             summary=submission.summary,
+            handle=target.handle,
+            target_ref=submission.target_ref,
         )
         arguments = target_arguments(
             {
-                "target_id": submission.target_id,
+                "target_ref": submission.target_ref,
                 "summary": submission.summary,
                 "duration_sec": submission.duration_sec,
             },
@@ -64,23 +74,69 @@ def materialize_runner_action(
         dismiss_keyboard = submission.dismiss_keyboard
         if dismiss_keyboard is None:
             raise ValueError("edit_text submission is missing dismiss_keyboard")
-        target = resolve_target(deps, submission.target_id) if submission.target_id is not None else None
+        target = resolve_target(deps, submission.target_ref) if submission.target_ref is not None else None
+        # Structure handle → must be real text input.
+        # Spatial / incomplete → reject set_value-only controls (no positive text check).
+        if target is not None and is_structure_element_handle(target.handle):
+            if requires_set_value_action(target):
+                raise ValueError(
+                    "edit_text cannot target structured controls "
+                    "(date/select/checkbox/switch/radio); use set_value with #t* "
+                    f"(got {target.ref or submission.target_ref})"
+                )
+            if not is_text_input_target(target):
+                raise ValueError(
+                    "edit_text requires a real text input target; "
+                    "use set_value for structured controls or pick a text field "
+                    f"(got {target.ref or submission.target_ref})"
+                )
+        elif target is not None and requires_set_value_action(target):
+            raise ValueError(
+                "native form controls (date/select/checkbox/radio) require set_value with #t*; "
+                f"got spatial target {target.ref or submission.target_ref}"
+            )
         action = Action.edit_text(
             text=submission.text,
             mode=submission.mode,
             target_box=target.box if target is not None else None,
             dismiss_keyboard=dismiss_keyboard,
             summary=submission.summary,
+            handle=target.handle if target is not None else None,
+            target_ref=submission.target_ref,
         )
         arguments = submission.model_dump(exclude={"action_type"}, exclude_none=True)
         if target is not None:
             arguments = target_arguments(arguments, target)
         return record_materialized_action(deps, "edit_text", arguments, action)
 
+    if isinstance(submission, SetValueActionSubmission):
+        target = resolve_target(deps, submission.target_ref)
+        if not is_structure_element_handle(target.handle):
+            raise ValueError(
+                "set_value requires a structure (#t*) target with dom/a11y handle; "
+                f"got {target.ref or submission.target_ref}"
+            )
+        assert target.handle is not None
+        action = Action.set_value(
+            value=submission.value,
+            handle=target.handle,
+            target_ref=submission.target_ref,
+            summary=submission.summary,
+        )
+        arguments = target_arguments(
+            {
+                "target_ref": submission.target_ref,
+                "value": submission.value,
+                "summary": submission.summary,
+            },
+            target,
+        )
+        return record_materialized_action(deps, "set_value", arguments, action)
+
     if isinstance(submission, RevealMoreActionSubmission):
         gesture = resolve_reveal_more_gesture(
             deps,
-            anchor_target_id=submission.anchor_target_id,
+            anchor_target_ref=submission.anchor_target_ref,
             direction=submission.direction,
             distance=submission.distance,
             start_y_ratio=submission.start_y_ratio,
@@ -101,8 +157,8 @@ def materialize_runner_action(
             "resolved_distance_ratio": round(gesture.distance_ratio, 4),
             "summary": submission.summary,
         }
-        if submission.anchor_target_id is not None:
-            arguments["anchor_target_id"] = submission.anchor_target_id
+        if submission.anchor_target_ref is not None:
+            arguments["anchor_target_ref"] = submission.anchor_target_ref
             arguments = target_arguments(arguments, gesture.anchor_target)
         return record_materialized_action(deps, "reveal_more", arguments, action)
 

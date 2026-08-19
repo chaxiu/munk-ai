@@ -84,6 +84,10 @@ def _to_snapshot(node: ParsedTreeNode) -> TreeNodeSnapshot:
         selected=node.selected,
         scrollable=node.scrollable,
         semantic_role=node.semantic_role,
+        input_type=node.input_type,
+        dom_name=node.dom_name,
+        dom_value=node.dom_value,
+        test_id=node.test_id,
     )
 
 

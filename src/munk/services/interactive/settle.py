@@ -30,7 +30,7 @@ def capture_interactive_settle_snapshot(
     screenshot_ms = int(round((time.monotonic() - stage_started) * 1000.0))
 
     stage_started = time.monotonic()
-    observation_tree = _capture_observation_tree(context)
+    observation_tree = _capture_observation_tree(context).tree
     tree_ms = int(round((time.monotonic() - stage_started) * 1000.0))
 
     stage_started = time.monotonic()
@@ -38,7 +38,7 @@ def capture_interactive_settle_snapshot(
     ocr_ms = int(round((time.monotonic() - stage_started) * 1000.0))
 
     snapshot = build_settle_snapshot(
-        observation_tree=observation_tree,
+        observation_tree=observation_tree,  # type: ignore[arg-type]
         texts=texts,
     )
     total_ms = int(round((time.monotonic() - started) * 1000.0))

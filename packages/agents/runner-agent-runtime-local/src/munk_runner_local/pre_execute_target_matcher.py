@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from munk.agent_base.action import ActionType
-from munk.core.action_targets import ActionTarget
+from munk.core.action_targets import ActionTarget, is_text_input_target, set_value_control_family
+
+from munk_runner_local.target_handle_fingerprint import handle_fingerprint
 
 MAX_REBIND_CENTER_DISTANCE_RATIO = 0.1
 
@@ -25,7 +27,15 @@ def match_pre_execute_target(
     if not _has_rebind_signature(original_target):
         return TargetMatchResult(resolved_target=original_target)
     compatible_targets = _dedupe_targets(
-        [target for target in current_targets if _is_candidate_compatible(target, action_type=action_type)]
+        [
+            target
+            for target in current_targets
+            if _is_candidate_compatible(
+                target,
+                action_type=action_type,
+                original_target=original_target,
+            )
+        ]
     )
     for layer_name, matches in _collect_layer_matches(original_target, compatible_targets):
         if not matches:
@@ -50,6 +60,9 @@ def match_pre_execute_target(
 
 
 def _has_rebind_signature(target: ActionTarget) -> bool:
+    # Frame-local refs (vN/tN) are never a stable rebind identity.
+    if handle_fingerprint(target.handle) is not None:
+        return True
     return _has_text(target.stable_key) or _has_text(target.resource_id) or has_reliable_target_label(target)
 
 
@@ -58,6 +71,18 @@ def _collect_layer_matches(
     compatible_targets: list[ActionTarget],
 ) -> tuple[tuple[str, list[ActionTarget]], ...]:
     layers: list[tuple[str, list[ActionTarget]]] = []
+    original_fingerprint = handle_fingerprint(original_target.handle)
+    if original_fingerprint is not None:
+        layers.append(
+            (
+                "handle",
+                [
+                    target
+                    for target in compatible_targets
+                    if handle_fingerprint(target.handle) == original_fingerprint
+                ],
+            )
+        )
     if _has_text(original_target.stable_key):
         stable_key = str(original_target.stable_key).strip()
         layers.append(
@@ -130,33 +155,35 @@ def _target_preference_sort_key(target: ActionTarget) -> tuple[int, int, int, tu
     )
 
 
-def _is_candidate_compatible(target: ActionTarget, *, action_type: ActionType) -> bool:
+def _is_candidate_compatible(
+    target: ActionTarget,
+    *,
+    action_type: ActionType,
+    original_target: ActionTarget | None = None,
+) -> bool:
     if target.enabled is False:
         return False
     if action_type in {ActionType.CLICK, ActionType.LONG_PRESS}:
         return target.clickable is not False
     if action_type == ActionType.EDIT_TEXT:
-        return _looks_like_input_target(target)
+        return is_text_input_target(target)
+    if action_type == ActionType.SET_VALUE:
+        if target.handle is None or target.handle.kind not in {"dom", "a11y"}:
+            return False
+        if original_target is None:
+            return set_value_control_family(target) is not None
+        original_family = set_value_control_family(original_target)
+        candidate_family = set_value_control_family(target)
+        if original_family is None or candidate_family is None:
+            return False
+        return original_family == candidate_family
     return True
-
-
-def _looks_like_input_target(target: ActionTarget) -> bool:
-    normalized_kind = _normalize_token(target.kind)
-    normalized_role = _normalize_token(target.semantic_role)
-    normalized_class = _normalize_token(target.class_name)
-    if normalized_kind == "input" or normalized_role == "input":
-        return True
-    return "edittext" in normalized_class or "textfield" in normalized_class or "input" in normalized_class
 
 
 def _normalize_label(value: object) -> str | None:
     if not _has_text(value):
         return None
     return " ".join(str(value).split()).lower()
-
-
-def _normalize_token(value: object) -> str:
-    return str(value or "").strip().lower()
 
 
 def _has_text(value: object) -> bool:

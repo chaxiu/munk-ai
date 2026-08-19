@@ -31,6 +31,7 @@ POST_ACTION_DELAY_SEC = 0.2
 POST_ACTION_SKIP_WAIT_TYPES = frozenset(
     {
         ActionType.EDIT_TEXT,
+        ActionType.SET_VALUE,
         ActionType.WAIT_FOR_TEXT,
         ActionType.SCROLL_UNTIL_TEXT,
         ActionType.WAIT,

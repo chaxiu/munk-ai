@@ -23,6 +23,7 @@ TERMINAL_TOOL_NAMES = (
     "click",
     "long_press",
     "edit_text",
+    "set_value",
     "reveal_more",
     "swipe",
     "drag",
@@ -89,11 +90,11 @@ def build_targets_seed_text(
 def build_target_detail_payload(
     deps: RunnerStepDeps,
     *,
-    target_id: int,
- ) -> str:
+    target_ref: str,
+) -> str:
     return build_target_detail_text(
         deps.screen,
-        target_id=target_id,
+        target_ref=target_ref,
         max_elements=_canonical_target_part_limit(deps),
     )
 
@@ -104,10 +105,10 @@ def resolve_target_part_limit(limit: int | None = None) -> int:
     return _validate_target_part_limit(limit)
 
 
-def resolve_target(deps: RunnerStepDeps, target_id: int) -> Any:
+def resolve_target(deps: RunnerStepDeps, target_ref: str) -> Any:
     return resolve_action_target(
         deps.screen,
-        target_id=target_id,
+        target_ref=target_ref,
         max_elements=_canonical_target_part_limit(deps),
     )
 
@@ -115,13 +116,13 @@ def resolve_target(deps: RunnerStepDeps, target_id: int) -> Any:
 def resolve_reveal_more_gesture(
     deps: RunnerStepDeps,
     *,
-    anchor_target_id: int | None,
+    anchor_target_ref: str | None,
     direction: Literal["up", "down"],
     distance: float | None,
     start_y_ratio: float | None,
 ) -> ResolvedGestureAnchor:
     distance_ratio = distance if distance is not None else DEFAULT_REVEAL_MORE_DISTANCE_RATIO
-    anchor_target = resolve_target(deps, anchor_target_id) if anchor_target_id is not None else None
+    anchor_target = resolve_target(deps, anchor_target_ref) if anchor_target_ref is not None else None
     width, height = deps.screen.screen_size
     if width <= 0 or height <= 0:
         raise ValueError("screen_size must be positive for gesture actions")
@@ -195,6 +196,8 @@ def text_match_arguments(match: object, **extra: object) -> dict[str, object]:
 
 def target_arguments(arguments: dict[str, object], target: object) -> dict[str, object]:
     payload = dict(arguments)
+    payload["target_ref"] = getattr(target, "ref", None) or payload.get("target_ref")
+    payload["target_channel"] = getattr(target, "channel", None)
     payload["target_part"] = getattr(target, "part", None)
     payload["target_source"] = getattr(target, "source", None)
     payload["target_box"] = getattr(target, "box", None)

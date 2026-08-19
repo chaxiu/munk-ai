@@ -431,6 +431,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interactive/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Interactive Session */
+        post: operations["create_interactive_session_v1_interactive_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interactive/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Interactive Session */
+        get: operations["get_interactive_session_v1_interactive_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interactive/sessions/{session_id}/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Abort Interactive Session */
+        post: operations["abort_interactive_session_v1_interactive_sessions__session_id__abort_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interactive/sessions/{session_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalize Interactive Session */
+        post: operations["finalize_interactive_session_v1_interactive_sessions__session_id__finalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plan": {
         parameters: {
             query?: never;
@@ -2528,6 +2596,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** CreateInteractiveSessionRequest */
+        CreateInteractiveSessionRequest: {
+            /** @description Application target to bind the interactive session to. */
+            app_target: components["schemas"]["AppTarget"];
+            /**
+             * Config Path
+             * @description Optional path to a Munk config file; otherwise workspace/profile discovery applies.
+             */
+            config_path?: string | null;
+            /**
+             * Device Ref
+             * @description Optional device reference to claim for the interactive session.
+             */
+            device_ref?: string | null;
+        };
         /** CreateRecordingRequest */
         CreateRecordingRequest: {
             app_target: components["schemas"]["AppTarget"];
@@ -2915,6 +2998,14 @@ export interface components {
             /** Stop Reason */
             stop_reason?: string | null;
         };
+        /** FinalizeInteractiveSessionRequest */
+        FinalizeInteractiveSessionRequest: {
+            /**
+             * Summary
+             * @description Optional agent or host summary recorded on finalize.
+             */
+            summary?: string | null;
+        };
         /** FlowKnowledgeCandidateDraft */
         FlowKnowledgeCandidateDraft: {
             /** App Id */
@@ -3168,6 +3259,111 @@ export interface components {
             submit: boolean;
             /** Text */
             text: string;
+        };
+        /** InteractiveSessionAbortData */
+        InteractiveSessionAbortData: {
+            session: components["schemas"]["InteractiveSessionPayload"];
+        };
+        /** InteractiveSessionCreateData */
+        InteractiveSessionCreateData: {
+            session: components["schemas"]["InteractiveSessionPayload"];
+        };
+        /** InteractiveSessionFinalizeData */
+        InteractiveSessionFinalizeData: {
+            /**
+             * Agent Summary
+             * @description Optional summary provided at finalize.
+             */
+            agent_summary?: string | null;
+            /**
+             * Last Observation Summary
+             * @description Summary of the latest observation when available.
+             */
+            last_observation_summary?: string | null;
+            session: components["schemas"]["InteractiveSessionPayload"];
+            /**
+             * Step Count
+             * @description Recorded step count at finalize time.
+             */
+            step_count: number;
+            /**
+             * Steps Summary
+             * @description Transcript of step summaries.
+             */
+            steps_summary?: string[];
+        };
+        /** InteractiveSessionGetData */
+        InteractiveSessionGetData: {
+            session: components["schemas"]["InteractiveSessionPayload"];
+        };
+        /** InteractiveSessionPayload */
+        InteractiveSessionPayload: {
+            /**
+             * App Id
+             * @description Application identifier associated with the session.
+             */
+            app_id: string;
+            /**
+             * Device Ref
+             * @description Claimed device reference when available.
+             */
+            device_ref?: string | null;
+            /**
+             * Expires At
+             * @description Session absolute expiry timestamp in ISO format.
+             */
+            expires_at: string;
+            /**
+             * Finalized Agent Summary
+             * @description Agent summary from finalize when available.
+             */
+            finalized_agent_summary?: string | null;
+            /**
+             * Idle Expires At
+             * @description Session idle expiry timestamp in ISO format.
+             */
+            idle_expires_at: string;
+            /**
+             * Last Active At
+             * @description Last agent activity timestamp in ISO format.
+             */
+            last_active_at: string;
+            /**
+             * Last Observation Summary
+             * @description Summary of the latest observation when available.
+             */
+            last_observation_summary?: string | null;
+            /**
+             * Platform
+             * @description Interactive target platform.
+             */
+            platform: string;
+            /**
+             * Session Id
+             * @description Interactive session identifier.
+             */
+            session_id: string;
+            /**
+             * Started At
+             * @description Session start timestamp in ISO format.
+             */
+            started_at: string;
+            /**
+             * Status
+             * @description Current interactive session status.
+             * @enum {string}
+             */
+            status: "created" | "waiting_agent" | "acting" | "finalized" | "aborted" | "expired";
+            /**
+             * Step Count
+             * @description Current recorded step count.
+             */
+            step_count: number;
+            /**
+             * Updated At
+             * @description Session update timestamp in ISO format.
+             */
+            updated_at: string;
         };
         /** InteractiveSessionStateData */
         InteractiveSessionStateData: {
@@ -6369,8 +6565,14 @@ export interface components {
         RunStoppedEventPayload: {
             /** Action */
             action?: string | null;
+            /** Advice */
+            advice?: string | null;
             /** Consecutive No Effect Count */
             consecutive_no_effect_count?: number | null;
+            /** Consecutive Postcheck Failure Count */
+            consecutive_postcheck_failure_count?: number | null;
+            /** Postcheck Summary */
+            postcheck_summary?: string | null;
             /** Reason */
             reason?: string | null;
             /** Step */
@@ -7146,6 +7348,70 @@ export interface components {
             /** Command */
             command: string;
             data: components["schemas"]["DeviceUnlockData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[InteractiveSessionAbortData] */
+        SuccessResponse_InteractiveSessionAbortData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["InteractiveSessionAbortData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[InteractiveSessionCreateData] */
+        SuccessResponse_InteractiveSessionCreateData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["InteractiveSessionCreateData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[InteractiveSessionFinalizeData] */
+        SuccessResponse_InteractiveSessionFinalizeData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["InteractiveSessionFinalizeData"];
+            /**
+             * Ok
+             * @default true
+             * @constant
+             */
+            ok: true;
+        };
+        /** SuccessResponse[InteractiveSessionGetData] */
+        SuccessResponse_InteractiveSessionGetData_: {
+            /** Artifacts */
+            artifacts?: {
+                [key: string]: string;
+            } | null;
+            /** Command */
+            command: string;
+            data: components["schemas"]["InteractiveSessionGetData"];
             /**
              * Ok
              * @default true
@@ -10050,6 +10316,271 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_interactive_session_v1_interactive_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInteractiveSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_InteractiveSessionCreateData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_interactive_session_v1_interactive_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_InteractiveSessionGetData_"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    abort_interactive_session_v1_interactive_sessions__session_id__abort_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_InteractiveSessionAbortData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finalize_interactive_session_v1_interactive_sessions__session_id__finalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FinalizeInteractiveSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_InteractiveSessionFinalizeData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

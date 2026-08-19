@@ -59,7 +59,7 @@ def register_common_runner_tools(agent: Agent[RunnerStepDeps, RunnerActionOutput
         limit: int | None = None,
         source: Literal["vision", "tree", "all"] = "all",
     ) -> str:
-        """Read one page of numbered clickable elements with source/offset/limit; use offset=0 for the first page and advance with next_offset."""
+        """Read one page of clickable elements as target_ref values (#v* / #t*) with source/offset/limit; use offset=0 for the first page and advance with next_offset."""
         args = ListClickableElementsToolArgs(offset=offset, limit=limit, source=source)
         page_limit = resolve_target_part_limit(args.limit)
         payload = build_clickable_elements_text(
@@ -76,10 +76,10 @@ def register_common_runner_tools(agent: Agent[RunnerStepDeps, RunnerActionOutput
         return record_read_tool(ctx.deps, "list_clickable_elements", arguments, payload)
 
     @agent.tool
-    def inspect_element(ctx: PydanticRunContext[RunnerStepDeps], target_id: int) -> str:
-        """Read details for one numbered clickable element by stable global target_id."""
-        detail = build_target_detail_payload(ctx.deps, target_id=target_id)
-        arguments: dict[str, object] = {"target_id": target_id}
+    def inspect_element(ctx: PydanticRunContext[RunnerStepDeps], target_ref: str) -> str:
+        """Read details for one clickable element by target_ref (vN or tN)."""
+        detail = build_target_detail_payload(ctx.deps, target_ref=target_ref)
+        arguments: dict[str, object] = {"target_ref": target_ref}
         return record_read_tool(ctx.deps, "inspect_element", arguments, detail)
 
     @agent.tool
@@ -95,7 +95,7 @@ def register_common_runner_tools(agent: Agent[RunnerStepDeps, RunnerActionOutput
         step_index: int | None = None,
         annotated: bool = True,
     ) -> str | ToolReturn:
-        """Read the compressed saved screenshot for a runner step; annotated screenshots align target ids with prompt text."""
+        """Read the compressed saved screenshot for a runner step; annotated screenshots align target_ref labels (vN / tN) with prompt text."""
         return runtime_read_step_screenshot(ctx.deps, step_index=step_index, annotated=annotated)
 
     @agent.tool

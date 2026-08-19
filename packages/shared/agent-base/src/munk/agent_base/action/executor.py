@@ -8,9 +8,11 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from typing import cast
 
-from munk.device import DeviceDriver, SupportsThreadBoundDeviceCalls
+from munk.device import DeviceDriver, SupportsElementTargetAction, SupportsThreadBoundDeviceCalls
 
 from ..types import Action, ActionType
+from munk.core.action_targets import handle_as_mapping
+from .structure_handle import is_structure_element_handle
 
 DEFAULT_ACTION_TIMEOUT_SEC = 10.0
 DEFAULT_LONG_PRESS_DURATION_SEC = 1.0
@@ -110,10 +112,12 @@ class ActionExecutor:
         raise ActionExecutionError(f"unsupported executable action: {action.type.value}")
 
     def _normalize_click(self, action: Action) -> Action:
+        if is_structure_element_handle(action.handle):
+            return action
         if action.box is not None:
             return action
         if action.point is None:
-            raise ActionExecutionError("click action requires box or point")
+            raise ActionExecutionError("click action requires box, point, or structure handle")
         width, height = self.device.window_size()
         x, y = action.point
         if width > 0 and height > 0:
@@ -393,6 +397,11 @@ class ActionExecutor:
 
     def _execute_normalized(self, action: Action) -> None:
         if action.type in {ActionType.CLICK, ActionType.LONG_PRESS}:
+            handle = action.handle
+            if action.type == ActionType.CLICK and is_structure_element_handle(handle):
+                assert handle is not None  # narrowed by is_structure_element_handle
+                self._run_device_call(self._click_element, action, handle_as_mapping(handle))
+                return
             if action.box is not None:
                 x1, y1, x2, y2 = action.box
                 cx = int(round((x1 + x2) / 2.0))
@@ -469,6 +478,11 @@ class ActionExecutor:
 
     def _click(self, x: int, y: int) -> None:
         self.device.click(x, y)
+
+    def _click_element(self, handle: dict[str, object]) -> None:
+        if not isinstance(self.device, SupportsElementTargetAction):
+            raise ActionExecutionError("device does not support element target actions")
+        self.device.click_element(handle)
 
     def _long_press(self, x: int, y: int, duration: float | None) -> None:
         self.device.long_press(x, y, duration)

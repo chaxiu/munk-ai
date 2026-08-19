@@ -121,6 +121,29 @@ class DeviceSession {
     await (await this.ensureClient()).clearText();
   }
 
+  async findElement(using: string, value: string): Promise<string> {
+    return await (await this.ensureClient()).findElement(using, value);
+  }
+
+  async clickElement(elementId: string): Promise<void> {
+    await (await this.ensureClient()).clickElement(elementId);
+  }
+
+  async clearElement(elementId: string): Promise<void> {
+    await (await this.ensureClient()).clearElement(elementId);
+  }
+
+  async setElementValue(elementId: string, text: string): Promise<void> {
+    await (await this.ensureClient()).setElementValue(elementId, text);
+  }
+
+  async getElementAttribute(
+    elementId: string,
+    name: string,
+  ): Promise<string | null> {
+    return await (await this.ensureClient()).getElementAttribute(elementId, name);
+  }
+
   async press(key: string): Promise<void> {
     await (await this.ensureClient()).press(key);
   }
@@ -347,6 +370,38 @@ export class IOSDeviceBridgeSessionManager {
 
   async clearText(sessionId: string): Promise<void> {
     await this.getSession(sessionId).clearText();
+  }
+
+  async findElement(
+    sessionId: string,
+    using: string,
+    value: string,
+  ): Promise<string> {
+    return await this.getSession(sessionId).findElement(using, value);
+  }
+
+  async clickElement(sessionId: string, elementId: string): Promise<void> {
+    await this.getSession(sessionId).clickElement(elementId);
+  }
+
+  async clearElement(sessionId: string, elementId: string): Promise<void> {
+    await this.getSession(sessionId).clearElement(elementId);
+  }
+
+  async setElementValue(
+    sessionId: string,
+    elementId: string,
+    text: string,
+  ): Promise<void> {
+    await this.getSession(sessionId).setElementValue(elementId, text);
+  }
+
+  async getElementAttribute(
+    sessionId: string,
+    elementId: string,
+    name: string,
+  ): Promise<string | null> {
+    return await this.getSession(sessionId).getElementAttribute(elementId, name);
   }
 
   async press(sessionId: string, key: string): Promise<void> {

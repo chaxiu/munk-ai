@@ -63,19 +63,27 @@ export class WdaHttpClient {
     }
     async clearText() {
         const payload = await this.sessionRequest('GET', '/element/active');
-        const value = payload.value;
-        if (!value || typeof value !== 'object') {
-            throw new IOSDeviceBridgeError('wda_invalid_response', 'WDA active element response missing value object', 502);
-        }
-        const mapping = value;
-        const elementId = (typeof mapping['element-6066-11e4-a52e-4f735466cecf'] === 'string'
-            ? mapping['element-6066-11e4-a52e-4f735466cecf']
-            : null) ??
-            (typeof mapping.ELEMENT === 'string' ? mapping.ELEMENT : null);
-        if (!elementId) {
-            throw new IOSDeviceBridgeError('wda_invalid_response', 'WDA active element response missing element identifier', 502);
-        }
+        const elementId = parseWdaElementId(payload.value, 'active element');
+        await this.clearElement(elementId);
+    }
+    async findElement(using, value) {
+        const payload = await this.sessionRequest('POST', '/element', { using, value });
+        return parseWdaElementId(payload.value, `find using=${using}`);
+    }
+    async clickElement(elementId) {
+        await this.sessionRequest('POST', `/element/${elementId}/click`);
+    }
+    async clearElement(elementId) {
         await this.sessionRequest('POST', `/element/${elementId}/clear`);
+    }
+    async setElementValue(elementId, text) {
+        await this.sessionRequest('POST', `/element/${elementId}/value`, {
+            value: Array.from(text),
+        });
+    }
+    async getElementAttribute(elementId, name) {
+        const payload = await this.sessionRequest('GET', `/element/${elementId}/attribute/${name}`);
+        return parseWdaAttributeValue(payload.value);
     }
     async press(key) {
         const normalized = key.trim().toLowerCase();
@@ -268,6 +276,35 @@ function extractWdaSessionId(payload) {
         ? payload.value.sessionId
         : null;
     return direct ?? nested;
+}
+function parseWdaElementId(value, context) {
+    if (!value || typeof value !== 'object') {
+        throw new IOSDeviceBridgeError('wda_invalid_response', `WDA ${context} response missing value object`, 502);
+    }
+    const mapping = value;
+    const elementId = (typeof mapping['element-6066-11e4-a52e-4f735466cecf'] === 'string'
+        ? mapping['element-6066-11e4-a52e-4f735466cecf']
+        : null) ??
+        (typeof mapping.ELEMENT === 'string' ? mapping.ELEMENT : null);
+    if (!elementId) {
+        throw new IOSDeviceBridgeError('wda_invalid_response', `WDA ${context} response missing element identifier`, 502);
+    }
+    return elementId;
+}
+function parseWdaAttributeValue(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (typeof value === 'boolean') {
+        return value ? 'true' : 'false';
+    }
+    if (typeof value === 'number') {
+        return String(value);
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    return null;
 }
 function isWdaUiTestingAuthorizationPayload(payload) {
     if (!payload) {

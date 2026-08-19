@@ -12,6 +12,7 @@ from munk.device import (
     RuntimeLogEntry,
     SupportsAppLifecycle,
     SupportsClose,
+    SupportsElementTargetAction,
     SupportsRuntimeLogs,
     SupportsSoftKeyboardBounds,
     SupportsSoftKeyboardDismiss,
@@ -34,6 +35,14 @@ class FakeWDAProvider:
         self.press_calls: list[str] = []
         self.launch_calls: list[str] = []
         self.terminate_calls: list[str] = []
+        self.find_calls: list[tuple[str, str]] = []
+        self.element_clicks: list[str] = []
+        self.element_clears: list[str] = []
+        self.element_set_values: list[tuple[str, str]] = []
+        self.element_attributes: dict[str, dict[str, str | None]] = {}
+        self.missing_find_keys: set[tuple[str, str]] = set()
+        self._find_to_element: dict[tuple[str, str], str] = {}
+        self._element_counter = 0
         self._window_size = (1179, 2556)
         self._app_state = WDAAppState(
             "com.example.demo",
@@ -95,6 +104,42 @@ class FakeWDAProvider:
 
     def clear_text(self) -> None:
         self.clear_calls += 1
+
+    def find_element(self, using: str, value: str) -> str:
+        key = (using, value)
+        self.find_calls.append(key)
+        if key in self.missing_find_keys:
+            raise ValueError(f"element not found for {using}={value}")
+        existing = self._find_to_element.get(key)
+        if existing is not None:
+            return existing
+        self._element_counter += 1
+        element_id = f"elem-{self._element_counter}"
+        self._find_to_element[key] = element_id
+        self.element_attributes.setdefault(element_id, {"value": "", "selected": "false"})
+        return element_id
+
+    def click_element(self, element_id: str) -> None:
+        self.element_clicks.append(element_id)
+        attrs = self.element_attributes.setdefault(element_id, {})
+        current = attrs.get("value")
+        if current in {"0", "1", "true", "false"}:
+            attrs["value"] = "0" if current in {"1", "true"} else "1"
+
+    def clear_element(self, element_id: str) -> None:
+        self.element_clears.append(element_id)
+        attrs = self.element_attributes.setdefault(element_id, {})
+        attrs["value"] = ""
+
+    def set_element_value(self, element_id: str, text: str) -> None:
+        self.element_set_values.append((element_id, text))
+        attrs = self.element_attributes.setdefault(element_id, {})
+        attrs["value"] = text
+
+    def get_element_attribute(self, element_id: str, name: str) -> str | None:
+        attrs = self.element_attributes.get(element_id) or {}
+        value = attrs.get(name)
+        return value if isinstance(value, str) or value is None else str(value)
 
     def press(self, key: str) -> None:
         self.press_calls.append(key)
@@ -285,10 +330,131 @@ def test_ios_device_satisfies_device_driver_protocol() -> None:
     assert isinstance(cast(object, device), SupportsAppLifecycle)
     assert isinstance(cast(object, device), SupportsClose)
     assert isinstance(cast(object, device), SupportsTextClear)
+    assert isinstance(cast(object, device), SupportsElementTargetAction)
     assert isinstance(cast(object, device), SupportsSoftKeyboardDismiss)
     assert isinstance(cast(object, device), SupportsSoftKeyboardVisibility)
     assert isinstance(cast(object, device), SupportsSoftKeyboardBounds)
     assert isinstance(cast(object, device), SupportsRuntimeLogs)
+
+
+def test_ios_device_click_element_uses_accessibility_id_not_coordinates() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+
+    device.click_element({"resource_id": "continueButton", "class_name": "XCUIElementTypeButton"})
+
+    assert provider.find_calls == [("accessibility id", "continueButton")]
+    assert provider.element_clicks == ["elem-1"]
+    assert provider.tap_calls == []
+
+
+def test_ios_device_click_element_prefers_bounds_when_resource_id_and_box() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+
+    device.click_element(
+        {
+            "resource_id": "taskCheckbox",
+            "class_name": "XCUIElementTypeSwitch",
+            "box": (10, 20, 110, 64),
+        }
+    )
+
+    assert provider.find_calls == [
+        (
+            "xpath",
+            '//XCUIElementTypeSwitch[@x="10" and @y="20" and @width="100" and @height="44"]',
+        )
+    ]
+    assert provider.element_clicks == ["elem-1"]
+    assert provider.tap_calls == []
+
+
+def test_ios_device_fill_and_read_element_use_textfield_value() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+    handle = {
+        "resource_id": "titleField",
+        "class_name": "XCUIElementTypeTextField",
+        "fill_mode": "value",
+    }
+
+    device.fill_element(handle, "Hello iOS", mode="value")
+    assert device.read_element_value(handle) == "Hello iOS"
+
+    assert provider.find_calls == [
+        ("accessibility id", "titleField"),
+        ("accessibility id", "titleField"),
+    ]
+    assert provider.element_clicks == ["elem-1"]
+    assert provider.element_clears == ["elem-1"]
+    assert provider.element_set_values == [("elem-1", "Hello iOS")]
+    assert provider.tap_calls == []
+    assert provider.type_calls == []
+
+
+def test_ios_device_fill_check_mode_toggles_switch() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+    handle = {
+        "resource_id": "notifySwitch",
+        "class_name": "XCUIElementTypeSwitch",
+        "fill_mode": "check",
+    }
+    element_id = provider.find_element("accessibility id", "notifySwitch")
+    provider.element_attributes[element_id]["value"] = "0"
+    provider.find_calls.clear()
+
+    device.fill_element(handle, "true", mode="check")
+    assert device.read_element_value(handle) is True
+    assert provider.element_clicks == [element_id]
+
+
+def test_ios_device_click_element_resolves_bounds_via_xpath() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+
+    device.click_element(
+        {
+            "class_name": "XCUIElementTypeButton",
+            "box": (10, 20, 110, 64),
+        }
+    )
+
+    assert provider.find_calls == [
+        (
+            "xpath",
+            '//XCUIElementTypeButton[@x="10" and @y="20" and @width="100" and @height="44"]',
+        )
+    ]
+    assert provider.element_clicks == ["elem-1"]
+    assert provider.tap_calls == []
+
+
+def test_ios_device_element_api_fails_when_resource_missing() -> None:
+    provider = FakeWDAProvider()
+    provider.missing_find_keys.add(("accessibility id", "missing"))
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+
+    try:
+        device.click_element({"resource_id": "missing"})
+        raise AssertionError("expected ValueError")
+    except ValueError as err:
+        assert "resource_id=missing" in str(err)
+    assert provider.tap_calls == []
+
+
+def test_ios_device_element_api_fails_without_locator_fields() -> None:
+    provider = FakeWDAProvider()
+    device = IOSDevice(app_target=build_app_target(), provider=provider)
+
+    try:
+        device.click_element({"node_id": "node-0", "kind": "a11y"})
+        raise AssertionError("expected ValueError")
+    except ValueError as err:
+        assert "resource_id or box" in str(err)
+    assert provider.find_calls == []
+    assert provider.tap_calls == []
 
 
 def test_ios_device_uses_http_wda_provider_by_default() -> None:

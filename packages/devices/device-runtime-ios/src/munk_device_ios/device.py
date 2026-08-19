@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any, Protocol, cast
 
 import cv2
@@ -10,6 +11,14 @@ from munk.device import CurrentAppState, RuntimeLogEntry
 from munk.perception import ObservationTree
 from munk.perception.image import BgrImage
 
+from ._element_helpers import (
+    coerce_checkbox_desired,
+    coerce_ios_checked_value,
+    format_ios_xpath_for_box,
+    is_ios_checkable_class,
+    optional_handle_box,
+    optional_handle_text,
+)
 from .http_wda_provider import HttpWDAProvider
 from .runtime_logs import IOSLogDeviceKind, IOSLogStream, IOSRuntimeLogStream
 from .wda_provider import WDAProvider
@@ -48,6 +57,36 @@ class IOSDevice:
 
     def click(self, x: int, y: int) -> None:
         self._provider.tap(x, y)
+
+    def click_element(self, handle: Mapping[str, object]) -> None:
+        element_id = self._element_id_for_handle(handle)
+        self._provider.click_element(element_id)
+
+    def fill_element(self, handle: Mapping[str, object], text: str, *, mode: str) -> None:
+        element_id = self._element_id_for_handle(handle)
+        fill_mode = (mode or str(handle.get("fill_mode") or "value")).strip().lower()
+        if fill_mode == "check":
+            desired = coerce_checkbox_desired(text)
+            current = self._read_checked_state(element_id, handle)
+            if current is None or current != desired:
+                self._provider.click_element(element_id)
+            return
+        if fill_mode == "select":
+            raise ValueError("ios fill_element does not support mode=select")
+        self._provider.click_element(element_id)
+        self._provider.clear_element(element_id)
+        self._provider.set_element_value(element_id, text)
+
+    def read_element_value(self, handle: Mapping[str, object]) -> str | bool | None:
+        element_id = self._element_id_for_handle(handle)
+        fill_mode = str(handle.get("fill_mode") or "").strip().lower()
+        class_name = optional_handle_text(handle.get("class_name"))
+        if fill_mode == "check" or is_ios_checkable_class(class_name):
+            return self._read_checked_state(element_id, handle)
+        value = self._provider.get_element_attribute(element_id, "value")
+        if value is not None:
+            return value
+        return self._provider.get_element_attribute(element_id, "label")
 
     def long_press(self, x: int, y: int, duration: float | None = None) -> None:
         self._provider.long_press(x, y, duration_sec=duration)
@@ -179,6 +218,33 @@ class IOSDevice:
         if tree is None:
             return None
         return _find_keyboard_node(tree.payload)
+
+    def _element_id_for_handle(self, handle: Mapping[str, object]) -> str:
+        resource_id = optional_handle_text(handle.get("resource_id"))
+        class_name = optional_handle_text(handle.get("class_name"))
+        box = optional_handle_box(handle.get("box"))
+        # Prefer bounds whenever present so duplicate accessibility ids resolve
+        # to the spatially rebound target instead of the first name match.
+        if box is not None:
+            expression = format_ios_xpath_for_box(box, class_name=class_name)
+            try:
+                return self._provider.find_element("xpath", expression)
+            except Exception as err:
+                raise ValueError(f"ios element not found for bounds xpath={expression}") from err
+        if resource_id:
+            try:
+                return self._provider.find_element("accessibility id", resource_id)
+            except Exception as err:
+                raise ValueError(f"ios element not found for resource_id={resource_id}") from err
+        raise ValueError("ios element handle requires resource_id or box")
+
+    def _read_checked_state(self, element_id: str, handle: Mapping[str, object]) -> bool | None:
+        value = self._provider.get_element_attribute(element_id, "value")
+        checked = coerce_ios_checked_value(value)
+        if checked is not None:
+            return checked
+        selected = self._provider.get_element_attribute(element_id, "selected")
+        return coerce_ios_checked_value(selected)
 
 
 def _decode_png_to_bgr(payload: bytes) -> BgrImage:

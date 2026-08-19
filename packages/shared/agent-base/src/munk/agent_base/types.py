@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from munk.core.action_target_models import TargetHandle
 
 
 class ActionType(str, Enum):
@@ -9,6 +13,7 @@ class ActionType(str, Enum):
     LONG_PRESS = "long_press"
     INPUT = "input"
     EDIT_TEXT = "edit_text"
+    SET_VALUE = "set_value"
     SCROLL = "scroll"
     SWIPE = "swipe"
     DRAG = "drag"
@@ -44,10 +49,24 @@ class Action:
     distance_px: int | None = None
     dismiss_keyboard: bool | None = None
     summary: str | None = None
+    handle: TargetHandle | None = None
+    target_ref: str | None = None
 
     @staticmethod
-    def click(box: tuple[int, int, int, int], summary: str | None = None) -> "Action":
-        return Action(type=ActionType.CLICK, box=box, summary=summary)
+    def click(
+        box: tuple[int, int, int, int],
+        summary: str | None = None,
+        *,
+        handle: TargetHandle | None = None,
+        target_ref: str | None = None,
+    ) -> "Action":
+        return Action(
+            type=ActionType.CLICK,
+            box=box,
+            summary=summary,
+            handle=handle,
+            target_ref=target_ref,
+        )
 
     @staticmethod
     def click_point(point: tuple[int, int], summary: str | None = None) -> "Action":
@@ -59,8 +78,17 @@ class Action:
         *,
         duration: float | None = None,
         summary: str | None = None,
+        handle: TargetHandle | None = None,
+        target_ref: str | None = None,
     ) -> "Action":
-        return Action(type=ActionType.LONG_PRESS, box=box, duration=duration, summary=summary)
+        return Action(
+            type=ActionType.LONG_PRESS,
+            box=box,
+            duration=duration,
+            summary=summary,
+            handle=handle,
+            target_ref=target_ref,
+        )
 
     @staticmethod
     def long_press_point(
@@ -88,6 +116,8 @@ class Action:
         target_box: tuple[int, int, int, int] | None = None,
         dismiss_keyboard: bool | None = None,
         summary: str | None = None,
+        handle: TargetHandle | None = None,
+        target_ref: str | None = None,
     ) -> "Action":
         return Action(
             type=ActionType.EDIT_TEXT,
@@ -96,6 +126,25 @@ class Action:
             text_mode=mode,
             dismiss_keyboard=dismiss_keyboard,
             summary=summary,
+            handle=handle,
+            target_ref=target_ref,
+        )
+
+    @staticmethod
+    def set_value(
+        *,
+        value: str,
+        handle: TargetHandle,
+        target_ref: str,
+        summary: str | None = None,
+    ) -> "Action":
+        return Action(
+            type=ActionType.SET_VALUE,
+            box=handle.box,
+            text=value,
+            summary=summary,
+            handle=handle,
+            target_ref=target_ref,
         )
 
     @staticmethod

@@ -28,7 +28,7 @@ describe('App entry', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Munk AI')
+    expect(wrapper.text()).toContain('Munk Test')
     expect(wrapper.text()).toContain('Dashboard')
     expect(wrapper.text()).toContain('Devices')
     expect(wrapper.text()).toContain('Tests')

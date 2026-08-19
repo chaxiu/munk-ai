@@ -18,6 +18,7 @@ SCROLL_UNTIL_TEXT_NOT_FOUND_ERROR = "text_not_found_after_scroll_attempts"
 SCROLL_UNTIL_TEXT_STAGNATED_ERROR = "scroll_stagnated_before_text_match"
 HIGH_LEVEL_ACTION_TYPES = {
     ActionType.EDIT_TEXT,
+    ActionType.SET_VALUE,
     ActionType.DISMISS_SOFT_KEYBOARD,
     ActionType.RESTART_APP,
     ActionType.WAIT_FOR_TEXT,

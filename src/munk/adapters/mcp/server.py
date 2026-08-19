@@ -57,7 +57,7 @@ def build_mcp_tools(*, client: Any) -> dict[str, Callable[..., Any]]:
 
 def create_mcp_server(
     *,
-    machine_service_factory: Callable[[], MachineCommandService],
+    machine_service_factory: Callable[[], MachineCommandService] | None = None,
     doctor_service_factory: Callable[[], DoctorService] | None = None,
     app_service_factory: Callable[[], AppAssetService] | None = None,
     plan_store_factory: Callable[[], PlanStore] | None = None,
@@ -80,10 +80,12 @@ def create_mcp_server(
         importlib.import_module("mcp.server.transport_security"),
         "TransportSecuritySettings",
     )
-    handlers = (
-        handlers_factory()
-        if handlers_factory is not None
-        else McpToolHandlers(
+    if handlers_factory is not None:
+        handlers = handlers_factory()
+    else:
+        if machine_service_factory is None:
+            raise ValueError("machine_service_factory is required when handlers_factory is omitted")
+        handlers = McpToolHandlers(
             machine_service_factory=machine_service_factory,
             doctor_service_factory=doctor_service_factory,
             app_service_factory=app_service_factory,
@@ -91,7 +93,6 @@ def create_mcp_server(
             operation_registry_factory=operation_registry_factory,
             workspace_root=workspace_root,
         )
-    )
     allowed_hosts = [host, f"{host}:{port}"]
     if host == "127.0.0.1":
         allowed_hosts.extend(["localhost", f"localhost:{port}"])

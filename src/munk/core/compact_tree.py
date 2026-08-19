@@ -52,6 +52,17 @@ def compact_tree_node(
     role = node.get("semantic_role")
     if role:
         payload["role"] = role
+    for key, compact_key in (
+        ("input_type", "input_type"),
+        ("dom_name", "name"),
+        ("dom_value", "value"),
+        ("test_id", "test_id"),
+    ):
+        value = node.get(key)
+        if value is not None and str(value).strip() != "":
+            payload[compact_key] = value
+        elif key == "dom_value" and value is not None:
+            payload[compact_key] = value
     matched_visual_ids = node.get("matched_visual_ids")
     if isinstance(matched_visual_ids, list) and matched_visual_ids:
         payload["visual_ids"] = list(matched_visual_ids)
@@ -66,7 +77,7 @@ def sparse_state_fields(raw_item: object, *, platform: str | None = None) -> dic
 
 
 def compact_node_label(node: Mapping[str, object]) -> str | None:
-    for key in ("txt", "cd", "rid", "role", "cls", "id"):
+    for key in ("txt", "cd", "rid", "role", "cls", "id", "name"):
         value = node.get(key)
         if value is None:
             continue
@@ -112,6 +123,10 @@ def _normalize_tree_node(raw_item: object) -> dict[str, object] | None:
             "scrollable": raw_item.scrollable,
             "semantic_role": raw_item.semantic_role,
             "matched_visual_ids": list(raw_item.matched_visual_ids),
+            "input_type": raw_item.input_type,
+            "dom_name": raw_item.dom_name,
+            "dom_value": raw_item.dom_value,
+            "test_id": raw_item.test_id,
         }
     if isinstance(raw_item, dict):
         return cast(dict[str, object], raw_item)

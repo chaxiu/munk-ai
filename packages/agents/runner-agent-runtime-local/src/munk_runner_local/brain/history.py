@@ -14,6 +14,13 @@ def action_history_detail(action: Action) -> str | None:
         if action.dismiss_keyboard is not None:
             detail = f"{detail} dismiss_keyboard={str(action.dismiss_keyboard).lower()}"
         return detail
+    if action.type == ActionType.SET_VALUE and action.text:
+        detail = f"value={action.text!r}"
+        if action.target_ref is not None:
+            detail = f"{detail} target_ref={action.target_ref}"
+        if action.handle is not None and action.handle.fill_mode is not None:
+            detail = f"{detail} fill_mode={action.handle.fill_mode}"
+        return detail
     if action.type == ActionType.LONG_PRESS:
         if action.duration is not None:
             return f"duration={action.duration:g}"
@@ -65,6 +72,8 @@ def canonical_action_summary(action: Action) -> str:
     if action.type in {ActionType.INPUT, ActionType.EDIT_TEXT} and action.text:
         prefix = "edit_text" if action.type == ActionType.EDIT_TEXT else "input"
         return f"{prefix} | {action.text}"
+    if action.type == ActionType.SET_VALUE and action.text:
+        return f"set_value | {action.text}"
     if action.type == ActionType.CLICK:
         return "click"
     if action.type == ActionType.LONG_PRESS:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+from mcp.types import CallToolResult
 from pydantic import Field
 
 from munk.adapters.mcp.device_tool_handlers import DeviceMcpToolHandlers
@@ -10,49 +11,47 @@ from munk.adapters.mcp.device_tool_models import (
     AppInstallInput,
     AppLaunchInput,
     AppStopInput,
+    DevicesListInput,
     DeviceStateInput,
     DeviceUnlockInput,
-    DevicesListInput,
     SessionAbortInput,
     SessionActInput,
     SessionActionInput,
     SessionFinalizeInput,
     SessionGetInput,
+    SessionListTargetsInput,
     SessionObserveInput,
     SessionsListInput,
     SessionStartInput,
 )
 from munk.adapters.mcp.device_tool_outputs import (
     AppLifecycleOutput,
+    DevicesListOutput,
     DeviceStateOutput,
     DeviceUnlockOutput,
-    DevicesListOutput,
     SessionAbortOutput,
     SessionActOutput,
     SessionFinalizeOutput,
     SessionGetOutput,
+    SessionListTargetsOutput,
     SessionObserveOutput,
     SessionsListOutput,
     SessionStartOutput,
 )
+from munk.adapters.mcp.device_tool_results import build_session_observe_call_tool_result
 
 
-def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None:
+def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None:  # noqa: C901
     @mcp.tool(
         name="devices_list",
         title="List Devices",
-        description=(
-            "List discovered local devices for a platform or across all supported runtimes.\n"
-            "Use this before starting an interactive session when you need to inspect device availability.\n"
-            "Returns the canonical discovered device payload.\n"
-            "Does not claim or reserve any device."
-        ),
+        description="List discovered local devices. Optional platform filter.",
         structured_output=True,
     )
     def devices_list(
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional platform filter: android, ios, or web."),
+            Field(description="Optional platform filter."),
         ] = None,
     ) -> DevicesListOutput:
         return handlers.devices_list(DevicesListInput(platform=platform))
@@ -60,19 +59,14 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="device_state",
         title="Get Device State",
-        description=(
-            "Load the current state of one discovered device.\n"
-            "Use this before device_unlock or other device actions when the agent needs lock, screen, and automation readiness signals.\n"
-            "Returns the canonical device-state payload.\n"
-            "Does not claim the device, launch apps, or create a session."
-        ),
+        description="Read lock, screen, and automation readiness for one device.",
         structured_output=True,
     )
     def device_state(
-        device_ref: Annotated[str, Field(description="Target device reference to inspect.")],
+        device_ref: Annotated[str, Field(description="Device reference.")],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform filter used to disambiguate the device reference."),
+            Field(description="Optional platform disambiguator."),
         ] = None,
     ) -> DeviceStateOutput:
         return handlers.device_state(DeviceStateInput(device_ref=device_ref, platform=platform))
@@ -80,23 +74,18 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="device_unlock",
         title="Unlock Device",
-        description=(
-            "Attempt to unlock one device explicitly.\n"
-            "Use this when the agent needs a direct unlock step instead of relying on app_launch side effects; V1 supports Android swipe only.\n"
-            "Returns before and after device-state payloads together with the unlock result.\n"
-            "Does not launch apps, create a session, or hide unsupported strategies."
-        ),
+        description="Unlock one device. V1: Android swipe only.",
         structured_output=True,
     )
     def device_unlock(
-        device_ref: Annotated[str, Field(description="Target device reference to unlock.")],
+        device_ref: Annotated[str, Field(description="Device reference.")],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform filter used to disambiguate the device reference."),
+            Field(description="Optional platform disambiguator."),
         ] = None,
         strategy: Annotated[
             Literal["swipe"],
-            Field(description="Device unlock strategy. V1 supports swipe only."),
+            Field(description="Unlock strategy. V1: swipe only."),
         ] = "swipe",
     ) -> DeviceUnlockOutput:
         return handlers.device_unlock(DeviceUnlockInput(device_ref=device_ref, platform=platform, strategy=strategy))
@@ -104,29 +93,24 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="app_launch",
         title="Launch App",
-        description=(
-            "Launch one application directly on a target device or runtime.\n"
-            "Use this when an external agent needs to open or reset an app outside interactive session mode.\n"
-            "Returns the resolved app identity and lifecycle action summary.\n"
-            "Does not create a session, claim a device, or start an operation."
-        ),
+        description="Launch an app outside an interactive session.",
         structured_output=True,
     )
     def app_launch(
-        app_id: Annotated[str, Field(description="Application identifier associated with the lifecycle action.")],
+        app_id: Annotated[str, Field(description="App identifier.")],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform override used to derive the app target."),
+            Field(description="Optional platform override."),
         ] = None,
-        device_ref: Annotated[str | None, Field(description="Optional target device reference.")] = None,
-        package: Annotated[str | None, Field(description="Optional Android package name override.")] = None,
-        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle identifier override.")] = None,
-        base_url: Annotated[str | None, Field(description="Optional web base URL override.")] = None,
-        origin: Annotated[str | None, Field(description="Optional web origin override.")] = None,
-        headless: Annotated[bool, Field(description="Whether to launch the web runtime headlessly.")] = False,
+        device_ref: Annotated[str | None, Field(description="Optional device reference.")] = None,
+        package: Annotated[str | None, Field(description="Optional Android package.")] = None,
+        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle id.")] = None,
+        base_url: Annotated[str | None, Field(description="Optional web base URL.")] = None,
+        origin: Annotated[str | None, Field(description="Optional web origin.")] = None,
+        headless: Annotated[bool, Field(description="Launch web runtime headlessly.")] = False,
         assets_root: Annotated[
             str | None,
-            Field(description="Optional assets root containing apps/ and plans/ for app target resolution."),
+            Field(description="Optional assets root (apps/, plans/)."),
         ] = None,
     ) -> AppLifecycleOutput:
         return handlers.app_launch(
@@ -146,29 +130,24 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="app_stop",
         title="Stop App",
-        description=(
-            "Stop one application directly on a target device or runtime.\n"
-            "Use this when an external agent needs to terminate an app outside interactive session mode.\n"
-            "Returns the resolved app identity and lifecycle action summary.\n"
-            "Does not create a session, claim a device, or start an operation."
-        ),
+        description="Stop an app outside an interactive session.",
         structured_output=True,
     )
     def app_stop(
-        app_id: Annotated[str, Field(description="Application identifier associated with the lifecycle action.")],
+        app_id: Annotated[str, Field(description="App identifier.")],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform override used to derive the app target."),
+            Field(description="Optional platform override."),
         ] = None,
-        device_ref: Annotated[str | None, Field(description="Optional target device reference.")] = None,
-        package: Annotated[str | None, Field(description="Optional Android package name override.")] = None,
-        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle identifier override.")] = None,
-        base_url: Annotated[str | None, Field(description="Optional web base URL override.")] = None,
-        origin: Annotated[str | None, Field(description="Optional web origin override.")] = None,
-        headless: Annotated[bool, Field(description="Whether to launch the web runtime headlessly.")] = False,
+        device_ref: Annotated[str | None, Field(description="Optional device reference.")] = None,
+        package: Annotated[str | None, Field(description="Optional Android package.")] = None,
+        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle id.")] = None,
+        base_url: Annotated[str | None, Field(description="Optional web base URL.")] = None,
+        origin: Annotated[str | None, Field(description="Optional web origin.")] = None,
+        headless: Annotated[bool, Field(description="Launch web runtime headlessly.")] = False,
         assets_root: Annotated[
             str | None,
-            Field(description="Optional assets root containing apps/ and plans/ for app target resolution."),
+            Field(description="Optional assets root (apps/, plans/)."),
         ] = None,
     ) -> AppLifecycleOutput:
         return handlers.app_stop(
@@ -188,33 +167,28 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="app_install",
         title="Install App",
-        description=(
-            "Install one application artifact directly on a target device.\n"
-            "Use this before launch when the runtime supports installation; V1 schema is cross-platform but Android APK is the primary supported path, and artifact_path is a host workspace path that Android stages to /data/local/tmp before pm install.\n"
-            "Returns the resolved app identity, artifact path, and lifecycle action summary.\n"
-            "Does not create a session, claim a device, or start an operation."
-        ),
+        description="Install an app artifact. V1 Android-primary (package + artifact_path); web fields not accepted.",
         structured_output=True,
     )
     def app_install(
-        app_id: Annotated[str, Field(description="Application identifier associated with the lifecycle action.")],
+        app_id: Annotated[str, Field(description="App identifier.")],
         artifact_path: Annotated[
             str,
-            Field(description="Host workspace path to the application artifact to install. Android runtime stages it to a device tmp path before install."),
+            Field(description="Host path to the install artifact."),
         ],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform override used to derive the app target."),
+            Field(description="Optional platform override. V1 install is Android-primary."),
         ] = None,
-        device_ref: Annotated[str | None, Field(description="Optional target device reference.")] = None,
-        package: Annotated[str | None, Field(description="Optional Android package name override.")] = None,
-        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle identifier override.")] = None,
-        base_url: Annotated[str | None, Field(description="Optional web base URL override.")] = None,
-        origin: Annotated[str | None, Field(description="Optional web origin override.")] = None,
-        headless: Annotated[bool, Field(description="Whether to launch the web runtime headlessly.")] = False,
+        device_ref: Annotated[str | None, Field(description="Optional device reference.")] = None,
+        package: Annotated[str | None, Field(description="Optional Android package.")] = None,
+        bundle_id: Annotated[
+            str | None,
+            Field(description="Optional iOS bundle id (not V1 primary)."),
+        ] = None,
         assets_root: Annotated[
             str | None,
-            Field(description="Optional assets root containing apps/ and plans/ for app target resolution."),
+            Field(description="Optional assets root (apps/, plans/)."),
         ] = None,
     ) -> AppLifecycleOutput:
         return handlers.app_install(
@@ -225,9 +199,6 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
                 device_ref=device_ref,
                 package=package,
                 bundle_id=bundle_id,
-                base_url=base_url,
-                origin=origin,
-                headless=headless,
                 assets_root=Path(assets_root) if assets_root is not None else None,
             )
         )
@@ -236,28 +207,27 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         name="session_start",
         title="Start Session",
         description=(
-            "Start one in-memory interactive device session.\n"
-            "Use this when an external agent wants to iteratively observe and act on a device target; for Android, package is an optional override and session_start falls back to the app asset config when available.\n"
-            "Returns the created session summary including session_id and expiry metadata.\n"
-            "Does not create operations, artifacts, or persistent session storage."
+            "Start an interactive session (debug clients). "
+            "Auto smoke should use Local API POST /v1/interactive/sessions. "
+            "Conflicts include JSON recovery guidance."
         ),
         structured_output=True,
     )
     def session_start(
-        app_id: Annotated[str, Field(description="Application identifier associated with the interactive session.")],
+        app_id: Annotated[str, Field(description="App identifier.")],
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional explicit platform override used to derive the app target."),
+            Field(description="Optional platform override."),
         ] = None,
-        device_ref: Annotated[str | None, Field(description="Optional device reference to claim for the session.")] = None,
-        package: Annotated[str | None, Field(description="Optional Android package name override.")] = None,
-        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle identifier override.")] = None,
-        base_url: Annotated[str | None, Field(description="Optional web base URL override.")] = None,
-        origin: Annotated[str | None, Field(description="Optional web origin override.")] = None,
-        headless: Annotated[bool, Field(description="Whether to launch the web runtime headlessly.")] = False,
+        device_ref: Annotated[str | None, Field(description="Optional device to claim.")] = None,
+        package: Annotated[str | None, Field(description="Optional Android package.")] = None,
+        bundle_id: Annotated[str | None, Field(description="Optional iOS bundle id.")] = None,
+        base_url: Annotated[str | None, Field(description="Optional web base URL.")] = None,
+        origin: Annotated[str | None, Field(description="Optional web origin.")] = None,
+        headless: Annotated[bool, Field(description="Launch web runtime headlessly.")] = False,
         config_path: Annotated[
             str | None,
-            Field(description="Optional path to an existing config file in the workspace."),
+            Field(description="Optional workspace config path."),
         ] = None,
     ) -> SessionStartOutput:
         resolved_config_path = Path(config_path) if config_path is not None else None
@@ -280,42 +250,32 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="session_get",
         title="Get Session",
-        description=(
-            "Load the current state of one interactive session by session_id.\n"
-            "Use this to inspect status, expiry, and last observation summary between steps.\n"
-            "Returns the canonical in-memory session summary.\n"
-            "Does not capture a fresh observation or mutate the session."
-        ),
+        description="Load one interactive session by session_id.",
         structured_output=True,
     )
     def session_get(
-        session_id: Annotated[str, Field(description="Interactive session identifier.")],
+        session_id: Annotated[str, Field(description="Session id.")],
     ) -> SessionGetOutput:
         return handlers.session_get(SessionGetInput(session_id=session_id))
 
     @mcp.tool(
         name="sessions_list",
         title="List Sessions",
-        description=(
-            "List active interactive sessions for recovery and troubleshooting.\n"
-            "Use this when session_start reports a conflict or when an agent needs to resume an existing session.\n"
-            "Returns active interactive session summaries with expiry and observation context.\n"
-            "Does not include completed session history."
-        ),
+        description="List active interactive sessions for recovery.",
         structured_output=True,
     )
     def sessions_list(
         platform: Annotated[
             Literal["android", "ios", "web"] | None,
-            Field(description="Optional platform filter for active interactive sessions."),
+            Field(description="Optional platform filter."),
         ] = None,
         device_ref: Annotated[
             str | None,
-            Field(description="Optional device reference filter for active interactive sessions."),
+            Field(description="Optional device filter."),
         ] = None,
         app_id: Annotated[
             str | None,
-            Field(description="Optional app identifier filter for active interactive sessions."),
+            Field(description="Optional app filter."),
         ] = None,
     ) -> SessionsListOutput:
         return handlers.sessions_list(
@@ -330,30 +290,63 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         name="session_observe",
         title="Observe Session",
         description=(
-            "Capture one fresh observation for an interactive session.\n"
-            "Use this when the agent needs the latest screen summary and action targets before deciding the next step.\n"
-            "Returns the updated session summary and a compact observation payload by default; use detail=full for the complete payload.\n"
-            "Set include_screenshot=true to include the same-frame observation screenshot as a saved PNG path using the session's default vl_max_side.\n"
-            "Does not execute any action."
+            "Capture a fresh observation with Runner-style targets_text (#vN/#tN). "
+            "If truncated, page via session_list_targets on the same snapshot. "
+            "Optional match bypass; include_screenshot=true returns an MCP image block."
         ),
         structured_output=True,
     )
     def session_observe(
-        session_id: Annotated[str, Field(description="Interactive session identifier to observe.")],
-        detail: Annotated[
-            Literal["compact", "full"],
-            Field(description="Observation payload detail level. compact is the default agent-facing mode; full returns the complete payload."),
-        ] = "compact",
+        session_id: Annotated[str, Field(description="Session id.")],
+        match: Annotated[
+            str | None,
+            Field(description="Keyword bypass hit region; does not rewrite targets_text."),
+        ] = None,
         include_screenshot: Annotated[
             bool,
-            Field(description="Whether to include the current observation screenshot as a saved PNG path. Disabled by default."),
+            Field(description="Return an MCP image block (vision). Default false."),
         ] = False,
-    ) -> SessionObserveOutput:
-        return handlers.session_observe(
-            SessionObserveInput(
+    ) -> Annotated[CallToolResult, SessionObserveOutput]:
+        return build_session_observe_call_tool_result(
+            handlers.session_observe(
+                SessionObserveInput(
+                    session_id=session_id,
+                    match=match,
+                    include_screenshot=include_screenshot,
+                )
+            )
+        )
+
+    @mcp.tool(
+        name="session_list_targets",
+        title="List Session Targets",
+        description=(
+            "Page targets from the last observation without re-capturing. "
+            "Requires prior session_observe."
+        ),
+        structured_output=True,
+    )
+    def session_list_targets(
+        session_id: Annotated[
+            str,
+            Field(description="Session id."),
+        ],
+        source: Annotated[
+            Literal["all", "vision", "tree"],
+            Field(description="Channel filter. all applies offset/limit per channel."),
+        ] = "all",
+        offset: Annotated[int, Field(description="Pagination offset per channel.", ge=0)] = 0,
+        limit: Annotated[
+            int | None,
+            Field(description="Page size. Default 40."),
+        ] = None,
+    ) -> SessionListTargetsOutput:
+        return handlers.session_list_targets(
+            SessionListTargetsInput(
                 session_id=session_id,
-                detail=detail,
-                include_screenshot=include_screenshot,
+                source=source,
+                offset=offset,
+                limit=limit,
             )
         )
 
@@ -361,31 +354,23 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
         name="session_act",
         title="Act Session",
         description=(
-            "Execute one allowed action inside an interactive session.\n"
-            "Use this after an explicit observe step; prefer target_id from the latest session_observe result, with resource_id or label as fallbacks.\n"
-            "Returns a diff summary by default; use detail=compact for post-action targets or detail=full for complete before and after observations, and optionally override the short post-action settle window before after is captured.\n"
-            "Canonical example: {\"action\":{\"type\":\"click\",\"target_id\":12}}. Long-press example: {\"action\":{\"type\":\"long_press\",\"target_id\":12,\"duration\":1.2}}. Shorthand examples: {\"action\":{\"click\":12}}, {\"action\":{\"back\":true}}, {\"action\":{\"wait\":1.5}}.\n"
-            "Does not run autonomous loops, retries, or judge-based convergence; box and point remain available as manual escape hatches."
+            "Execute one action after observe. Prefer #vN/#tN from targets_text or match.match_text. "
+            "set_value needs tN + value; edit_text uses text. Returns a fixed summary."
         ),
         structured_output=True,
     )
     def session_act(
-        session_id: Annotated[str, Field(description="Interactive session identifier to act on.")],
-        action: Annotated[SessionActionInput, Field(description="One allowed interactive action request.")],
-        detail: Annotated[
-            Literal["summary", "compact", "full"],
-            Field(description="Action result payload detail level. summary is the default agent-facing mode; compact returns post-action targets and full returns complete before/after observations."),
-        ] = "summary",
+        session_id: Annotated[str, Field(description="Session id.")],
+        action: Annotated[SessionActionInput, Field(description="One action request.")],
         timeout_sec: Annotated[
             float | None,
-            Field(description="Optional post-action timeout in seconds while waiting for the screen to settle. Defaults to 6.0 for interactive sessions."),
+            Field(description="Post-action settle timeout seconds. Default 6."),
         ] = None,
     ) -> SessionActOutput:
         return handlers.session_act(
             SessionActInput(
                 session_id=session_id,
                 action=action,
-                detail=detail,
                 timeout_sec=timeout_sec,
             )
         )
@@ -393,32 +378,22 @@ def register_device_mcp_tools(mcp: Any, handlers: DeviceMcpToolHandlers) -> None
     @mcp.tool(
         name="session_finalize",
         title="Finalize Session",
-        description=(
-            "Finalize one interactive session and build a transcript summary.\n"
-            "Use this when the external agent is done with the device exploration loop.\n"
-            "Returns the finalized session summary and transcript step summaries.\n"
-            "Does not write reports, artifacts, or operation records."
-        ),
+        description="Finalize a session and return a transcript summary.",
         structured_output=True,
     )
     def session_finalize(
-        session_id: Annotated[str, Field(description="Interactive session identifier to finalize.")],
-        summary: Annotated[str | None, Field(description="Optional agent-authored summary attached to finalize result.")] = None,
+        session_id: Annotated[str, Field(description="Session id.")],
+        summary: Annotated[str | None, Field(description="Optional agent summary.")] = None,
     ) -> SessionFinalizeOutput:
         return handlers.session_finalize(SessionFinalizeInput(session_id=session_id, summary=summary))
 
     @mcp.tool(
         name="session_abort",
         title="Abort Session",
-        description=(
-            "Abort one active interactive session.\n"
-            "Use this when the device loop should stop without producing a finalize transcript.\n"
-            "Returns the aborted session summary.\n"
-            "Does not persist the session or produce operation artifacts."
-        ),
+        description="Abort a session without a finalize transcript.",
         structured_output=True,
     )
     def session_abort(
-        session_id: Annotated[str, Field(description="Interactive session identifier to abort.")],
+        session_id: Annotated[str, Field(description="Session id.")],
     ) -> SessionAbortOutput:
         return handlers.session_abort(SessionAbortInput(session_id=session_id))

@@ -11,13 +11,21 @@ from munk.agent_base.action.high_level import (
     uses_high_level_execution,
 )
 from munk.agent_base.action.high_level_common import from_atomic_result
-from munk.agent_base.base import ActionFeedback, ObservationSnapshotSource, RuntimeObservationSnapshot, ScreenState
+from munk.agent_base.base import (
+    ActionFeedback,
+    ActionFeedbackValue,
+    ObservationSnapshotSource,
+    RuntimeObservationSnapshot,
+    ScreenState,
+)
 from munk.core import map_action_to_device
 from munk.services.events import (
     ActionExecutedEvent,
     ActionExecutionFailedEvent,
     ActionExecutionStartedEvent,
     RunEventSink,
+    RunStoppedEvent,
+    build_run_stopped_event_payload,
     build_runner_action_event_payload,
 )
 from munk.services.models import RunnerKernelResult
@@ -37,6 +45,15 @@ from .loop_step_planning import (
     prepare_step_action,
 )
 from .loop_support import begin_step_logs, finish_step_logs, safe_app_state, summarize_action
+from .postcheck_loop_guard import (
+    POSTCHECK_FAILURE_THRESHOLD_ERROR,
+    POSTCHECK_FAILURE_WARNING_CODE,
+    PostcheckFailureTrackingState,
+    build_postcheck_failure_advice,
+    should_stop_for_postcheck_failures,
+    should_warn_for_postcheck_failures,
+    update_postcheck_failure_state,
+)
 
 RECOVERABLE_SCROLL_UNTIL_TEXT_ERRORS = {
     SCROLL_UNTIL_TEXT_NOT_FOUND_ERROR,
@@ -78,6 +95,7 @@ def execute_run_loop(
     last_target_identity: str | None = None
     last_surface_identity: str | None = None
     no_effect_state = NoEffectTrackingState()
+    postcheck_failure_state = PostcheckFailureTrackingState()
 
     logger.info(
         "runner_case case_id=%s title=%s",
@@ -223,6 +241,29 @@ def execute_run_loop(
             summarize_action(normalized_action),
             settle_result.status,
         )
+        postcheck_failure_state = update_postcheck_failure_state(
+            postcheck_failure_state,
+            action=action,
+            postcheck_passed=execution.postcheck_passed,
+            postcheck_summary=execution.postcheck_summary,
+        )
+        postcheck_extra_fields: tuple[tuple[str, ActionFeedbackValue], ...] = ()
+        if should_warn_for_postcheck_failures(postcheck_failure_state):
+            advice = build_postcheck_failure_advice(postcheck_failure_state.identity)
+            postcheck_extra_fields = (
+                ("warning_code", POSTCHECK_FAILURE_WARNING_CODE),
+                ("consecutive_postcheck_failure_count", postcheck_failure_state.count),
+                ("postcheck_summary", postcheck_failure_state.last_summary or ""),
+                ("advice", advice),
+            )
+            logger.warning(
+                "step=%s same_target_postcheck_failure identity=%s count=%s summary=%s advice=%s",
+                step_index,
+                postcheck_failure_state.identity,
+                postcheck_failure_state.count,
+                postcheck_failure_state.last_summary,
+                advice,
+            )
         previous_screen = prepared.screen
         previous_action = action
         previous_action_feedback = augment_runner_action_feedback(
@@ -230,6 +271,7 @@ def execute_run_loop(
             feedback=build_runner_action_feedback(normalized_action),
             duration_ms=execution.duration_ms,
             changes=settle_result.changes,
+            extra_fields=postcheck_extra_fields,
         )
 
         current_app_state = safe_app_state(context)
@@ -239,6 +281,23 @@ def execute_run_loop(
             target_identity=current_app_state.entry_identity if current_app_state is not None else None,
             surface_identity=current_app_state.surface_identity if current_app_state is not None else None,
         )
+        if should_stop_for_postcheck_failures(postcheck_failure_state):
+            advice = build_postcheck_failure_advice(postcheck_failure_state.identity)
+            _publish_postcheck_failure_threshold_stop(
+                event_sink=event_sink,
+                step_index=step_index,
+                action=action,
+                state=postcheck_failure_state,
+                advice=advice,
+            )
+            return build_run_result(
+                step_index=step_index + 1,
+                stop_reason=POSTCHECK_FAILURE_THRESHOLD_ERROR,
+                status="incomplete",
+                last_action_summary=last_action_summary,
+                last_target_identity=last_target_identity,
+                last_surface_identity=last_surface_identity,
+            )
         result = context.monitor.on_step(current_app_state or context.device.app_current())
         if result.should_stop:
             logger.info("run stopped: %s", result.reason)
@@ -253,6 +312,36 @@ def execute_run_loop(
             )
 
         step_index += 1
+
+
+def _publish_postcheck_failure_threshold_stop(
+    *,
+    event_sink: RunEventSink | None,
+    step_index: int,
+    action: Action,
+    state: PostcheckFailureTrackingState,
+    advice: str,
+) -> None:
+    if event_sink is None:
+        return
+    event_sink(
+        RunStoppedEvent(
+            message=(
+                f"run stopped after same-target postcheck failure threshold at step {step_index}: "
+                f"identity={state.identity} count={state.count}"
+            ),
+            data=build_run_stopped_event_payload(
+                step=step_index,
+                action=action.type.value,
+                summary=action.summary,
+                reason=POSTCHECK_FAILURE_THRESHOLD_ERROR,
+                warning_code=POSTCHECK_FAILURE_WARNING_CODE,
+                consecutive_postcheck_failure_count=state.count,
+                postcheck_summary=state.last_summary,
+                advice=advice,
+            ),
+        )
+    )
 
 
 def _log_selected_action(

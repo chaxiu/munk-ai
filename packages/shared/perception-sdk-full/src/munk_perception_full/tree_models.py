@@ -20,6 +20,10 @@ class ParsedTreeNode:
     selected: bool = False
     scrollable: bool = False
     semantic_role: str | None = None
+    input_type: str | None = None
+    dom_name: str | None = None
+    dom_value: str | None = None
+    test_id: str | None = None
 
 
 def summarize_tree_nodes(nodes: list[ParsedTreeNode]) -> str:

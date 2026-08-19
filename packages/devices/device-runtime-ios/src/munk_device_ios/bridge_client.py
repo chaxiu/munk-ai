@@ -176,6 +176,57 @@ class IOSBridgeClient:
     def clear_text(self) -> None:
         self._request("POST", f"/sessions/{self._session.session_id}/device/clear-text")
 
+    def find_element(self, using: str, value: str) -> str:
+        payload = self._request(
+            "POST",
+            f"/sessions/{self._session.session_id}/device/find-element",
+            json={"using": using, "value": value},
+        )
+        data = cast(dict[str, Any], payload.get("data") or {})
+        element_id = data.get("element_id")
+        if not isinstance(element_id, str) or not element_id.strip():
+            raise IOSBridgeClientError("ios bridge find-element response missing element_id")
+        return element_id
+
+    def click_element(self, element_id: str) -> None:
+        self._request(
+            "POST",
+            f"/sessions/{self._session.session_id}/device/click-element",
+            json={"element_id": element_id},
+        )
+
+    def clear_element(self, element_id: str) -> None:
+        self._request(
+            "POST",
+            f"/sessions/{self._session.session_id}/device/clear-element",
+            json={"element_id": element_id},
+        )
+
+    def set_element_value(self, element_id: str, text: str) -> None:
+        self._request(
+            "POST",
+            f"/sessions/{self._session.session_id}/device/set-element-value",
+            json={"element_id": element_id, "text": text},
+        )
+
+    def get_element_attribute(self, element_id: str, name: str) -> str | None:
+        payload = self._request(
+            "POST",
+            f"/sessions/{self._session.session_id}/device/get-element-attribute",
+            json={"element_id": element_id, "name": name},
+        )
+        data = cast(dict[str, Any], payload.get("data") or {})
+        value = data.get("value")
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, str):
+            return value
+        return None
+
     def press(self, key: str) -> None:
         self._request("POST", f"/sessions/{self._session.session_id}/device/press", json={"key": key})
 

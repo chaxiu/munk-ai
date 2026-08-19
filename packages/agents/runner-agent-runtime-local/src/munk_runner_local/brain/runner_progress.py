@@ -4,7 +4,7 @@ import re
 
 from munk.agent_base.base import ActionHistoryEntry, ScreenState
 
-_TEXT_DETAIL_RE = re.compile(r"text=(?P<quote>['\"])(?P<value>.*?)(?P=quote)")
+_TEXT_DETAIL_RE = re.compile(r"(?:text|value)=(?P<quote>['\"])(?P<value>.*?)(?P=quote)")
 
 
 def build_goal_progress_summary(entries: list[ActionHistoryEntry], screen: ScreenState) -> str:
@@ -60,7 +60,7 @@ def _latest_outcome_summary(entries: list[ActionHistoryEntry]) -> str:
 def _recent_input_texts(entries: list[ActionHistoryEntry]) -> list[str]:
     texts: list[str] = []
     for entry in reversed(entries):
-        if entry.action_type not in {"input", "edit_text"}:
+        if entry.action_type not in {"input", "edit_text", "set_value"}:
             continue
         if not entry.detail:
             continue

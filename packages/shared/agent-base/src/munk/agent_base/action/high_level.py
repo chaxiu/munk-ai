@@ -62,6 +62,8 @@ class HighLevelActionService:
         try:
             if action.type == ActionType.EDIT_TEXT:
                 result = self._input_handler.execute_edit_text(action, screen, capture_observation)
+            elif action.type == ActionType.SET_VALUE:
+                result = self._input_handler.execute_set_value(action, capture_observation)
             elif action.type == ActionType.DISMISS_SOFT_KEYBOARD:
                 result = self._input_handler.execute_dismiss_soft_keyboard(
                     action,

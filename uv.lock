@@ -1845,7 +1845,7 @@ wheels = [
 
 [[package]]
 name = "munk"
-version = "0.34.0b1"
+version = "0.34.0"
 source = { editable = "." }
 dependencies = [
     { name = "croniter" },

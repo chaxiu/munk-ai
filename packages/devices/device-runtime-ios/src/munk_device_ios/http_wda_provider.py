@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import httpx
 
+from ._element_helpers import parse_wda_attribute_value, parse_wda_element_id
 from .wda_provider import WDAAccessibilityTree, WDAAppState
 
 
@@ -68,7 +69,27 @@ class HttpWDAProvider:
 
     def clear_text(self) -> None:
         element_id = self._active_element_id()
+        self.clear_element(element_id)
+
+    def find_element(self, using: str, value: str) -> str:
+        payload = self._session_request("POST", "/element", json={"using": using, "value": value})
+        try:
+            return parse_wda_element_id(payload)
+        except ValueError as err:
+            raise ValueError(f"WDA element not found for using={using!r} value={value!r}") from err
+
+    def click_element(self, element_id: str) -> None:
+        self._session_request("POST", f"/element/{element_id}/click")
+
+    def clear_element(self, element_id: str) -> None:
         self._session_request("POST", f"/element/{element_id}/clear")
+
+    def set_element_value(self, element_id: str, text: str) -> None:
+        self._session_request("POST", f"/element/{element_id}/value", json={"value": list(text)})
+
+    def get_element_attribute(self, element_id: str, name: str) -> str | None:
+        payload = self._session_request("GET", f"/element/{element_id}/attribute/{name}")
+        return parse_wda_attribute_value(payload)
 
     def press(self, key: str) -> None:
         normalized = key.strip().lower()
@@ -163,16 +184,7 @@ class HttpWDAProvider:
 
     def _active_element_id(self) -> str:
         payload = self._session_request("GET", "/element/active")
-        value = payload.get("value")
-        if not isinstance(value, dict):
-            raise ValueError("WDA active element response missing value object")
-        value_dict = cast(dict[str, Any], value)
-        element_id = _read_string(value_dict, "element-6066-11e4-a52e-4f735466cecf")
-        if element_id is None:
-            element_id = _read_string(value_dict, "ELEMENT")
-        if element_id is None:
-            raise ValueError("WDA active element response missing element identifier")
-        return element_id
+        return parse_wda_element_id(payload)
 
     def _delete_session(self, session_id: str) -> None:
         try:

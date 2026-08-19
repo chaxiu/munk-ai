@@ -57,6 +57,21 @@ class DeviceSession {
     async clearText() {
         await (await this.ensureClient()).clearText();
     }
+    async findElement(using, value) {
+        return await (await this.ensureClient()).findElement(using, value);
+    }
+    async clickElement(elementId) {
+        await (await this.ensureClient()).clickElement(elementId);
+    }
+    async clearElement(elementId) {
+        await (await this.ensureClient()).clearElement(elementId);
+    }
+    async setElementValue(elementId, text) {
+        await (await this.ensureClient()).setElementValue(elementId, text);
+    }
+    async getElementAttribute(elementId, name) {
+        return await (await this.ensureClient()).getElementAttribute(elementId, name);
+    }
     async press(key) {
         await (await this.ensureClient()).press(key);
     }
@@ -218,6 +233,21 @@ export class IOSDeviceBridgeSessionManager {
     }
     async clearText(sessionId) {
         await this.getSession(sessionId).clearText();
+    }
+    async findElement(sessionId, using, value) {
+        return await this.getSession(sessionId).findElement(using, value);
+    }
+    async clickElement(sessionId, elementId) {
+        await this.getSession(sessionId).clickElement(elementId);
+    }
+    async clearElement(sessionId, elementId) {
+        await this.getSession(sessionId).clearElement(elementId);
+    }
+    async setElementValue(sessionId, elementId, text) {
+        await this.getSession(sessionId).setElementValue(elementId, text);
+    }
+    async getElementAttribute(sessionId, elementId, name) {
+        return await this.getSession(sessionId).getElementAttribute(elementId, name);
     }
     async press(sessionId, key) {
         await this.getSession(sessionId).press(key);

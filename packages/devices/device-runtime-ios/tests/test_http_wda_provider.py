@@ -149,6 +149,47 @@ def test_type_text_uses_session_keyboard_routes_and_ignores_dismiss_error() -> N
     ]
 
 
+def test_http_wda_element_apis_use_session_routes() -> None:
+    requests: list[tuple[str, str, dict[str, Any]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = read_json_body(request)
+        requests.append((request.method, request.url.path, body))
+        if request.url.path == "/session":
+            return httpx.Response(200, json={"value": {}, "sessionId": "sid-1"})
+        if request.url.path == "/session/sid-1/element":
+            return httpx.Response(
+                200,
+                json={"value": {"element-6066-11e4-a52e-4f735466cecf": "elem-9"}},
+            )
+        if request.url.path == "/session/sid-1/element/elem-9/click":
+            return httpx.Response(200, json={"value": None})
+        if request.url.path == "/session/sid-1/element/elem-9/clear":
+            return httpx.Response(200, json={"value": None})
+        if request.url.path == "/session/sid-1/element/elem-9/value":
+            return httpx.Response(200, json={"value": None})
+        if request.url.path == "/session/sid-1/element/elem-9/attribute/value":
+            return httpx.Response(200, json={"value": "typed"})
+        raise AssertionError(f"unexpected request: {request.method} {request.url}")
+
+    provider = build_provider(handler)
+
+    element_id = provider.find_element("accessibility id", "titleField")
+    provider.click_element(element_id)
+    provider.clear_element(element_id)
+    provider.set_element_value(element_id, "typed")
+    assert provider.get_element_attribute(element_id, "value") == "typed"
+
+    assert requests == [
+        ("POST", "/session", {"capabilities": {"alwaysMatch": {}}}),
+        ("POST", "/session/sid-1/element", {"using": "accessibility id", "value": "titleField"}),
+        ("POST", "/session/sid-1/element/elem-9/click", {}),
+        ("POST", "/session/sid-1/element/elem-9/clear", {}),
+        ("POST", "/session/sid-1/element/elem-9/value", {"value": ["t", "y", "p", "e", "d"]}),
+        ("GET", "/session/sid-1/element/elem-9/attribute/value", {}),
+    ]
+
+
 def test_clear_text_uses_active_element_and_clear_route() -> None:
     requests: list[tuple[str, str, dict[str, Any]]] = []
 

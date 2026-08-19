@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from munk.agent_base.llm import coerce_json_container_string
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from munk.core.action_target_refs import normalize_target_ref
 from munk_runner_local.brain.pydantic_runner_models import TextMatchArgs
 
 
@@ -24,6 +25,16 @@ def _validate_finite_non_negative(value: float, *, field_name: str) -> float:
     return value
 
 
+def _validate_target_ref(value: str) -> str:
+    return normalize_target_ref(value)
+
+
+def _validate_optional_target_ref(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return normalize_target_ref(value)
+
+
 class RunnerActionSubmissionBase(BaseModel):
     summary: str = Field(description="One-sentence action summary.")
 
@@ -35,16 +46,26 @@ class RunnerActionSubmissionBase(BaseModel):
 
 class ClickActionSubmission(RunnerActionSubmissionBase):
     action_type: Literal["click"] = Field(default="click")
-    target_id: int
+    target_ref: str = Field(description="Channel target reference such as v1 or t2.")
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str) -> str:
+        return _validate_target_ref(value)
 
 
 class LongPressActionSubmission(RunnerActionSubmissionBase):
     action_type: Literal["long_press"] = Field(default="long_press")
-    target_id: int
+    target_ref: str = Field(description="Channel target reference such as v1 or t2.")
     duration_sec: float | None = Field(
         default=None,
         description="Optional hold duration in seconds. Uses the runtime default when omitted.",
     )
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str) -> str:
+        return _validate_target_ref(value)
 
     @field_validator("duration_sec")
     @classmethod
@@ -63,15 +84,20 @@ class EditTextActionSubmission(RunnerActionSubmissionBase):
     mode: Literal["append", "replace"] = Field(
         description="Use 'append' to type into the current focus or an optional target. Use 'replace' to focus a target, clear it, then type the new text.",
     )
-    target_id: int | None = Field(
+    target_ref: str | None = Field(
         default=None,
-        description="Required for 'replace'. Optional for 'append'.",
+        description="Required for 'replace'. Optional for 'append'. Use vN or tN.",
     )
     text: str
     dismiss_keyboard: bool | None = Field(
         default=None,
         description="Defaults to false for 'append' and true for 'replace'.",
     )
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str | None) -> str | None:
+        return _validate_optional_target_ref(value)
 
     @field_validator("text")
     @classmethod
@@ -81,8 +107,8 @@ class EditTextActionSubmission(RunnerActionSubmissionBase):
     @model_validator(mode="after")
     def validate_input_shape(self) -> "EditTextActionSubmission":
         if self.mode == "replace":
-            if self.target_id is None:
-                raise ValueError("target_id is required for replace mode")
+            if self.target_ref is None:
+                raise ValueError("target_ref is required for replace mode")
             if self.dismiss_keyboard is None:
                 self.dismiss_keyboard = True
             return self
@@ -91,24 +117,43 @@ class EditTextActionSubmission(RunnerActionSubmissionBase):
         return self
 
 
+class SetValueActionSubmission(RunnerActionSubmissionBase):
+    action_type: Literal["set_value"] = Field(default="set_value")
+    target_ref: str = Field(
+        description="Required tree target_ref (tN / #t*). Vision refs (vN) are not allowed.",
+    )
+    value: str = Field(
+        description="Value to apply on the structure control (text, date ISO, select option, or check on/off).",
+    )
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str) -> str:
+        normalized = _validate_target_ref(value)
+        if not normalized.startswith("t"):
+            raise ValueError("set_value requires a tree target_ref (tN); vision refs (vN) are not allowed")
+        return normalized
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: str) -> str:
+        return _validate_non_empty(value, field_name="value")
+
+
 class AnchoredGestureActionSubmissionBase(RunnerActionSubmissionBase):
-    anchor_target_id: int | None = Field(
+    anchor_target_ref: str | None = Field(
         default=None,
-        description="Optional visible target id used to anchor the gesture start near that control.",
+        description="Optional visible target_ref used to anchor the gesture start near that control.",
     )
     distance: float | None = Field(
         default=None,
         description="Optional normalized gesture travel ratio in the range (0.0, 1.0].",
     )
 
-    @field_validator("anchor_target_id")
+    @field_validator("anchor_target_ref")
     @classmethod
-    def validate_anchor_target_id(cls, value: int | None) -> int | None:
-        if value is None:
-            return None
-        if value <= 0:
-            raise ValueError("anchor_target_id must be positive")
-        return value
+    def validate_anchor_target_ref(cls, value: str | None) -> str | None:
+        return _validate_optional_target_ref(value)
 
     @field_validator("distance")
     @classmethod
@@ -321,6 +366,7 @@ RunnerActionOutput = Annotated[
     ClickActionSubmission
     | LongPressActionSubmission
     | EditTextActionSubmission
+    | SetValueActionSubmission
     | RevealMoreActionSubmission
     | SwipeActionSubmission
     | DragActionSubmission
@@ -335,6 +381,7 @@ RunnerActionOutputModels = (
     ClickActionSubmission,
     LongPressActionSubmission,
     EditTextActionSubmission,
+    SetValueActionSubmission,
     RevealMoreActionSubmission,
     SwipeActionSubmission,
     DragActionSubmission,

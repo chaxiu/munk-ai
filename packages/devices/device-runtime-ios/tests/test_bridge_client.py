@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import httpx
@@ -95,3 +96,50 @@ def test_bridge_client_parses_accessibility_tree_payload() -> None:
             }
         ],
     }
+
+
+def test_bridge_client_element_apis_use_device_routes() -> None:
+    requests: list[tuple[str, str, dict[str, object]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8")) if request.content else {}
+        requests.append((request.method, request.url.path, body))
+        if request.url.path == "/sessions/session-1/device/find-element":
+            return httpx.Response(200, json={"ok": True, "data": {"element_id": "elem-bridge"}})
+        if request.url.path == "/sessions/session-1/device/click-element":
+            return httpx.Response(200, json={"ok": True})
+        if request.url.path == "/sessions/session-1/device/clear-element":
+            return httpx.Response(200, json={"ok": True})
+        if request.url.path == "/sessions/session-1/device/set-element-value":
+            return httpx.Response(200, json={"ok": True})
+        if request.url.path == "/sessions/session-1/device/get-element-attribute":
+            return httpx.Response(200, json={"ok": True, "data": {"value": "bridge-value"}})
+        raise AssertionError(f"unexpected request: {request.method} {request.url}")
+
+    client = build_client(handler)
+
+    element_id = client.find_element("accessibility id", "titleField")
+    client.click_element(element_id)
+    client.clear_element(element_id)
+    client.set_element_value(element_id, "bridge-value")
+    assert client.get_element_attribute(element_id, "value") == "bridge-value"
+
+    assert requests == [
+        (
+            "POST",
+            "/sessions/session-1/device/find-element",
+            {"using": "accessibility id", "value": "titleField"},
+        ),
+        ("POST", "/sessions/session-1/device/click-element", {"element_id": "elem-bridge"}),
+        ("POST", "/sessions/session-1/device/clear-element", {"element_id": "elem-bridge"}),
+        (
+            "POST",
+            "/sessions/session-1/device/set-element-value",
+            {"element_id": "elem-bridge", "text": "bridge-value"},
+        ),
+        (
+            "POST",
+            "/sessions/session-1/device/get-element-attribute",
+            {"element_id": "elem-bridge", "name": "value"},
+        ),
+    ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from munk.perception import ObservationTree
@@ -48,6 +49,17 @@ class SupportsTextClear(Protocol):
     """Optional capability for focused text controls that support explicit clear."""
 
     def clear_text(self) -> None: ...
+
+
+@runtime_checkable
+class SupportsElementTargetAction(Protocol):
+    """Optional capability for structure-backed element click/fill/read."""
+
+    def click_element(self, handle: Mapping[str, object]) -> None: ...
+
+    def fill_element(self, handle: Mapping[str, object], text: str, *, mode: str) -> None: ...
+
+    def read_element_value(self, handle: Mapping[str, object]) -> str | bool | None: ...
 
 
 @runtime_checkable
@@ -110,7 +122,13 @@ class SupportsDeviceScreenState(Protocol):
 
 @runtime_checkable
 class SupportsThreadBoundDeviceCalls(Protocol):
-    """Optional capability for runtimes whose device calls must stay on the owning thread."""
+    """Optional capability for runtimes whose device calls must stay on one owning thread.
+
+    When ``device_calls_thread_safe`` is False, the runtime should guarantee that its
+    public device methods execute on a stable owner OS thread (for example Playwright
+    sync greenlet affinity). Callers such as ActionExecutor must not hop those calls
+    onto an extra timeout worker thread.
+    """
 
     @property
     def device_calls_thread_safe(self) -> bool: ...

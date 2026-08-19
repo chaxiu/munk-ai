@@ -136,6 +136,9 @@ def _run_knowledge_post_action_if_needed(
         import_module("munk.services.knowledge.request_models").KnowledgePostActionOperationRequest,
     )
     evidence = resolve_case_run_evidence(result, prefer_optimization_attempt=False)
+    resolve_effective_assets_root = import_module(
+        "munk.services.knowledge.loader"
+    ).resolve_effective_assets_root
     knowledge_request = request_model(
         app_id=request.app_id,
         plan_id=request.plan_id,
@@ -143,7 +146,7 @@ def _run_knowledge_post_action_if_needed(
         case_title=result.summary,
         run_dir=result.run_dir,
         result_path=Path(result.artifacts[ARTIFACT_ID_RESULT]),
-        assets_root=request.assets_root,
+        assets_root=resolve_effective_assets_root(request.assets_root),
         judge_result_path=evidence.judge_result_path,
         source_attempt_index=evidence.source_attempt_index,
         parent_operation_id=parent_tracker.operation_id,

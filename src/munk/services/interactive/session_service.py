@@ -7,6 +7,7 @@ from uuid import uuid4
 from munk.app import AppTarget
 from munk.config import ResolvedConfig
 from munk.config.defaults import DEFAULT_RUNNER_MAX_ELEMENTS
+from munk.device import SupportsAppLifecycle, SupportsDeviceLockState, SupportsDeviceUnlock
 from munk.runtime_defaults import DEFAULT_ICON_CONF, DEFAULT_MAX_SIDE
 
 from .device_claim_service import InteractiveDeviceClaimService
@@ -83,6 +84,7 @@ class InteractiveSessionService:
                 icon_conf=icon_conf,
                 max_elements=max_elements,
             )
+            _cold_start_session_app(context, app_target)
             self._registry.create(InteractiveSessionEntry(session=session, context=context))
             self._transition(session, "waiting_agent", timestamp=started_at)
             self._claim_service.refresh_session(session)
@@ -147,6 +149,14 @@ class InteractiveSessionService:
         self._ensure_ready_for_next_step(entry.session)
         self._transition(entry.session, "acting")
         return entry
+
+    def fail_action(self, session_id: str) -> InteractiveSession:
+        """Roll back an in-flight act to waiting_agent without recording a step."""
+        entry = self.get_active_entry(session_id)
+        session = entry.session
+        if session.status == "acting":
+            self._transition(session, "waiting_agent")
+        return session
 
     def record_action_step(
         self,
@@ -278,3 +288,28 @@ class InteractiveSessionService:
     ) -> None:
         session.status = status
         session.updated_at = timestamp or now_iso()
+
+
+def _cold_start_session_app(context: InteractiveSessionContext, app_target: AppTarget) -> None:
+    """Bring the session app to a deterministic entry state (unlock + stop + start)."""
+    entry_identity = (app_target.entry_identity or "").strip()
+    if not entry_identity:
+        raise RuntimeError("interactive session start requires an app_target with entry_identity")
+    device = context.device
+    if not isinstance(device, SupportsAppLifecycle):
+        raise RuntimeError(
+            f"interactive session cold start is not supported for platform '{app_target.platform}'"
+        )
+    _unlock_device_if_needed(device)
+    device.app_stop(entry_identity)
+    device.app_start(entry_identity)
+
+
+def _unlock_device_if_needed(device: object) -> None:
+    if not isinstance(device, SupportsDeviceUnlock):
+        return
+    if isinstance(device, SupportsDeviceLockState):
+        locked = device.is_locked()
+        if locked is False:
+            return
+    device.unlock()

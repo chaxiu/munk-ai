@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from munk.agent_base.action import Action, ActionType
 from munk.agent_base.base import ScreenState
-from munk.core.action_targets import build_action_targets, find_action_target_by_box
+from munk.core.action_targets import TargetHandle, build_action_targets, find_action_target_by_box
 
 from .context import RunContext
 from .pre_execute_target_matcher import match_pre_execute_target
 from .pre_execute_visual_fallback import match_visual_fallback_box, should_try_visual_fallback
 from .step_observation import StepObservationState
 
+_REBIND_HANDLE_UNSET = object()
+
 PRE_EXECUTION_GUARDED_ACTION_TYPES = frozenset(
     {
         ActionType.CLICK,
         ActionType.LONG_PRESS,
         ActionType.EDIT_TEXT,
+        ActionType.SET_VALUE,
     }
 )
 
@@ -48,6 +51,12 @@ def guard_action_before_execution(
 ) -> PreExecuteGuardResult:
     if not should_guard_action_before_execution(action):
         return PreExecuteGuardResult(action=action, state=decision_state)
+    if action.handle is not None and action.handle.kind == "dom":
+        return _guard_dom_action_identity(
+            action=action,
+            decision_state=decision_state,
+            refresh_state=refresh_state,
+        )
     original_box = action.box
     if original_box is None:
         return PreExecuteGuardResult(action=action, state=decision_state)
@@ -93,7 +102,11 @@ def guard_action_before_execution(
     )
     if match_result.resolved_target is not None and match_result.match_strategy is not None:
         rebound_target = match_result.resolved_target
-        rebound_action = rebind_action_box(action, rebound_target.box)
+        rebound_action = rebind_action_box(
+            action,
+            rebound_target.box,
+            handle=rebound_target.handle,
+        )
         return PreExecuteGuardResult(
             action=rebound_action,
             state=refreshed_state,
@@ -128,7 +141,11 @@ def guard_action_before_execution(
         )
     if match_result.resolved_target is not None:
         rebound_target = match_result.resolved_target
-        rebound_action = rebind_action_box(action, rebound_target.box)
+        rebound_action = rebind_action_box(
+            action,
+            rebound_target.box,
+            handle=rebound_target.handle,
+        )
         return PreExecuteGuardResult(
             action=rebound_action,
             state=refreshed_state,
@@ -149,21 +166,87 @@ def guard_action_before_execution(
     return PreExecuteGuardResult(action=action, state=refreshed_state)
 
 
+def _guard_dom_action_identity(
+    *,
+    action: Action,
+    decision_state: StepObservationState,
+    refresh_state: Callable[[ScreenState | None], StepObservationState],
+) -> PreExecuteGuardResult:
+    # DOM selector identity must not be rebound to spatial boxes, but entry/surface
+    # changes still invalidate the action before execution.
+    refreshed_state = refresh_state(decision_state.screen)
+    refreshed_screen = refreshed_state.screen
+    if refreshed_screen.entry_identity != decision_state.screen.entry_identity:
+        return PreExecuteGuardResult(
+            action=action,
+            state=refreshed_state,
+            invalidated=True,
+            status=PRE_EXECUTE_STATUS_INVALIDATED,
+            stale_reason="entry_identity_changed_before_execution",
+        )
+    if refreshed_screen.surface_identity != decision_state.screen.surface_identity:
+        return PreExecuteGuardResult(
+            action=action,
+            state=refreshed_state,
+            invalidated=True,
+            status=PRE_EXECUTE_STATUS_INVALIDATED,
+            stale_reason="surface_identity_changed_before_execution",
+        )
+    return PreExecuteGuardResult(
+        action=action,
+        state=refreshed_state,
+        status=PRE_EXECUTE_STATUS_PASSTHROUGH,
+    )
+
+
 def should_guard_action_before_execution(action: Action) -> bool:
-    return action.type in PRE_EXECUTION_GUARDED_ACTION_TYPES and action.box is not None
+    if action.type not in PRE_EXECUTION_GUARDED_ACTION_TYPES:
+        return False
+    if action.handle is not None and action.handle.kind == "dom":
+        return True
+    return action.box is not None
 
 
-def rebind_action_box(action: Action, box: tuple[int, int, int, int]) -> Action:
+def rebind_action_box(
+    action: Action,
+    box: tuple[int, int, int, int],
+    *,
+    handle: TargetHandle | None | object = _REBIND_HANDLE_UNSET,
+) -> Action:
+    rebound_handle = action.handle if handle is _REBIND_HANDLE_UNSET else handle
     if action.type == ActionType.CLICK:
-        return Action.click(box, summary=action.summary)
+        return Action.click(
+            box,
+            summary=action.summary,
+            handle=rebound_handle,  # type: ignore[arg-type]
+            target_ref=action.target_ref,
+        )
     if action.type == ActionType.LONG_PRESS:
-        return Action.long_press(box, duration=action.duration, summary=action.summary)
+        return Action.long_press(
+            box,
+            duration=action.duration,
+            summary=action.summary,
+            handle=rebound_handle,  # type: ignore[arg-type]
+            target_ref=action.target_ref,
+        )
     if action.type == ActionType.EDIT_TEXT:
         return Action.edit_text(
             text=action.text or "",
             mode=action.text_mode or "append",
             target_box=box,
             dismiss_keyboard=action.dismiss_keyboard,
+            summary=action.summary,
+            handle=rebound_handle,  # type: ignore[arg-type]
+            target_ref=action.target_ref,
+        )
+    if action.type == ActionType.SET_VALUE:
+        if not isinstance(rebound_handle, TargetHandle):
+            return action
+        updated_handle = rebound_handle if rebound_handle.box == box else replace(rebound_handle, box=box)
+        return Action.set_value(
+            value=action.text or "",
+            handle=updated_handle,
+            target_ref=action.target_ref or "",
             summary=action.summary,
         )
     return action

@@ -43,7 +43,12 @@ def annotate_action_targets(
         style = _build_label_style(canvas_shape, target.box)
         color = _target_color(target)
         cv2.rectangle(canvas, (x1, y1), (x2, y2), color, style.border_thickness)
-        label = str(target.target_id)
+        if target.ref:
+            label = target.ref
+        elif target.index > 0:
+            label = f"{target.channel}{target.index}"
+        else:
+            label = str(target.target_id)
         label_w, label_h, _ = _measure_label(label, style)
         position = _choose_label_position(
             target.box,

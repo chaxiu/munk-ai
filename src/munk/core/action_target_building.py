@@ -13,7 +13,14 @@ from munk.core.action_target_geometry import (
     overlap_ratio,
     sort_targets_spatially,
 )
-from munk.core.action_target_models import ActionTarget, TREE_PART_MAX, TargetParts
+from munk.core.action_target_models import ActionTarget, TargetParts
+from munk.core.action_target_refs import (
+    build_a11y_handle,
+    build_dom_handle,
+    build_spatial_handle,
+    build_target_ref,
+    is_form_control_target,
+)
 from munk.core.action_target_utils import (
     clip_ocr_text,
     compact_box,
@@ -84,20 +91,76 @@ def _build_target_parts_uncached(
     )
     tree_targets_all = _build_tree_targets(screen=screen, compact_tree=compact_tree, limit=tree_limit)
     numbered_vision_targets = [
-        replace(target, target_id=index)
+        _assign_channel_identity(target, channel="v", index=index, transitional_target_id=index)
         for index, target in enumerate(vision_targets_all, start=1)
     ]
     tree_start_id = len(numbered_vision_targets) + 1
     numbered_tree_targets = [
-        replace(target, target_id=tree_start_id + index)
+        _assign_channel_identity(
+            target,
+            channel="t",
+            index=index + 1,
+            transitional_target_id=tree_start_id + index,
+        )
         for index, target in enumerate(tree_targets_all)
     ]
     return TargetParts(
         vision_targets=numbered_vision_targets,
         tree_targets=numbered_tree_targets,
-        vision_total=len(screen.elements),
-        tree_total=_compact_tree_node_count(compact_tree, uncapped=True),
+        vision_total=len(numbered_vision_targets),
+        tree_total=len(numbered_tree_targets),
         is_canonical_snapshot=is_canonical_snapshot,
+    )
+
+
+def select_form_first_tree_targets(targets: list[ActionTarget], *, limit: int) -> list[ActionTarget]:
+    if limit <= 0:
+        return []
+    form_controls = [target for target in targets if is_form_control_target(target)]
+    others = [target for target in targets if not is_form_control_target(target)]
+    ordered = [*form_controls, *others]
+    return ordered[:limit]
+
+
+def _assign_channel_identity(
+    target: ActionTarget,
+    *,
+    channel: str,
+    index: int,
+    transitional_target_id: int,
+) -> ActionTarget:
+    ref = build_target_ref(channel=channel, index=index)  # type: ignore[arg-type]
+    handle = target.handle
+    if handle is None:
+        if channel == "v":
+            handle = build_spatial_handle(target.box)
+        elif (target.platform or "").lower() == "web":
+            handle = build_dom_handle(
+                node_id=target.linked_tree_node_id or f"missing-{index}",
+                box=target.box,
+                tag=target.class_name,
+                input_type=target.input_type,
+                name=target.dom_name,
+                value=target.dom_value,
+                resource_id=target.resource_id,
+                test_id=target.test_id,
+                stable_key=target.stable_key,
+            )
+        else:
+            handle = build_a11y_handle(
+                node_id=target.linked_tree_node_id,
+                stable_key=target.stable_key,
+                resource_id=target.resource_id,
+                class_name=target.class_name,
+                box=target.box,
+            )
+    return replace(
+        target,
+        target_id=transitional_target_id,
+        ref=ref,
+        channel=channel,
+        index=index,
+        handle=handle,
     )
 
 
@@ -140,28 +203,61 @@ def _build_tree_targets(
             continue
         raw_state = node.get("state")
         state = cast(Mapping[str, object] | None, raw_state) if isinstance(raw_state, dict) else None
+        node_id = cast(str | None, node.get("id"))
+        class_name = cast(str | None, node.get("cls"))
+        input_type = cast(str | None, node.get("input_type"))
+        dom_name = cast(str | None, node.get("name"))
+        dom_value = cast(str | None, node.get("value"))
+        test_id = cast(str | None, node.get("test_id"))
+        resource_id = cast(str | None, node.get("rid"))
+        stable_key = cast(str | None, node.get("sk"))
+        if (screen.platform or "").lower() == "web" and node_id:
+            handle = build_dom_handle(
+                node_id=node_id,
+                box=box,
+                tag=class_name,
+                input_type=input_type,
+                name=dom_name,
+                value=dom_value,
+                resource_id=resource_id,
+                test_id=test_id,
+                stable_key=stable_key,
+            )
+        else:
+            handle = build_a11y_handle(
+                node_id=node_id,
+                stable_key=stable_key,
+                resource_id=resource_id,
+                class_name=class_name,
+                box=box,
+            )
         targets.append(
             ActionTarget(
                 target_id=0,
                 part="tree",
                 source="tree",
                 box=box,
+                handle=handle,
                 kind=cast(str | None, node.get("role")),
                 text=cast(str | None, node.get("txt")),
-                resource_id=cast(str | None, node.get("rid")),
+                resource_id=resource_id,
                 content_desc=cast(str | None, node.get("cd")),
-                class_name=cast(str | None, node.get("cls")),
+                class_name=class_name,
                 semantic_role=cast(str | None, node.get("role")),
                 enabled=state_bool(state, "enabled"),
                 checked=state_bool(state, "checked"),
                 selected=state_bool(state, "selected"),
                 clickable=state_bool(state, "clickable"),
                 focused=state_bool(state, "focused"),
-                linked_tree_node_id=cast(str | None, node.get("id")),
-                stable_key=cast(str | None, node.get("sk")),
-                label=compact_node_label(node),
+                linked_tree_node_id=node_id,
+                stable_key=stable_key,
+                label=_tree_target_label(node, input_type=input_type, dom_name=dom_name, dom_value=dom_value),
                 reason="tree_target",
                 platform=screen.platform,
+                input_type=input_type,
+                dom_name=dom_name,
+                dom_value=dom_value,
+                test_id=test_id,
             )
         )
     on_screen_targets = _filter_targets_outside_viewport(targets, screen_size=screen.screen_size)
@@ -191,11 +287,13 @@ def _build_vision_target(
         linked_compact_node=linked_compact_node,
     )
     stable_key = linked_compact_node.get("sk") if isinstance(linked_compact_node, dict) else None
+    box = cast(tuple[int, int, int, int], getattr(element, "box"))
     return ActionTarget(
         target_id=0,
         part="vision",
         source=str(getattr(element, "source", None) or "vision"),
-        box=cast(tuple[int, int, int, int], getattr(element, "box")),
+        box=box,
+        handle=build_spatial_handle(box),
         kind=cast(str | None, getattr(element, "kind", None)),
         text=text,
         resource_id=cast(str | None, getattr(element, "resource_id", None)),
@@ -213,6 +311,30 @@ def _build_vision_target(
         reason="vision_target",
         platform=platform,
     )
+
+
+def _tree_target_label(
+    node: Mapping[str, object],
+    *,
+    input_type: str | None,
+    dom_name: str | None,
+    dom_value: str | None,
+) -> str | None:
+    tag = cast(str | None, node.get("cls"))
+    parts: list[str] = []
+    if tag:
+        parts.append(tag)
+    if input_type:
+        parts.append(f"type={input_type}")
+    if dom_name:
+        parts.append(f"name={dom_name}")
+    if dom_value is not None and str(dom_value).strip() != "":
+        parts.append(f'value="{dom_value}"')
+    elif input_type or tag in {"input", "textarea", "select"}:
+        parts.append('value=""')
+    if parts:
+        return " ".join(parts)
+    return compact_node_label(node)
 
 
 def _pick_target_label(
@@ -333,15 +455,6 @@ def _is_mergeable_child_text_target(*, control: ActionTarget, child: ActionTarge
 
 def _explicit_control_kind(target: ActionTarget) -> str | None:
     return _target_profile(target).explicit_control_kind(target)
-
-
-def _compact_tree_node_count(compact_tree: Mapping[str, object], *, uncapped: bool = False) -> int:
-    raw_nodes = compact_tree.get("nodes")
-    if not isinstance(raw_nodes, list):
-        return 0
-    if uncapped:
-        return len(raw_nodes)
-    return min(len(raw_nodes), TREE_PART_MAX)
 
 
 def _is_explicit_control_values(*, class_name: str | None, semantic_role: str | None) -> bool:

@@ -37,6 +37,14 @@ def build_runner_action_feedback(action: Action) -> ActionFeedback | None:
         if action.type == ActionType.EDIT_TEXT and input_target is not None:
             fields.append(("input_target", input_target))
         return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
+    if action.type == ActionType.SET_VALUE:
+        if action.text is not None:
+            fields.append(("value_applied", action.text))
+        if action.target_ref is not None:
+            fields.append(("target_ref", action.target_ref))
+        if action.handle is not None and action.handle.fill_mode is not None:
+            fields.append(("fill_mode", action.handle.fill_mode))
+        return ActionFeedback(action_type=action.type.value, status="executed", fields=tuple(fields))
     if action.type in {ActionType.BACK, ActionType.HOME, ActionType.RESTART_APP, ActionType.WAIT}:
         return ActionFeedback(action_type=action.type.value, status="executed")
     return None
@@ -48,9 +56,10 @@ def augment_runner_action_feedback(
     feedback: ActionFeedback | None,
     duration_ms: int | None = None,
     changes: tuple[str, ...] = (),
+    extra_fields: tuple[tuple[str, ActionFeedbackValue], ...] = (),
 ) -> ActionFeedback | None:
     effective = feedback
-    if effective is None and (duration_ms is not None or changes):
+    if effective is None and (duration_ms is not None or changes or extra_fields):
         effective = ActionFeedback(action_type=action.type.value, status="executed")
     if effective is None:
         return None
@@ -59,6 +68,7 @@ def augment_runner_action_feedback(
         fields.append(("duration_ms", duration_ms))
     if changes:
         fields.append(("changes", list(changes)))
+    fields.extend(extra_fields)
     return ActionFeedback(
         action_type=effective.action_type,
         status=effective.status,

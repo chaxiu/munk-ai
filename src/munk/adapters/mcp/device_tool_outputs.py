@@ -20,7 +20,7 @@ class InteractiveScreenData(BaseModel):
 
 
 class InteractiveTargetData(BaseModel):
-    target_id: int = Field(description="Resolved target identifier.")
+    target_ref: str = Field(description="Channel target reference such as v1 or t2.")
     label: str | None = Field(default=None, description="Optional target label.")
     kind: str | None = Field(default=None, description="Optional target kind.")
     source: str = Field(description="Resolver source of the target.")
@@ -30,7 +30,7 @@ class InteractiveTargetData(BaseModel):
 
 
 class InteractiveTargetCompactData(BaseModel):
-    target_id: int = Field(description="Resolved target identifier.")
+    target_ref: str = Field(description="Channel target reference such as v1 or t2.")
     source: str = Field(description="Resolver source of the target.")
     box: tuple[int, int, int, int] = Field(description="Target bounds as left, top, right, bottom.")
     label: str | None = Field(default=None, description="Optional target label.")
@@ -55,13 +55,83 @@ class InteractiveObservationData(BaseModel):
     )
     screenshot_path: str | None = Field(
         default=None,
-        description="Optional absolute PNG screenshot path when include_screenshot is enabled.",
+        description="Optional absolute screenshot path when include_screenshot is enabled.",
     )
+
+
+class SessionObserveMatchData(BaseModel):
+    query: str = Field(description="Normalized match query that produced this bypass region.")
+    matched_count: int = Field(description="Number of target lines included in match_text (capped).")
+    match_text: str = Field(
+        description=(
+            "Runner-style plain-text hit lines from the full canonical catalog. "
+            "Copy #vN/#tN refs into session_act. Does not rewrite targets_text."
+        ),
+    )
+
+
+class SessionObserveObservationData(BaseModel):
+    captured_at: str = Field(description="Observation capture timestamp in ISO format.")
+    summary: str = Field(description="Concise observation summary.")
+    screen: InteractiveScreenData = Field(description="Serializable screen summary.")
+    targets_text: str = Field(
+        description="Runner-style plain-text discovery window. Copy #vN/#tN refs into session_act.",
+    )
+    total_vision: int = Field(description="Total vision targets in the captured snapshot.")
+    total_tree: int = Field(description="Total tree targets in the captured snapshot.")
+    returned_vision: int = Field(description="Vision targets included in targets_text.")
+    returned_tree: int = Field(description="Tree targets included in targets_text.")
+    truncated: bool = Field(description="Whether the default observation window omitted targets.")
+    guidance: str | None = Field(
+        default=None,
+        description="When truncated, guidance to page the same snapshot via session_list_targets.",
+    )
+    tree_status: Literal["ok", "missing", "error"] = Field(
+        description="Whether structure/tree capture succeeded for this observation.",
+    )
+    tree_error: str | None = Field(default=None, description="Short tree capture error when tree_status=error.")
+    match: SessionObserveMatchData | None = Field(
+        default=None,
+        description="Optional bypass hit region when match was provided. Never filters targets_text.",
+    )
+    screenshot_mime_type: str | None = Field(
+        default=None,
+        description="Optional screenshot MIME type when include_screenshot is enabled.",
+    )
+    screenshot_path: str | None = Field(
+        default=None,
+        description="Optional absolute screenshot path for debug when include_screenshot is enabled.",
+    )
+
+
+class SessionListTargetsData(BaseModel):
+    source: Literal["all", "vision", "tree"] = Field(description="Applied channel filter.")
+    offset: int = Field(description="Applied pagination offset.")
+    limit: int = Field(description="Applied page size.")
+    targets_text: str = Field(
+        description="Runner-style plain-text page of the last observation snapshot. Copy #vN/#tN refs into session_act.",
+    )
+    total_vision: int = Field(description="Total vision targets in the selected source window.")
+    total_tree: int = Field(description="Total tree targets in the selected source window.")
+    returned_vision: int = Field(description="Vision targets included in this page.")
+    returned_tree: int = Field(description="Tree targets included in this page.")
+    truncated: bool = Field(description="Whether more targets remain after this page.")
+    next_offset: int | None = Field(
+        default=None,
+        description="Next offset to continue paging when truncated.",
+    )
+    tree_status: Literal["ok", "missing", "error"] = Field(
+        description="Tree status from the last observation snapshot.",
+    )
+    tree_error: str | None = Field(default=None, description="Short tree capture error from the snapshot when present.")
 
 
 class InteractiveActionData(BaseModel):
     type: str = Field(description="Action type.")
-    target_id: int | None = Field(default=None, description="Optional target identifier from the original request.")
+    target_ref: str | None = Field(
+        default=None,
+        description="Optional channel target reference from the original request.",
+    )
     resource_id: str | None = Field(default=None, description="Optional target resource identifier from the original request.")
     label: str | None = Field(default=None, description="Optional target label from the original request.")
     box: tuple[int, int, int, int] | None = Field(default=None, description="Optional action box.")
@@ -185,24 +255,21 @@ class SessionGetOutput(BaseModel):
 class SessionObserveOutput(BaseModel):
     summary: str = Field(description="Concise observe summary.")
     session: InteractiveSessionData = Field(description="Interactive session summary after observe.")
-    observation: InteractiveObservationData = Field(description="Structured observation payload.")
+    observation: SessionObserveObservationData = Field(description="Structured observation payload with targets_text.")
+
+
+class SessionListTargetsOutput(BaseModel):
+    summary: str = Field(description="Concise list-targets summary.")
+    session: InteractiveSessionData = Field(description="Interactive session summary.")
+    data: SessionListTargetsData = Field(description="Paginated targets_text from the last observation snapshot.")
 
 
 class SessionActOutput(BaseModel):
     summary: str = Field(description="Concise action result summary.")
-    detail: Literal["summary", "compact", "full"] = Field(description="Applied action result payload detail level.")
     session: InteractiveSessionData = Field(description="Interactive session summary after action.")
     action: InteractiveActionData = Field(description="Original requested action payload.")
     normalized_action: InteractiveActionData = Field(description="Normalized action payload actually executed.")
     diff: InteractiveActionDiffSummaryData = Field(description="Structured diff summary for the action result.")
-    before: InteractiveObservationData | None = Field(
-        default=None,
-        description="Observation captured before action execution when full detail is requested.",
-    )
-    after: InteractiveObservationData | None = Field(
-        default=None,
-        description="Observation captured after action execution when compact or full detail is requested.",
-    )
     before_summary: str = Field(description="Concise summary of the observation captured before action execution.")
     after_summary: str = Field(description="Concise summary of the observation captured after action execution.")
     executed: bool = Field(description="Whether the action executed.")

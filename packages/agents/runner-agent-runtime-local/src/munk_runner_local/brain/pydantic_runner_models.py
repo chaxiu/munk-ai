@@ -45,8 +45,15 @@ class RunnerStepDeps:
 
 
 class ClickToolArgs(BaseModel):
-    target_id: int
+    target_ref: str
     summary: str
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str) -> str:
+        from munk.core.action_target_refs import normalize_target_ref
+
+        return normalize_target_ref(value)
 
     @field_validator("summary")
     @classmethod
@@ -114,10 +121,19 @@ class TextMatchArgs(BaseModel):
 
 class EditTextToolArgs(BaseModel):
     mode: Literal["append", "replace"]
-    target_id: int | None = None
+    target_ref: str | None = None
     text: str
     summary: str
     dismiss_keyboard: bool | None = None
+
+    @field_validator("target_ref")
+    @classmethod
+    def validate_target_ref(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from munk.core.action_target_refs import normalize_target_ref
+
+        return normalize_target_ref(value)
 
     @field_validator("text", "summary")
     @classmethod
@@ -130,8 +146,8 @@ class EditTextToolArgs(BaseModel):
     @model_validator(mode="after")
     def validate_shape(self) -> "EditTextToolArgs":
         if self.mode == "replace":
-            if self.target_id is None:
-                raise ValueError("target_id is required for replace mode")
+            if self.target_ref is None:
+                raise ValueError("target_ref is required for replace mode")
             if self.dismiss_keyboard is None:
                 self.dismiss_keyboard = True
             return self

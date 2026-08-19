@@ -128,3 +128,34 @@ def _parse_bounds(line: str) -> tuple[int, int, int, int] | None:
 
 def _box_area(bounds: tuple[int, int, int, int]) -> int:
     return max(0, bounds[2] - bounds[0]) * max(0, bounds[3] - bounds[1])
+
+
+def optional_handle_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def optional_handle_box(value: object) -> tuple[int, int, int, int] | None:
+    if not isinstance(value, (tuple, list)) or len(value) != 4:
+        return None
+    try:
+        left, top, right, bottom = (int(value[0]), int(value[1]), int(value[2]), int(value[3]))
+    except (TypeError, ValueError):
+        return None
+    return (left, top, right, bottom)
+
+
+def format_android_bounds(box: tuple[int, int, int, int]) -> str:
+    left, top, right, bottom = box
+    return f"[{left},{top}][{right},{bottom}]"
+
+
+def coerce_checkbox_desired(text: str) -> bool:
+    normalized = text.strip().lower()
+    if normalized in {"1", "true", "yes", "on", "checked"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "unchecked"}:
+        return False
+    return bool(normalized)

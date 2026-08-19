@@ -132,6 +132,9 @@ class RunStoppedEventPayload(BaseModel):
     summary: str | None = None
     warning_code: str | None = None
     consecutive_no_effect_count: int | None = None
+    consecutive_postcheck_failure_count: int | None = None
+    postcheck_summary: str | None = None
+    advice: str | None = None
 
 
 @dataclass(frozen=True)
@@ -342,6 +345,9 @@ def build_run_stopped_event_payload(
     summary: str | None = None,
     warning_code: str | None = None,
     consecutive_no_effect_count: int | None = None,
+    consecutive_postcheck_failure_count: int | None = None,
+    postcheck_summary: str | None = None,
+    advice: str | None = None,
 ) -> dict[str, Any]:
     payload = RunStoppedEventPayload(
         step=step,
@@ -350,6 +356,9 @@ def build_run_stopped_event_payload(
         summary=summary,
         warning_code=warning_code,
         consecutive_no_effect_count=consecutive_no_effect_count,
+        consecutive_postcheck_failure_count=consecutive_postcheck_failure_count,
+        postcheck_summary=postcheck_summary,
+        advice=advice,
     )
     return payload.model_dump(mode="json", exclude_none=True)
 

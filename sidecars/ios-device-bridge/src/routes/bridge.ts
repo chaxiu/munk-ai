@@ -201,6 +201,92 @@ const bridgeRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
     },
   );
 
+  fastify.post<{
+    Params: {sessionId: string};
+    Body: {using: string; value: string};
+  }>('/sessions/:sessionId/device/find-element', async function (request, reply) {
+    try {
+      const elementId =
+        await manager.iosDeviceBridgeSessionManager.findElement(
+          request.params.sessionId,
+          request.body.using,
+          request.body.value,
+        );
+      return {ok: true, data: {element_id: elementId}};
+    } catch (error) {
+      return sendBridgeError(reply, error);
+    }
+  });
+
+  fastify.post<{
+    Params: {sessionId: string};
+    Body: {element_id: string};
+  }>('/sessions/:sessionId/device/click-element', async function (request, reply) {
+    try {
+      await manager.iosDeviceBridgeSessionManager.clickElement(
+        request.params.sessionId,
+        request.body.element_id,
+      );
+      return {ok: true};
+    } catch (error) {
+      return sendBridgeError(reply, error);
+    }
+  });
+
+  fastify.post<{
+    Params: {sessionId: string};
+    Body: {element_id: string};
+  }>('/sessions/:sessionId/device/clear-element', async function (request, reply) {
+    try {
+      await manager.iosDeviceBridgeSessionManager.clearElement(
+        request.params.sessionId,
+        request.body.element_id,
+      );
+      return {ok: true};
+    } catch (error) {
+      return sendBridgeError(reply, error);
+    }
+  });
+
+  fastify.post<{
+    Params: {sessionId: string};
+    Body: {element_id: string; text: string};
+  }>(
+    '/sessions/:sessionId/device/set-element-value',
+    async function (request, reply) {
+      try {
+        await manager.iosDeviceBridgeSessionManager.setElementValue(
+          request.params.sessionId,
+          request.body.element_id,
+          request.body.text,
+        );
+        return {ok: true};
+      } catch (error) {
+        return sendBridgeError(reply, error);
+      }
+    },
+  );
+
+  fastify.post<{
+    Params: {sessionId: string};
+    Body: {element_id: string; name: string};
+  }>(
+    '/sessions/:sessionId/device/get-element-attribute',
+    async function (request, reply) {
+      try {
+        const value =
+          await manager.iosDeviceBridgeSessionManager.getElementAttribute(
+            request.params.sessionId,
+            request.body.element_id,
+            request.body.name,
+          );
+        return {ok: true, data: {value}};
+      } catch (error) {
+        return sendBridgeError(reply, error);
+      }
+    },
+  );
+
   fastify.post<{Params: {sessionId: string}; Body: {key: string}}>(
     '/sessions/:sessionId/device/press',
     async function (request, reply) {

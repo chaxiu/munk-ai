@@ -304,6 +304,26 @@ class _NoopProvider:
     def clear_text(self) -> None:
         raise AssertionError("not used")
 
+    def find_element(self, using: str, value: str) -> str:
+        _ = using, value
+        raise AssertionError("not used")
+
+    def click_element(self, element_id: str) -> None:
+        _ = element_id
+        raise AssertionError("not used")
+
+    def clear_element(self, element_id: str) -> None:
+        _ = element_id
+        raise AssertionError("not used")
+
+    def set_element_value(self, element_id: str, text: str) -> None:
+        _ = element_id, text
+        raise AssertionError("not used")
+
+    def get_element_attribute(self, element_id: str, name: str) -> str | None:
+        _ = element_id, name
+        raise AssertionError("not used")
+
     def press(self, key: str) -> None:
         _ = key
         raise AssertionError("not used")

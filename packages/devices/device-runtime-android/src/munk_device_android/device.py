@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 import numpy as np
@@ -20,8 +21,12 @@ from ._logcat import (
 )
 from ._ui_state import (
     android_surface_identity,
+    coerce_checkbox_desired,
     extract_keyboard_bounds,
+    format_android_bounds,
     is_automation_ime,
+    optional_handle_box,
+    optional_handle_text,
     parse_android_lock_state,
     prepare_adb_environment,
     shell_output_text,
@@ -59,6 +64,57 @@ class AndroidDevice:
 
     def click(self, x: int, y: int) -> None:
         self._device.click(x, y)
+
+    def click_element(self, handle: Mapping[str, object]) -> None:
+        element = self._element_for_handle(handle)
+        element.click()
+
+    def fill_element(self, handle: Mapping[str, object], text: str, *, mode: str) -> None:
+        element = self._element_for_handle(handle)
+        fill_mode = (mode or str(handle.get("fill_mode") or "value")).strip().lower()
+        if fill_mode == "check":
+            desired = coerce_checkbox_desired(text)
+            info = _element_info(element)
+            current = bool(info.get("checked")) if isinstance(info.get("checked"), bool) else False
+            if current != desired:
+                element.click()
+            return
+        if fill_mode == "select":
+            raise ValueError("android fill_element does not support mode=select")
+        set_text = getattr(element, "set_text", None)
+        if callable(set_text):
+            set_text(text)
+            return
+        clear_text = getattr(element, "clear_text", None)
+        if callable(clear_text):
+            clear_text()
+        else:
+            element.click()
+            self.clear_text()
+        self._input_text_via_uiautomator_ime(text)
+
+    def read_element_value(self, handle: Mapping[str, object]) -> str | bool | None:
+        element = self._element_for_handle(handle)
+        info = _element_info(element)
+        class_name = optional_handle_text(handle.get("class_name")) or str(info.get("className") or "")
+        fill_mode = str(handle.get("fill_mode") or "").strip().lower()
+        lowered_class = class_name.lower()
+        if (
+            fill_mode == "check"
+            or bool(info.get("checkable"))
+            or any(token in lowered_class for token in ("checkbox", "switch", "radiobutton", "togglebutton"))
+        ):
+            checked = info.get("checked")
+            return bool(checked) if isinstance(checked, bool) else None
+        get_text = getattr(element, "get_text", None)
+        if callable(get_text):
+            value = get_text()
+            if isinstance(value, str):
+                return value
+        text = info.get("text")
+        if isinstance(text, str):
+            return text
+        return None
 
     def long_press(self, x: int, y: int, duration: float | None = None) -> None:
         long_click = getattr(self._device, "long_click", None)
@@ -148,7 +204,7 @@ class AndroidDevice:
         remote_artifact_path = f"/data/local/tmp/munk-install-{uuid4().hex}{Path(artifact_path).suffix or '.apk'}"
         try:
             push(artifact_path, remote_artifact_path)
-            response = self._device.shell(["pm", "install", "-r", remote_artifact_path])
+            response = self._device.shell(["pm", "install", "-r", "-t", remote_artifact_path])
             output = shell_output_text(response) or ""
             normalized = output.strip()
             if "success" not in normalized.lower():
@@ -358,3 +414,76 @@ class AndroidDevice:
         except Exception:
             # Best-effort restore should not overwrite the main input result.
             return
+
+    def _element_for_handle(self, handle: Mapping[str, object]) -> Any:
+        resource_id = optional_handle_text(handle.get("resource_id"))
+        class_name = optional_handle_text(handle.get("class_name"))
+        box = optional_handle_box(handle.get("box"))
+        # Prefer bounds whenever present so duplicate resource_ids (list rows,
+        # shared checkboxes) resolve to the spatially rebound target instead of
+        # uiautomator2's first resourceId match.
+        if box is not None:
+            return self._element_for_bounds(box=box, resource_id=resource_id)
+        if resource_id:
+            selector: dict[str, object] = {"resourceId": resource_id}
+            if class_name:
+                selector["className"] = class_name
+            element = self._device(**selector)
+            if not _element_exists(element):
+                raise ValueError(f"android element not found for resource_id={resource_id}")
+            return element
+        raise ValueError("android element handle requires resource_id or box")
+
+    def _element_for_bounds(
+        self,
+        *,
+        box: tuple[int, int, int, int],
+        resource_id: str | None,
+    ) -> Any:
+        # Do not include @class: uiautomator2 xpath fails to match @class even when
+        # the hierarchy node has class="...". resource_id+bounds (or bounds alone)
+        # is enough to disambiguate duplicate resource_ids.
+        bounds = format_android_bounds(box)
+        predicates: list[str] = []
+        if resource_id:
+            predicates.append(f'@resource-id="{resource_id}"')
+        predicates.append(f'@bounds="{bounds}"')
+        expression = f'//*[{" and ".join(predicates)}]'
+        xpath = getattr(self._device, "xpath", None)
+        if not callable(xpath):
+            raise ValueError("android element resolve requires uiautomator2 xpath for bounds handles")
+        query = xpath(expression)
+        getter = getattr(query, "get", None)
+        if not callable(getter):
+            raise ValueError("android xpath query does not support get()")
+        try:
+            element = getter(timeout=1.0)
+        except TypeError:
+            try:
+                element = getter()
+            except Exception as err:
+                raise ValueError(f"android element not found for bounds={bounds}") from err
+        except Exception as err:
+            raise ValueError(f"android element not found for bounds={bounds}") from err
+        if element is None:
+            raise ValueError(f"android element not found for bounds={bounds}")
+        return element
+
+
+def _element_exists(element: object) -> bool:
+    exists = getattr(element, "exists", None)
+    if isinstance(exists, bool):
+        return exists
+    if callable(exists):
+        result = exists()
+        return result if isinstance(result, bool) else False
+    return True
+
+
+def _element_info(element: object) -> dict[str, object]:
+    info = getattr(element, "info", None)
+    if callable(info):
+        info = info()
+    if isinstance(info, dict):
+        return cast(dict[str, object], info)
+    return {}

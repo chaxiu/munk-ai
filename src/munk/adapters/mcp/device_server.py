@@ -8,7 +8,6 @@ from munk.adapters.mcp.device_tool_handlers import DeviceMcpToolHandlers
 from munk.adapters.mcp.device_tool_registry import register_device_mcp_tools
 from munk.adapters.mcp.server import create_mcp_server
 from munk.services.interactive import InteractiveService
-from munk.services.machine_command_service import MachineCommandService
 
 
 def create_device_mcp_server(
@@ -19,7 +18,6 @@ def create_device_mcp_server(
     port: int = 16888,
 ) -> Any:
     return create_mcp_server(
-        machine_service_factory=lambda: MachineCommandService(workspace_root=(workspace_root or Path.cwd)()),
         workspace_root=workspace_root,
         handlers_factory=lambda: DeviceMcpToolHandlers(
             interactive_service_factory=interactive_service_factory,
@@ -27,9 +25,10 @@ def create_device_mcp_server(
         ),
         server_name="Munk Device Control",
         instructions=(
-            "Use Munk device-control tools for agent-driven interactive sessions. "
-            "Choose this endpoint for explicit observe and act turns on a device, not for plan, review, or verification orchestration. "
-            "Prefer structured tool arguments."
+            "Device-control MCP for step-by-step observe/act (not plan/review/verify). "
+            "Auto smoke: Host owns create/release via Local API /v1/interactive/sessions*; "
+            "agents call session_observe / session_list_targets / session_act with that session_id. "
+            "session_start / abort / finalize are debug-only."
         ),
         streamable_http_path="/mcp/device",
         register_tools=register_device_mcp_tools,

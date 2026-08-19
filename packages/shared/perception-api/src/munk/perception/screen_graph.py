@@ -40,6 +40,10 @@ class TreeNodeSnapshot:
     semantic_role: str | None = None
     matched_visual_ids: list[str] = field(default_factory=empty_str_list)
     promoted_to_actionable: bool = False
+    input_type: str | None = None
+    dom_name: str | None = None
+    dom_value: str | None = None
+    test_id: str | None = None
 
     def label(self) -> str:
         return self.text or self.content_desc or self.resource_id or self.semantic_role or self.class_name or self.node_id

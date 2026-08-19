@@ -23,7 +23,17 @@ def parse_web_dom_snapshot(payload: str) -> list[ParsedTreeNode]:
         name = _clean_text(raw_node.get("name"))
         tag_name = _clean_text(raw_node.get("tag_name"))
         role = _clean_text(raw_node.get("role"))
-        semantic_role = _infer_semantic_role(role=role, tag_name=tag_name, clickable=bool(raw_node.get("clickable")))
+        input_type = _clean_text(raw_node.get("input_type"))
+        dom_name = _clean_text(raw_node.get("attr_name")) or _clean_text(raw_node.get("dom_name"))
+        raw_value = raw_node.get("value")
+        normalized_value = None if raw_value is None else str(raw_value)
+        test_id = _clean_text(raw_node.get("test_id"))
+        semantic_role = _infer_semantic_role(
+            role=role,
+            tag_name=tag_name,
+            clickable=bool(raw_node.get("clickable")),
+            input_type=input_type,
+        )
         nodes.append(
             ParsedTreeNode(
                 node_id=_clean_text(raw_node.get("node_id")) or f"node-{index}",
@@ -40,6 +50,10 @@ def parse_web_dom_snapshot(payload: str) -> list[ParsedTreeNode]:
                 selected=bool(raw_node.get("selected")),
                 scrollable=bool(raw_node.get("scrollable")),
                 semantic_role=semantic_role,
+                input_type=input_type,
+                dom_name=dom_name,
+                dom_value=normalized_value,
+                test_id=test_id,
             )
         )
     return nodes
@@ -65,6 +79,9 @@ def filter_web_dom_nodes(
             or node.clickable
             or node.checkable
             or node.scrollable
+            or node.input_type
+            or node.dom_name
+            or (node.class_name or "").lower() in {"input", "textarea", "select", "button"}
         ):
             continue
         kept.append(node)
@@ -105,7 +122,13 @@ def _coerce_bool(value: object, *, default: bool) -> bool:
     return default
 
 
-def _infer_semantic_role(*, role: str | None, tag_name: str | None, clickable: bool) -> str | None:
+def _infer_semantic_role(
+    *,
+    role: str | None,
+    tag_name: str | None,
+    clickable: bool,
+    input_type: str | None = None,
+) -> str | None:
     normalized_role = (role or "").strip().lower()
     if normalized_role in {"button", "checkbox", "switch", "tab", "textbox", "link"}:
         return {
@@ -116,6 +139,8 @@ def _infer_semantic_role(*, role: str | None, tag_name: str | None, clickable: b
     if normalized_tag in {"button", "summary"}:
         return "button"
     if normalized_tag in {"input", "textarea", "select"}:
+        if (input_type or "").strip().lower() in {"checkbox", "radio"}:
+            return "checkbox"
         return "input"
     if normalized_tag == "a":
         return "button" if clickable else "label"

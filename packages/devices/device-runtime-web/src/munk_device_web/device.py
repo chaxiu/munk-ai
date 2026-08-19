@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, cast
+from collections.abc import Callable, Mapping
+from functools import wraps
+from typing import Any, TypeVar, cast
 from urllib.parse import urlparse
 
 import cv2
@@ -12,6 +14,18 @@ from munk.device import CurrentAppState, RuntimeLogEntry, RuntimeLogLevel
 from munk.perception import ObservationTree
 from munk.perception.image import BgrImage
 from playwright.sync_api import sync_playwright  # pyright: ignore[reportMissingImports]
+
+from .thread_affinity import ThreadAffinityGate
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _on_owner_thread(method: _F) -> _F:
+    @wraps(method)
+    def wrapper(self: WebDevice, *args: Any, **kwargs: Any) -> Any:
+        return self._affinity.call(lambda: method(self, *args, **kwargs))
+
+    return cast(_F, wrapper)
 
 
 class WebDevice:
@@ -27,11 +41,13 @@ class WebDevice:
         self._page: Any | None = None
         self._runtime_logs: list[RuntimeLogEntry] = []
         self._log_session_started = False
+        self._affinity = ThreadAffinityGate(thread_name_prefix="munk-web-device")
 
     @property
     def device_calls_thread_safe(self) -> bool:
         return False
 
+    @_on_owner_thread
     def screenshot_bgr(self) -> BgrImage:
         page = self._ensure_page()
         payload = page.screenshot(type="png")
@@ -39,10 +55,12 @@ class WebDevice:
             raise ValueError("web screenshot not returned as bytes")
         return _decode_png_to_bgr(payload)
 
+    @_on_owner_thread
     def click(self, x: int, y: int) -> None:
         page = self._ensure_page()
         page.mouse.click(x, y)
 
+    @_on_owner_thread
     def long_press(self, x: int, y: int, duration: float | None = None) -> None:
         page = self._ensure_page()
         hold_duration = duration if duration is not None else 1.0
@@ -51,6 +69,7 @@ class WebDevice:
         time.sleep(max(hold_duration, 0.0))
         page.mouse.up()
 
+    @_on_owner_thread
     def scroll(
         self,
         start: tuple[int, int],
@@ -62,6 +81,7 @@ class WebDevice:
         page.mouse.move(start[0], start[1])
         page.mouse.wheel(start[0] - end[0], start[1] - end[1])
 
+    @_on_owner_thread
     def drag(
         self,
         start: tuple[int, int],
@@ -74,6 +94,7 @@ class WebDevice:
         page.mouse.move(end[0], end[1], steps=_drag_move_steps(duration))
         page.mouse.up()
 
+    @_on_owner_thread
     def press(self, key: str) -> None:
         page = self._ensure_page()
         normalized = key.strip().lower()
@@ -85,10 +106,12 @@ class WebDevice:
             return
         page.keyboard.press(key)
 
+    @_on_owner_thread
     def input_text(self, text: str) -> None:
         page = self._ensure_page()
         page.keyboard.type(text)
 
+    @_on_owner_thread
     def clear_text(self) -> None:
         page = self._ensure_page()
         cleared = page.evaluate(_CLEAR_ACTIVE_TEXT_SCRIPT)
@@ -97,6 +120,76 @@ class WebDevice:
         page.keyboard.press("Meta+A")
         page.keyboard.press("Backspace")
 
+    @_on_owner_thread
+    def click_element(self, handle: dict[str, object] | Mapping[str, object]) -> None:
+        locator = self._locator_for_handle(handle)
+        locator.click()
+
+    @_on_owner_thread
+    def fill_element(self, handle: dict[str, object] | Mapping[str, object], text: str, *, mode: str) -> None:
+        locator = self._locator_for_handle(handle)
+        fill_mode = (mode or str(handle.get("fill_mode") or "value")).strip().lower()
+        if fill_mode == "select":
+            locator.select_option(text)
+            return
+        if fill_mode == "check":
+            desired = _coerce_checkbox_desired(text)
+            if desired:
+                locator.check()
+            else:
+                locator.uncheck()
+            return
+        if fill_mode == "type":
+            locator.click()
+            locator.press("Meta+A")
+            locator.press("Backspace")
+            page = self._ensure_page()
+            page.keyboard.type(text)
+            return
+        # Default: value fill. Never keyboard.type for date/time-like controls.
+        locator.fill(text)
+        locator.dispatch_event("input")
+        locator.dispatch_event("change")
+
+    @_on_owner_thread
+    def read_element_value(self, handle: dict[str, object] | Mapping[str, object]) -> str | bool | None:
+        locator = self._locator_for_handle(handle)
+        fill_mode = str(handle.get("fill_mode") or "").strip().lower()
+        input_type = str(handle.get("input_type") or "").strip().lower()
+        tag = str(handle.get("tag") or handle.get("class_name") or "").strip().lower()
+        if fill_mode == "check" or input_type in {"checkbox", "radio"}:
+            checked = locator.is_checked()
+            return bool(checked)
+        if fill_mode == "select" or tag == "select":
+            values = locator.evaluate(
+                """(element) => {
+                  if (!(element instanceof HTMLSelectElement)) {
+                    return element.value ?? null;
+                  }
+                  const selected = Array.from(element.selectedOptions).map((option) => option.value);
+                  if (selected.length <= 1) {
+                    return selected[0] ?? element.value ?? null;
+                  }
+                  return selected.join(",");
+                }"""
+            )
+            if values is None:
+                return None
+            return str(values)
+        value = locator.input_value()
+        return value if isinstance(value, str) else (None if value is None else str(value))
+
+    def _locator_for_handle(self, handle: Mapping[str, object]) -> Any:
+        page = self._ensure_page()
+        selector = handle.get("selector")
+        if isinstance(selector, str) and selector.strip():
+            return page.locator(selector.strip()).first
+        node_id = handle.get("node_id")
+        if isinstance(node_id, str) and node_id.strip():
+            return page.locator(f'[data-munk-node-id="{node_id.strip()}"]').first
+        raise ValueError("element handle requires selector or node_id")
+
+    @_on_owner_thread
     def app_start(self, entry_identity: str) -> None:
         self._ensure_browser()
         self._close_context()
@@ -110,10 +203,12 @@ class WebDevice:
         self._context = context
         self._page = page
 
+    @_on_owner_thread
     def app_stop(self, entry_identity: str) -> None:
         del entry_identity
         self._close_context()
 
+    @_on_owner_thread
     def app_current(self) -> CurrentAppState:
         page = self._ensure_page()
         current_url = getattr(page, "url", None)
@@ -140,6 +235,7 @@ class WebDevice:
             raw={key: value for key, value in raw.items() if value is not None},
         )
 
+    @_on_owner_thread
     def window_size(self) -> tuple[int, int]:
         page = self._ensure_page()
         viewport_size = getattr(page, "viewport_size", None)
@@ -156,6 +252,7 @@ class WebDevice:
         size = self._viewport_size()
         return size["width"], size["height"]
 
+    @_on_owner_thread
     def capture_observation_tree(self) -> ObservationTree | None:
         page = self._ensure_page()
         payload = page.evaluate(_DOM_SNAPSHOT_SCRIPT)
@@ -171,20 +268,31 @@ class WebDevice:
             payload=json.dumps(payload_dict, ensure_ascii=False),
         )
 
+    @_on_owner_thread
     def start_log_session(self) -> None:
         self._log_session_started = True
         self._runtime_logs.clear()
 
+    @_on_owner_thread
     def drain_runtime_logs(self) -> list[RuntimeLogEntry]:
         entries = list(self._runtime_logs)
         self._runtime_logs.clear()
         return entries
 
+    @_on_owner_thread
     def stop_log_session(self) -> None:
         self._log_session_started = False
         self._runtime_logs.clear()
 
     def close(self) -> None:
+        if self._affinity.shut_down:
+            return
+        try:
+            self._affinity.call(self._close_playwright)
+        finally:
+            self._affinity.shutdown()
+
+    def _close_playwright(self) -> None:
         self._close_context()
         browser = self._browser
         if browser is not None:
@@ -434,17 +542,31 @@ _DOM_SNAPSHOT_SCRIPT = """
     const rect = element.getBoundingClientRect();
     const role = (element.getAttribute("role") || "").trim().toLowerCase() || null;
     const text = (element.innerText || element.textContent || "").replace(/\\s+/g, " ").trim() || null;
-    const name = (
+    const labelName = (
       element.getAttribute("aria-label") ||
       element.getAttribute("title") ||
       element.getAttribute("placeholder") ||
-      element.getAttribute("name") ||
       ""
     ).replace(/\\s+/g, " ").trim() || null;
+    const attrName = (element.getAttribute("name") || "").replace(/\\s+/g, " ").trim() || null;
     const tagName = element.tagName.toLowerCase();
+    const inputType = tagName === "input"
+      ? ((element.getAttribute("type") || "text").toLowerCase() || "text")
+      : (tagName === "textarea" || tagName === "select" ? tagName : null);
+    const testId = (
+      element.getAttribute("data-testid") ||
+      element.getAttribute("data-test-id") ||
+      ""
+    ).trim() || null;
+    let value = null;
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      value = element.value;
+    }
     const scrollable = element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1;
+    const nodeId = `node-${counter++}`;
+    element.setAttribute("data-munk-node-id", nodeId);
     const node = {
-      node_id: `node-${counter++}`,
+      node_id: nodeId,
       bounds: [
         Math.round(rect.left),
         Math.round(rect.top),
@@ -454,9 +576,13 @@ _DOM_SNAPSHOT_SCRIPT = """
       tag_name: tagName,
       role,
       text,
-      name,
+      name: labelName || attrName,
+      attr_name: attrName,
       resource_id: element.id || null,
-      clickable: isClickable(element, role),
+      input_type: inputType,
+      value,
+      test_id: testId,
+      clickable: isClickable(element, role) || ["input", "textarea", "select", "button"].includes(tagName),
       checkable: isCheckable(element, role),
       checked: element.getAttribute("aria-checked") === "true" || ("checked" in element && Boolean(element.checked)),
       enabled: !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true",
@@ -471,7 +597,9 @@ _DOM_SNAPSHOT_SCRIPT = """
       !node.text &&
       !node.name &&
       !node.resource_id &&
-      !node.role
+      !node.role &&
+      !node.input_type &&
+      !node.attr_name
     ) {
       continue;
     }
@@ -507,3 +635,10 @@ _CLEAR_ACTIVE_TEXT_SCRIPT = """
   return false;
 }
 """
+
+
+def _coerce_checkbox_desired(text: str) -> bool:
+    normalized = text.strip().lower()
+    if normalized in {"", "0", "false", "no", "off", "unchecked"}:
+        return False
+    return True

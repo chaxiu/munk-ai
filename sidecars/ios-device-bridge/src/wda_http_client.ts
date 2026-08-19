@@ -97,28 +97,38 @@ export class WdaHttpClient {
 
   async clearText(): Promise<void> {
     const payload = await this.sessionRequest('GET', '/element/active');
-    const value = payload.value;
-    if (!value || typeof value !== 'object') {
-      throw new IOSDeviceBridgeError(
-        'wda_invalid_response',
-        'WDA active element response missing value object',
-        502,
-      );
-    }
-    const mapping = value as Record<string, unknown>;
-    const elementId =
-      (typeof mapping['element-6066-11e4-a52e-4f735466cecf'] === 'string'
-        ? mapping['element-6066-11e4-a52e-4f735466cecf']
-        : null) ??
-      (typeof mapping.ELEMENT === 'string' ? mapping.ELEMENT : null);
-    if (!elementId) {
-      throw new IOSDeviceBridgeError(
-        'wda_invalid_response',
-        'WDA active element response missing element identifier',
-        502,
-      );
-    }
+    const elementId = parseWdaElementId(payload.value, 'active element');
+    await this.clearElement(elementId);
+  }
+
+  async findElement(using: string, value: string): Promise<string> {
+    const payload = await this.sessionRequest('POST', '/element', {using, value});
+    return parseWdaElementId(payload.value, `find using=${using}`);
+  }
+
+  async clickElement(elementId: string): Promise<void> {
+    await this.sessionRequest('POST', `/element/${elementId}/click`);
+  }
+
+  async clearElement(elementId: string): Promise<void> {
     await this.sessionRequest('POST', `/element/${elementId}/clear`);
+  }
+
+  async setElementValue(elementId: string, text: string): Promise<void> {
+    await this.sessionRequest('POST', `/element/${elementId}/value`, {
+      value: Array.from(text),
+    });
+  }
+
+  async getElementAttribute(
+    elementId: string,
+    name: string,
+  ): Promise<string | null> {
+    const payload = await this.sessionRequest(
+      'GET',
+      `/element/${elementId}/attribute/${name}`,
+    );
+    return parseWdaAttributeValue(payload.value);
   }
 
   async press(key: string): Promise<void> {
@@ -374,6 +384,46 @@ function extractWdaSessionId(payload: Record<string, unknown>): string | null {
       ? ((payload.value as Record<string, unknown>).sessionId as string)
       : null;
   return direct ?? nested;
+}
+
+function parseWdaElementId(value: unknown, context: string): string {
+  if (!value || typeof value !== 'object') {
+    throw new IOSDeviceBridgeError(
+      'wda_invalid_response',
+      `WDA ${context} response missing value object`,
+      502,
+    );
+  }
+  const mapping = value as Record<string, unknown>;
+  const elementId =
+    (typeof mapping['element-6066-11e4-a52e-4f735466cecf'] === 'string'
+      ? mapping['element-6066-11e4-a52e-4f735466cecf']
+      : null) ??
+    (typeof mapping.ELEMENT === 'string' ? mapping.ELEMENT : null);
+  if (!elementId) {
+    throw new IOSDeviceBridgeError(
+      'wda_invalid_response',
+      `WDA ${context} response missing element identifier`,
+      502,
+    );
+  }
+  return elementId;
+}
+
+function parseWdaAttributeValue(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return null;
 }
 
 function isWdaUiTestingAuthorizationPayload(

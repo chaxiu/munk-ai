@@ -43,6 +43,21 @@ class BridgeWDAProvider:
     def clear_text(self) -> None:
         self._client.clear_text()
 
+    def find_element(self, using: str, value: str) -> str:
+        return self._client.find_element(using, value)
+
+    def click_element(self, element_id: str) -> None:
+        self._client.click_element(element_id)
+
+    def clear_element(self, element_id: str) -> None:
+        self._client.clear_element(element_id)
+
+    def set_element_value(self, element_id: str, text: str) -> None:
+        self._client.set_element_value(element_id, text)
+
+    def get_element_attribute(self, element_id: str, name: str) -> str | None:
+        return self._client.get_element_attribute(element_id, name)
+
     def press(self, key: str) -> None:
         self._client.press(key)
 

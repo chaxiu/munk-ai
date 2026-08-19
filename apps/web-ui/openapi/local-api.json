@@ -4270,6 +4270,43 @@
         "title": "ContextPrepareStartStateStepEventPayload",
         "type": "object"
       },
+      "CreateInteractiveSessionRequest": {
+        "properties": {
+          "app_target": {
+            "$ref": "#/components/schemas/AppTarget",
+            "description": "Application target to bind the interactive session to."
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional path to a Munk config file; otherwise workspace/profile discovery applies.",
+            "title": "Config Path"
+          },
+          "device_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional device reference to claim for the interactive session.",
+            "title": "Device Ref"
+          }
+        },
+        "required": [
+          "app_target"
+        ],
+        "title": "CreateInteractiveSessionRequest",
+        "type": "object"
+      },
       "CreateRecordingRequest": {
         "properties": {
           "app_target": {
@@ -5303,6 +5340,24 @@
         "title": "ExecutionOutcome",
         "type": "object"
       },
+      "FinalizeInteractiveSessionRequest": {
+        "properties": {
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional agent or host summary recorded on finalize.",
+            "title": "Summary"
+          }
+        },
+        "title": "FinalizeInteractiveSessionRequest",
+        "type": "object"
+      },
       "FlowKnowledgeCandidateDraft": {
         "properties": {
           "app_id": {
@@ -5969,6 +6024,204 @@
           "text"
         ],
         "title": "InputForwardingPayload",
+        "type": "object"
+      },
+      "InteractiveSessionAbortData": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/InteractiveSessionPayload"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "InteractiveSessionAbortData",
+        "type": "object"
+      },
+      "InteractiveSessionCreateData": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/InteractiveSessionPayload"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "InteractiveSessionCreateData",
+        "type": "object"
+      },
+      "InteractiveSessionFinalizeData": {
+        "properties": {
+          "agent_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional summary provided at finalize.",
+            "title": "Agent Summary"
+          },
+          "last_observation_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Summary of the latest observation when available.",
+            "title": "Last Observation Summary"
+          },
+          "session": {
+            "$ref": "#/components/schemas/InteractiveSessionPayload"
+          },
+          "step_count": {
+            "description": "Recorded step count at finalize time.",
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "steps_summary": {
+            "description": "Transcript of step summaries.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps Summary",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session",
+          "step_count"
+        ],
+        "title": "InteractiveSessionFinalizeData",
+        "type": "object"
+      },
+      "InteractiveSessionGetData": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/InteractiveSessionPayload"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "InteractiveSessionGetData",
+        "type": "object"
+      },
+      "InteractiveSessionPayload": {
+        "properties": {
+          "app_id": {
+            "description": "Application identifier associated with the session.",
+            "title": "App Id",
+            "type": "string"
+          },
+          "device_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Claimed device reference when available.",
+            "title": "Device Ref"
+          },
+          "expires_at": {
+            "description": "Session absolute expiry timestamp in ISO format.",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "finalized_agent_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Agent summary from finalize when available.",
+            "title": "Finalized Agent Summary"
+          },
+          "idle_expires_at": {
+            "description": "Session idle expiry timestamp in ISO format.",
+            "title": "Idle Expires At",
+            "type": "string"
+          },
+          "last_active_at": {
+            "description": "Last agent activity timestamp in ISO format.",
+            "title": "Last Active At",
+            "type": "string"
+          },
+          "last_observation_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Summary of the latest observation when available.",
+            "title": "Last Observation Summary"
+          },
+          "platform": {
+            "description": "Interactive target platform.",
+            "title": "Platform",
+            "type": "string"
+          },
+          "session_id": {
+            "description": "Interactive session identifier.",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "Session start timestamp in ISO format.",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "description": "Current interactive session status.",
+            "enum": [
+              "created",
+              "waiting_agent",
+              "acting",
+              "finalized",
+              "aborted",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step_count": {
+            "description": "Current recorded step count.",
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "description": "Session update timestamp in ISO format.",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "status",
+          "platform",
+          "app_id",
+          "step_count",
+          "started_at",
+          "updated_at",
+          "last_active_at",
+          "expires_at",
+          "idle_expires_at"
+        ],
+        "title": "InteractiveSessionPayload",
         "type": "object"
       },
       "InteractiveSessionStateData": {
@@ -17568,6 +17821,17 @@
             ],
             "title": "Action"
           },
+          "advice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advice"
+          },
           "consecutive_no_effect_count": {
             "anyOf": [
               {
@@ -17578,6 +17842,28 @@
               }
             ],
             "title": "Consecutive No Effect Count"
+          },
+          "consecutive_postcheck_failure_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consecutive Postcheck Failure Count"
+          },
+          "postcheck_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postcheck Summary"
           },
           "reason": {
             "anyOf": [
@@ -19681,6 +19967,154 @@
           "data"
         ],
         "title": "SuccessResponse[DeviceUnlockData]",
+        "type": "object"
+      },
+      "SuccessResponse_InteractiveSessionAbortData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InteractiveSessionAbortData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[InteractiveSessionAbortData]",
+        "type": "object"
+      },
+      "SuccessResponse_InteractiveSessionCreateData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InteractiveSessionCreateData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[InteractiveSessionCreateData]",
+        "type": "object"
+      },
+      "SuccessResponse_InteractiveSessionFinalizeData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InteractiveSessionFinalizeData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[InteractiveSessionFinalizeData]",
+        "type": "object"
+      },
+      "SuccessResponse_InteractiveSessionGetData_": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InteractiveSessionGetData"
+          },
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "data"
+        ],
+        "title": "SuccessResponse[InteractiveSessionGetData]",
         "type": "object"
       },
       "SuccessResponse_KnowledgeCandidateApproveData_": {
@@ -24752,6 +25186,321 @@
           }
         },
         "summary": "Install App"
+      }
+    },
+    "/v1/interactive/sessions": {
+      "post": {
+        "operationId": "create_interactive_session_v1_interactive_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInteractiveSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InteractiveSessionCreateData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Create Interactive Session"
+      }
+    },
+    "/v1/interactive/sessions/{session_id}": {
+      "get": {
+        "operationId": "get_interactive_session_v1_interactive_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InteractiveSessionGetData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Get Interactive Session"
+      }
+    },
+    "/v1/interactive/sessions/{session_id}/abort": {
+      "post": {
+        "operationId": "abort_interactive_session_v1_interactive_sessions__session_id__abort_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InteractiveSessionAbortData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Abort Interactive Session"
+      }
+    },
+    "/v1/interactive/sessions/{session_id}/finalize": {
+      "post": {
+        "operationId": "finalize_interactive_session_v1_interactive_sessions__session_id__finalize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeInteractiveSessionRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InteractiveSessionFinalizeData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Finalize Interactive Session"
       }
     },
     "/v1/plan": {

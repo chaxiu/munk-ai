@@ -11,9 +11,80 @@ from munk.device import (
     DeviceInfo,
     SupportsAppInstall,
     SupportsClose,
+    SupportsElementTargetAction,
     SupportsRuntimeLogs,
 )
 from munk_device_android import AndroidDevice
+
+
+class FakeUiObject:
+    def __init__(self, device: "FakeU2Device", selector: dict[str, object]) -> None:
+        self._device = device
+        self._selector = dict(selector)
+        self.exists = True
+
+    def click(self) -> None:
+        self._device.element_clicks.append(dict(self._selector))
+
+    def set_text(self, text: str) -> None:
+        key = self._storage_key()
+        self._device.element_texts[key] = text
+        self._device.element_set_text_calls.append((dict(self._selector), text))
+
+    def clear_text(self) -> None:
+        key = self._storage_key()
+        self._device.element_texts[key] = ""
+        self._device.element_clear_calls.append(dict(self._selector))
+
+    def get_text(self) -> str:
+        key = self._storage_key()
+        return self._device.element_texts.get(key, str(self._device.element_info.get("text") or ""))
+
+    @property
+    def info(self) -> dict[str, object]:
+        payload = dict(self._device.element_info)
+        key = self._storage_key()
+        if key in self._device.element_texts:
+            payload["text"] = self._device.element_texts[key]
+        return payload
+
+    def _storage_key(self) -> str:
+        resource_id = self._selector.get("resourceId")
+        if isinstance(resource_id, str) and resource_id:
+            return resource_id
+        bounds = self._selector.get("bounds")
+        if isinstance(bounds, str) and bounds:
+            return bounds
+        return repr(sorted(self._selector.items()))
+
+
+class FakeXPathQuery:
+    def __init__(self, device: "FakeU2Device", expression: str) -> None:
+        self._device = device
+        self._expression = expression
+
+    def get(self, timeout: float | None = None) -> FakeUiObject:
+        del timeout
+        self._device.xpath_calls.append(self._expression)
+        if self._device.xpath_missing:
+            raise ValueError(f"xpath miss: {self._expression}")
+        bounds = None
+        class_name = None
+        resource_id = None
+        if '@bounds="' in self._expression:
+            bounds = self._expression.split('@bounds="', 1)[1].split('"', 1)[0]
+        if '@class="' in self._expression:
+            class_name = self._expression.split('@class="', 1)[1].split('"', 1)[0]
+        if '@resource-id="' in self._expression:
+            resource_id = self._expression.split('@resource-id="', 1)[1].split('"', 1)[0]
+        selector: dict[str, object] = {}
+        if resource_id:
+            selector["resourceId"] = resource_id
+        if class_name:
+            selector["className"] = class_name
+        if bounds:
+            selector["bounds"] = bounds
+        return FakeUiObject(self._device, selector)
 
 
 class FakeU2Device:
@@ -38,6 +109,28 @@ class FakeU2Device:
         self.long_click_calls: list[tuple[int, int, float]] = []
         self.unlock_calls = 0
         self.screen_on_calls = 0
+        self.coord_clicks: list[tuple[int, int]] = []
+        self.selector_calls: list[dict[str, object]] = []
+        self.element_clicks: list[dict[str, object]] = []
+        self.element_set_text_calls: list[tuple[dict[str, object], str]] = []
+        self.element_clear_calls: list[dict[str, object]] = []
+        self.element_texts: dict[str, str] = {}
+        self.element_info: dict[str, object] = {"text": "", "checked": False, "checkable": False}
+        self.missing_resource_ids: set[str] = set()
+        self.xpath_calls: list[str] = []
+        self.xpath_missing = False
+
+    def __call__(self, **kwargs: object) -> FakeUiObject:
+        selector = dict(kwargs)
+        self.selector_calls.append(selector)
+        element = FakeUiObject(self, selector)
+        resource_id = selector.get("resourceId")
+        if isinstance(resource_id, str) and resource_id in self.missing_resource_ids:
+            element.exists = False
+        return element
+
+    def xpath(self, expression: str) -> FakeXPathQuery:
+        return FakeXPathQuery(self, expression)
 
     def swipe(self, *args):  # noqa: ANN002, ANN003
         self.swipe_calls.append(args)
@@ -91,7 +184,7 @@ class FakeU2Device:
         return self.current_ime_value
 
     def click(self, x: int, y: int) -> None:
-        del x, y
+        self.coord_clicks.append((x, y))
 
     def long_click(self, x: int, y: int, duration: float) -> None:
         self.long_click_calls.append((x, y, duration))
@@ -245,7 +338,7 @@ def test_android_device_app_install_pushes_to_device_tmp_then_installs_and_clean
     assert fake.push_calls[0][1].startswith("/data/local/tmp/munk-install-")
     assert fake.push_calls[0][1].endswith(".apk")
     assert fake.shell_calls == [
-        ["pm", "install", "-r", fake.push_calls[0][1]],
+        ["pm", "install", "-r", "-t", fake.push_calls[0][1]],
         ["rm", "-f", fake.push_calls[0][1]],
     ]
 
@@ -424,6 +517,7 @@ def test_android_device_satisfies_device_driver_protocol() -> None:
     assert isinstance(cast(object, device), SupportsAppInstall)
     assert isinstance(cast(object, device), SupportsClose)
     assert isinstance(cast(object, device), SupportsRuntimeLogs)
+    assert isinstance(cast(object, device), SupportsElementTargetAction)
 
 
 def test_android_device_runtime_logs_use_pid_scoped_logcat() -> None:
@@ -528,3 +622,112 @@ def test_android_device_connect_exports_munk_adb_path_to_adbutils(monkeypatch) -
 
     assert os.environ["ADBUTILS_ADB_PATH"] == "/tmp/munk-adb"
     assert isinstance(device, AndroidDevice)
+
+
+def test_android_device_click_element_uses_resource_id_when_no_box() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    device.click_element(
+        {
+            "kind": "a11y",
+            "resource_id": "com.test.app:id/save",
+            "class_name": "android.widget.Button",
+        }
+    )
+
+    assert fake.selector_calls == [
+        {"resourceId": "com.test.app:id/save", "className": "android.widget.Button"}
+    ]
+    assert fake.element_clicks == [
+        {"resourceId": "com.test.app:id/save", "className": "android.widget.Button"}
+    ]
+    assert fake.xpath_calls == []
+    assert fake.coord_clicks == []
+
+
+def test_android_device_click_element_prefers_bounds_when_resource_id_and_box() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    device.click_element(
+        {
+            "kind": "a11y",
+            "resource_id": "com.test.app:id/checkbox_task",
+            "class_name": "android.widget.CheckBox",
+            "box": (140, 1217, 308, 1385),
+        }
+    )
+
+    assert fake.selector_calls == []
+    assert fake.xpath_calls == [
+        '//*[@resource-id="com.test.app:id/checkbox_task" and @bounds="[140,1217][308,1385]"]'
+    ]
+    assert fake.element_clicks == [
+        {
+            "resourceId": "com.test.app:id/checkbox_task",
+            "bounds": "[140,1217][308,1385]",
+        }
+    ]
+    assert fake.coord_clicks == []
+
+
+def test_android_device_fill_and_read_element_use_edittext_text() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+    handle = {
+        "kind": "a11y",
+        "resource_id": "com.test.app:id/title",
+        "class_name": "android.widget.EditText",
+        "box": (20, 100, 400, 160),
+    }
+
+    device.fill_element(handle, "Buy milk", mode="value")
+    value = device.read_element_value(handle)
+
+    expected_selector = {
+        "resourceId": "com.test.app:id/title",
+        "bounds": "[20,100][400,160]",
+    }
+    assert fake.xpath_calls == [
+        '//*[@resource-id="com.test.app:id/title" and @bounds="[20,100][400,160]"]',
+        '//*[@resource-id="com.test.app:id/title" and @bounds="[20,100][400,160]"]',
+    ]
+    assert fake.element_set_text_calls == [(expected_selector, "Buy milk")]
+    assert value == "Buy milk"
+    assert fake.coord_clicks == []
+
+
+def test_android_device_click_element_resolves_bounds_via_xpath() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    device.click_element(
+        {
+            "kind": "a11y",
+            "class_name": "android.widget.ImageView",
+            "box": (40, 50, 80, 90),
+        }
+    )
+
+    # class is intentionally omitted from bounds xpath (uiautomator2 @class mismatch).
+    assert fake.xpath_calls == ['//*[@bounds="[40,50][80,90]"]']
+    assert fake.element_clicks == [{"bounds": "[40,50][80,90]"}]
+    assert fake.coord_clicks == []
+
+
+def test_android_device_element_api_fails_when_resource_missing() -> None:
+    fake = FakeU2Device()
+    fake.missing_resource_ids.add("com.test.app:id/missing")
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="android element not found"):
+        device.click_element({"kind": "a11y", "resource_id": "com.test.app:id/missing"})
+
+
+def test_android_device_element_api_fails_without_locator_fields() -> None:
+    fake = FakeU2Device()
+    device = AndroidDevice(fake, app_target=build_app_target())  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="requires resource_id or box"):
+        device.click_element({"kind": "a11y", "node_id": "node-0"})

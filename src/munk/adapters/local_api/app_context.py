@@ -21,6 +21,7 @@ class LocalApiAppContext:
         workspace_root: Path,
         start_recording_bridge: bool,
         recording_service: RecordingSessionService | None = None,
+        interactive_service: InteractiveService | None = None,
     ) -> None:
         self.project_root = project_root
         self.workspace_root = workspace_root
@@ -28,7 +29,7 @@ class LocalApiAppContext:
         self.background_operation_supervisor = LocalBackgroundOperationSupervisor()
         self._machine_service: MachineCommandService | None = None
         self._recording_service = recording_service
-        self._interactive_service: InteractiveService | None = None
+        self._interactive_service = interactive_service
         self._schedule_runner: ScheduleRunner | None = None
 
     def get_machine_service(self) -> MachineCommandService:

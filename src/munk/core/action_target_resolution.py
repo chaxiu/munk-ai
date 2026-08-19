@@ -11,17 +11,39 @@ from munk.core.action_target_geometry import (
     spatial_sort_key,
 )
 from munk.core.action_target_models import ActionTarget, ActionTargetResolution
+from munk.core.action_target_refs import normalize_target_ref, parse_target_ref
 from munk.core.action_target_utils import first_int, normalized_text
 
 
-def resolve_action_target(screen: ScreenState, *, target_id: int, max_elements: int) -> ActionTarget:
+def resolve_action_target(
+    screen: ScreenState,
+    *,
+    target_ref: str,
+    max_elements: int,
+) -> ActionTarget:
     _ = max_elements
     canonical_parts = build_canonical_target_parts(screen)
-    targets = [*canonical_parts.vision_targets, *canonical_parts.tree_targets]
-    index = target_id - 1 if target_id > 0 else target_id
-    if not 0 <= index < len(targets):
-        raise ValueError(f"target_id out of range: {target_id}")
-    return targets[index]
+    return _resolve_by_ref(canonical_parts.vision_targets, canonical_parts.tree_targets, target_ref)
+
+
+def _resolve_by_ref(
+    vision_targets: list[ActionTarget],
+    tree_targets: list[ActionTarget],
+    target_ref: str,
+) -> ActionTarget:
+    channel, index = parse_target_ref(target_ref)
+    channel_targets = vision_targets if channel == "v" else tree_targets
+    for target in channel_targets:
+        if target.index == index and target.channel == channel:
+            return target
+    # Fallback: refs may be missing on transitional fixtures; match by constructed ref.
+    normalized = normalize_target_ref(target_ref)
+    for target in channel_targets:
+        if target.ref == normalized:
+            return target
+    if 1 <= index <= len(channel_targets):
+        return channel_targets[index - 1]
+    raise ValueError(f"target_ref out of range: {target_ref}")
 
 
 def find_action_target_by_box(
@@ -204,6 +226,9 @@ def summarize_action_target(target: ActionTarget | None) -> dict[str, object] | 
     }
     return {
         "target_id": target.target_id,
+        "ref": target.ref,
+        "channel": target.channel,
+        "index": target.index,
         "part": target.part,
         "source": target.source,
         "label": target.label,
@@ -220,6 +245,10 @@ def summarize_action_target(target: ActionTarget | None) -> dict[str, object] | 
         "ocr_texts": list(target.ocr_texts),
         "reason": target.reason,
         "platform": target.platform,
+        "input_type": target.input_type,
+        "dom_name": target.dom_name,
+        "dom_value": target.dom_value,
+        "test_id": target.test_id,
     }
 
 

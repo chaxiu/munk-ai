@@ -44,6 +44,6 @@ def register_run_evidence_tools(
         step_index: int | None = None,
         annotated: bool = True,
     ) -> str | ToolReturn:
-        """Read the compressed screenshot image for a step; annotated screenshots align target ids with prompt text."""
+        """Read the compressed screenshot image for a step; annotated screenshots align target_ref labels (vN / tN) with prompt text."""
         return provider_getter(ctx.deps).read_step_screenshot(step_index, annotated)
 

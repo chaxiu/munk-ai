@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from munk.agent_base.action import ActionExecutionResult, ActionType
 from munk.agent_base.action.high_level import HighLevelActionResult
 from munk.agent_base.action_annotation import annotate_action_targets
@@ -17,9 +19,18 @@ from .models import (
     InteractiveSession,
     InteractiveStepRecord,
     InteractiveTargetSummary,
+    InteractiveTreeStatus,
     now_iso,
 )
 from .session_context import InteractiveSessionContext
+from .target_catalog import build_interactive_target_catalog
+
+
+@dataclass(frozen=True)
+class ObservationTreeCapture:
+    tree: object | None
+    status: InteractiveTreeStatus
+    error: str | None = None
 
 
 def capture_interactive_observation(
@@ -27,31 +38,30 @@ def capture_interactive_observation(
     session_id: str,
     context: InteractiveSessionContext,
 ) -> InteractiveObservation:
-    screen = capture_screen_state(context).screen
-    action_targets = build_action_targets(screen, max_elements=context.max_elements)
-    targets = [
-        InteractiveTargetSummary(
-            target_id=target.target_id,
-            label=target.label,
-            kind=target.kind,
-            source=target.source,
-            box=target.box,
-            resource_id=target.resource_id,
-            text=target.text,
-        )
-        for target in action_targets
-    ]
+    snapshot, tree_capture = _capture_screen_state_with_tree(context)
+    screen = snapshot.screen
+    # Full canonical catalog (uncapped): same identity space as session_list_targets / match.
+    targets = build_interactive_target_catalog(screen)
     annotated_image_bgr = None
     if screen.image_bgr is not None:
-        annotated_image_bgr = annotate_action_targets(screen.image_bgr, action_targets)
+        # Overlay stays bounded for readability; resolve/act still use full `targets`.
+        annotate_targets = build_action_targets(screen, max_elements=context.max_elements)
+        annotated_image_bgr = annotate_action_targets(screen.image_bgr, annotate_targets)
+    runtime = resolve_runtime_config(context.resolved_config.config)
     return InteractiveObservation(
         session_id=session_id,
         captured_at=now_iso(),
         screen=screen,
         targets=targets,
         summary=build_observation_summary(screen, targets),
-        vl_max_side=resolve_runtime_config(context.resolved_config.config).vl_max_side,
+        vl_max_side=runtime.vl_max_side,
         annotated_image_bgr=annotated_image_bgr,
+        tree_status=tree_capture.status,
+        tree_error=tree_capture.error,
+        vl_image_format=runtime.vl_image_format,
+        vl_fallback_image_format=runtime.vl_fallback_image_format,
+        vl_webp_quality=runtime.vl_webp_quality,
+        vl_jpeg_quality=runtime.vl_jpeg_quality,
     )
 
 
@@ -68,8 +78,18 @@ def capture_screen_state(
     *,
     source: ObservationSnapshotSource = "step_pre_action",
 ) -> RuntimeObservationSnapshot:
+    snapshot, _tree_capture = _capture_screen_state_with_tree(context, source=source)
+    return snapshot
+
+
+def _capture_screen_state_with_tree(
+    context: InteractiveSessionContext,
+    *,
+    source: ObservationSnapshotSource = "step_pre_action",
+) -> tuple[RuntimeObservationSnapshot, ObservationTreeCapture]:
     screen_bgr = context.device.screenshot_bgr()
-    observation_tree = _capture_observation_tree(context)
+    tree_capture = _capture_observation_tree(context)
+    observation_tree = tree_capture.tree
     app_info = context.device.app_current()
     keyboard_visible, keyboard_bounds, keyboard_source = _read_soft_keyboard_state(context)
     image_h = int(screen_bgr.shape[0])
@@ -79,10 +99,10 @@ def capture_screen_state(
         device_size=context.device.window_size(),
         image_size=(image_w, image_h),
     )
-    return build_runtime_observation_snapshot(
+    snapshot = build_runtime_observation_snapshot(
         perception=context.perception,
         screen_bgr=screen_bgr,
-        observation_tree=observation_tree,
+        observation_tree=observation_tree,  # type: ignore[arg-type]
         entry_identity=app_info.entry_identity,
         surface_identity=app_info.surface_identity,
         platform=app_info.platform,
@@ -99,6 +119,7 @@ def capture_screen_state(
             keyboard_source=keyboard_source,
         ),
     )
+    return snapshot, tree_capture
 
 
 def build_observation_summary(
@@ -175,11 +196,15 @@ def close_interactive_context(context: InteractiveSessionContext) -> None:
         close()
 
 
-def _capture_observation_tree(context: InteractiveSessionContext):
+def _capture_observation_tree(context: InteractiveSessionContext) -> ObservationTreeCapture:
     try:
-        return context.device.capture_observation_tree()
-    except Exception:
-        return None
+        tree = context.device.capture_observation_tree()
+    except Exception as err:
+        message = str(err).strip() or err.__class__.__name__
+        return ObservationTreeCapture(tree=None, status="error", error=message[:240])
+    if tree is None:
+        return ObservationTreeCapture(tree=None, status="missing")
+    return ObservationTreeCapture(tree=tree, status="ok")
 
 
 def _build_platform_context(

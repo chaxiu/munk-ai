@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from munk.agent_base.action import Action, ActionType
+from munk.core.action_target_models import TargetHandle
 
 
 def map_action_to_device(
@@ -36,8 +39,18 @@ def map_action_to_device(
         y2 = max(0, min(device_h - 1, y2))
         return x1, y1, x2, y2
 
+    def scale_handle(handle: TargetHandle | None) -> TargetHandle | None:
+        if handle is None or handle.box is None:
+            return handle
+        return replace(handle, box=scale_box(handle.box))
+
     if action.type == ActionType.CLICK and action.box:
-        return Action.click(scale_box(action.box), summary=action.summary)
+        return Action.click(
+            scale_box(action.box),
+            summary=action.summary,
+            handle=scale_handle(action.handle),
+            target_ref=action.target_ref,
+        )
     if action.type == ActionType.CLICK and action.point:
         return Action.click_point(scale_point(action.point), summary=action.summary)
     if action.type == ActionType.LONG_PRESS and action.box:
@@ -45,6 +58,8 @@ def map_action_to_device(
             scale_box(action.box),
             duration=action.duration,
             summary=action.summary,
+            handle=scale_handle(action.handle),
+            target_ref=action.target_ref,
         )
     if action.type == ActionType.LONG_PRESS and action.point:
         return Action.long_press_point(
@@ -58,6 +73,17 @@ def map_action_to_device(
             mode=action.text_mode or "append",
             target_box=scale_box(action.box) if action.box is not None else None,
             dismiss_keyboard=action.dismiss_keyboard,
+            summary=action.summary,
+            handle=scale_handle(action.handle),
+            target_ref=action.target_ref,
+        )
+    if action.type == ActionType.SET_VALUE and action.text is not None and action.handle is not None:
+        scaled_handle = scale_handle(action.handle)
+        assert scaled_handle is not None
+        return Action.set_value(
+            value=action.text,
+            handle=scaled_handle,
+            target_ref=action.target_ref or "",
             summary=action.summary,
         )
     if action.type == ActionType.INPUT and action.text is not None:

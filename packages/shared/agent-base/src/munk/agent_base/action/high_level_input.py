@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import time
+
+from munk.core.action_target_refs import is_text_input_handle, requires_set_value_handle
+from munk.core.action_targets import handle_as_mapping
 from munk.device import (
     DeviceDriver,
+    SupportsElementTargetAction,
     SupportsSoftKeyboardDismiss,
     SupportsSoftKeyboardVisibility,
     SupportsTextClear,
@@ -9,13 +14,24 @@ from munk.device import (
 
 from ..base import ScreenState
 from ..types import Action
-from .executor import ActionExecutor, ActionExecutionError
+from .executor import ActionExecutor, ActionExecutionError, ActionExecutionResult
 from .high_level_common import HighLevelActionResult, ObservationRefresher, from_atomic_result
 from .high_level_screen import (
     input_target_has_text,
     map_box_to_screen_space,
     screen_contains_text,
     screen_likely_has_visible_keyboard,
+)
+from .structure_handle import is_structure_element_handle
+
+
+_EDIT_TEXT_STRUCTURED_REJECT = (
+    "edit_text cannot set structured controls "
+    "(date/select/checkbox/switch/radio); use set_value with #t*"
+)
+_EDIT_TEXT_NON_TEXT_REJECT = (
+    "edit_text requires a real text input target; "
+    "use set_value for structured controls or pick a text field"
 )
 
 
@@ -34,6 +50,19 @@ class HighLevelInputHandler:
         if mode == "append":
             return self._execute_edit_text_append(action, capture_observation)
         return self._execute_edit_text_replace(action, screen, capture_observation)
+
+    def execute_set_value(
+        self,
+        action: Action,
+        capture_observation: ObservationRefresher,
+    ) -> HighLevelActionResult:
+        if not is_structure_element_handle(action.handle):
+            raise ActionExecutionError("set_value requires a structure handle (#t*)")
+        return self._execute_structure_set_value(
+            action,
+            capture_observation,
+            warning_code_prefix="set_value",
+        )
 
     def execute_dismiss_soft_keyboard(
         self,
@@ -61,6 +90,7 @@ class HighLevelInputHandler:
         action: Action,
         capture_observation: ObservationRefresher,
     ) -> HighLevelActionResult:
+        self._reject_edit_text_structure_mismatch(action)
         if action.box is not None:
             focus_execution = self._executor.execute(Action.click(action.box, summary=action.summary))
             if not focus_execution.executed:
@@ -111,8 +141,15 @@ class HighLevelInputHandler:
         screen: ScreenState,
         capture_observation: ObservationRefresher,
     ) -> HighLevelActionResult:
+        if is_structure_element_handle(action.handle):
+            self._reject_edit_text_structure_mismatch(action)
+            return self._execute_structure_set_value(
+                action,
+                capture_observation,
+                warning_code_prefix="edit_text_replace",
+            )
         if action.box is None:
-            raise ActionExecutionError("edit_text replace requires target box")
+            raise ActionExecutionError("edit_text replace requires target box or structure handle")
         click_action = Action.click(action.box, summary=action.summary)
         target_box_on_screen = map_box_to_screen_space(
             action.box,
@@ -195,6 +232,66 @@ class HighLevelInputHandler:
                 dismiss_keyboard=dismiss_requested,
                 soft_keyboard_applicable=soft_keyboard_applicable,
                 keyboard_ok=keyboard_ok,
+            ),
+            warning_code=warning_code,
+            warning_message=warning_message,
+        )
+
+    def _execute_structure_set_value(
+        self,
+        action: Action,
+        capture_observation: ObservationRefresher,
+        *,
+        warning_code_prefix: str,
+    ) -> HighLevelActionResult:
+        handle = action.handle
+        if not is_structure_element_handle(handle):
+            raise ActionExecutionError("structure set_value requires structure handle")
+        assert handle is not None  # narrowed by is_structure_element_handle
+        if not isinstance(self._driver, SupportsElementTargetAction):
+            raise ActionExecutionError("device does not support element target actions")
+        fill_mode = (handle.fill_mode or "value").strip().lower()
+        started = time.monotonic()
+        try:
+            self._driver.fill_element(handle_as_mapping(handle), action.text or "", mode=fill_mode)
+        except Exception as exc:  # noqa: BLE001 - surface device errors via action result
+            duration_ms = int(round((time.monotonic() - started) * 1000.0))
+            failed = ActionExecutionResult(
+                executed=False,
+                timed_out=False,
+                action=action,
+                normalized_action=action,
+                duration_ms=duration_ms,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            return from_atomic_result(action, failed)
+        duration_ms = int(round((time.monotonic() - started) * 1000.0))
+        execution = ActionExecutionResult(
+            executed=True,
+            timed_out=False,
+            action=action,
+            normalized_action=action,
+            duration_ms=duration_ms,
+        )
+        capture_observation("post_action_final")
+        actual = self._driver.read_element_value(handle_as_mapping(handle))
+        expected = action.text or ""
+        value_applied = _element_value_matches(actual=actual, expected=expected, fill_mode=fill_mode)
+        warning_code = None
+        warning_message = None
+        if not value_applied:
+            warning_code = f"{warning_code_prefix}_value_not_applied"
+            warning_message = f"element value {actual!r} does not match expected {expected!r}"
+        return from_atomic_result(
+            action,
+            execution,
+            normalized_action_override=action,
+            postcheck_passed=value_applied,
+            postcheck_summary=(
+                f"element_value_match text={expected!r} actual={actual!r}"
+                if value_applied
+                else f"element_value_missing text={expected!r} actual={actual!r}"
             ),
             warning_code=warning_code,
             warning_message=warning_message,
@@ -384,8 +481,34 @@ class HighLevelInputHandler:
         return screen_likely_has_visible_keyboard(screen, recent_input=recent_input)
 
     @staticmethod
+    def _reject_edit_text_structure_mismatch(action: Action) -> None:
+        handle = action.handle
+        if not is_structure_element_handle(handle):
+            return
+        if requires_set_value_handle(handle):
+            raise ActionExecutionError(_EDIT_TEXT_STRUCTURED_REJECT)
+        if not is_text_input_handle(handle):
+            raise ActionExecutionError(_EDIT_TEXT_NON_TEXT_REJECT)
+
+    @staticmethod
     def _require_edit_text_mode(action: Action) -> str:
         mode = (action.text_mode or "").strip().lower()
         if mode not in {"append", "replace"}:
             raise ActionExecutionError("edit_text requires text_mode of append or replace")
         return mode
+
+
+def _element_value_matches(*, actual: str | bool | None, expected: str, fill_mode: str) -> bool:
+    if fill_mode == "check":
+        desired = expected.strip().lower() not in {"", "0", "false", "no", "off", "unchecked"}
+        return bool(actual) is desired
+    if actual is None:
+        return False
+    actual_text = str(actual).strip()
+    expected_text = expected.strip()
+    if actual_text == expected_text:
+        return True
+    # date inputs may normalize zero-padded values; compare digit-only forms as fallback
+    actual_digits = "".join(ch for ch in actual_text if ch.isdigit())
+    expected_digits = "".join(ch for ch in expected_text if ch.isdigit())
+    return bool(actual_digits) and actual_digits == expected_digits

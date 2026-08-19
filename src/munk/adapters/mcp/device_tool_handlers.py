@@ -23,14 +23,15 @@ from .device_tool_models import (
     AppInstallInput,
     AppLaunchInput,
     AppStopInput,
+    DevicesListInput,
     DeviceStateInput,
     DeviceUnlockInput,
-    DevicesListInput,
     SessionAbortInput,
     SessionActInput,
     SessionActionInput,
     SessionFinalizeInput,
     SessionGetInput,
+    SessionListTargetsInput,
     SessionObserveInput,
     SessionsListInput,
     SessionStartInput,
@@ -38,24 +39,25 @@ from .device_tool_models import (
 from .device_tool_outputs import (
     AppLifecycleData,
     AppLifecycleOutput,
-    InteractiveActionDiffSummaryData,
-    DeviceUnlockData,
-    DeviceStateOutput,
-    DeviceUnlockOutput,
     DevicesListOutput,
+    DeviceStateOutput,
+    DeviceUnlockData,
+    DeviceUnlockOutput,
     InteractiveActionData,
+    InteractiveActionDiffSummaryData,
     InteractiveSessionData,
     InteractiveSessionListItemData,
     SessionAbortOutput,
     SessionActOutput,
     SessionFinalizeOutput,
     SessionGetOutput,
+    SessionListTargetsOutput,
     SessionObserveOutput,
     SessionsListOutput,
     SessionStartConflictData,
     SessionStartOutput,
 )
-from .interactive_projection import build_observation_payload
+from .interactive_projection import build_list_targets_payload, build_observe_payload
 
 
 class DeviceMcpToolHandlers:
@@ -141,9 +143,6 @@ class DeviceMcpToolHandlers:
                 device_ref=request.device_ref,
                 package=request.package,
                 bundle_id=request.bundle_id,
-                base_url=request.base_url,
-                origin=request.origin,
-                headless=request.headless,
                 assets_root=request.assets_root,
             )
         )
@@ -210,18 +209,43 @@ class DeviceMcpToolHandlers:
         return SessionObserveOutput(
             summary=observation.summary,
             session=_build_session_data(session),
-            observation=build_observation_payload(
+            observation=build_observe_payload(
                 observation,
-                detail=request.detail,
                 include_screenshot=request.include_screenshot,
+                match=request.match,
             ),
+        )
+
+    def session_list_targets(self, request: SessionListTargetsInput) -> SessionListTargetsOutput:
+        service = self._interactive_service_factory()
+        session = service.get_session(request.session_id)
+        observation = session.last_observation
+        if observation is None:
+            raise ValueError(
+                "session_list_targets requires a prior session_observe snapshot; "
+                "call session_observe first, then page with session_list_targets"
+            )
+        data = build_list_targets_payload(
+            observation,
+            source=request.source,
+            offset=request.offset,
+            limit=request.limit,
+        )
+        returned = data.returned_vision + data.returned_tree
+        return SessionListTargetsOutput(
+            summary=(
+                f"listed {returned} target(s) from last observation "
+                f"(source={data.source}; offset={data.offset}; limit={data.limit})"
+            ),
+            session=_build_session_data(session),
+            data=data,
         )
 
     def session_act(self, request: SessionActInput) -> SessionActOutput:
         service = self._interactive_service_factory()
         action_request = InteractiveActionRequest(
             action=_build_action(request.action),
-            target_id=request.action.target_id,
+            target_ref=request.action.target_ref,
             resource_id=request.action.resource_id,
             label=request.action.label,
         )
@@ -235,7 +259,6 @@ class DeviceMcpToolHandlers:
             session,
             result,
             request=action_request,
-            detail=request.detail,
         )
 
     def session_finalize(self, request: SessionFinalizeInput) -> SessionFinalizeOutput:
@@ -266,6 +289,13 @@ def _build_action(action: SessionActionInput) -> Action:
             start_y_ratio=action.start_y_ratio,
             distance_ratio=action.distance_ratio,
             summary=action.summary,
+        )
+    if action.type == "set_value":
+        return Action(
+            type=ActionType.SET_VALUE,
+            text=action.value,
+            summary=action.summary,
+            target_ref=action.target_ref,
         )
     return Action(
         type=ActionType(action.type),
@@ -312,24 +342,18 @@ def _build_session_act_output(
     result: InteractiveActionResult,
     *,
     request: InteractiveActionRequest,
-    detail: str,
 ) -> SessionActOutput:
-    summary = detail == "summary"
-    compact = detail == "compact"
     return SessionActOutput(
         summary=result.effect_summary,
-        detail=detail,  # type: ignore[arg-type]
         session=_build_session_data(session),
         action=_build_action_data(
             result.action,
-            target_id=request.target_id,
+            target_ref=request.target_ref,
             resource_id=request.resource_id,
             label=request.label,
         ),
         normalized_action=_build_action_data(result.normalized_action),
         diff=_build_action_diff_summary_data(result),
-        before=None if (summary or compact) else build_observation_payload(result.before, detail="full"),
-        after=None if summary else build_observation_payload(result.after, detail="compact" if compact else "full"),
         before_summary=result.before.summary,
         after_summary=result.after.summary,
         executed=result.executed,
@@ -397,13 +421,13 @@ def _build_session_data(session: InteractiveSession) -> InteractiveSessionData:
 def _build_action_data(
     action: Action,
     *,
-    target_id: int | None = None,
+    target_ref: str | None = None,
     resource_id: str | None = None,
     label: str | None = None,
 ) -> InteractiveActionData:
     return InteractiveActionData(
         type=action.type.value,
-        target_id=target_id,
+        target_ref=target_ref,
         resource_id=resource_id,
         label=label,
         box=action.box,
