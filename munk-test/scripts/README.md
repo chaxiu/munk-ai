@@ -15,10 +15,10 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 - `assemble_standalone_runtime.py`: assemble the release runtime; generates Local API OpenAPI and frontend contracts before build assembly
 - `bootstrap_standalone_dev.py`: bootstrap the dev runtime; generates Local API OpenAPI and frontend contracts before runtime bootstrap
 - `publish_release_artifacts.py`: publish release artifacts
-- `sync_public_repo.sh`: sync the public-repo allowlist into `public/munk-ai`
+- `sync_public_repo.sh`: sync the public-repo allowlist into `public/munk-ai/munk-test`
   - Reuses root `.gitignore` for local noise / large resources
   - Policy denylist for private paths (explicitly includes top-level `cloud/`)
-  - Protects destination `.github/` (public-repo-owned Release CI; never overwritten)
+  - Writes only inside `public/munk-ai/munk-test`. The public repo `.github/` and `.git` stay in the parent directory and are outside the rsync destination. The script refuses to run if `--target` itself contains `.git`.
   - Explicitly keeps `config/build/` even though `.gitignore` has a broad `build/` rule
   - Allowlist: build manifests + `apps` / `assets` / `packages` / `scripts` / `sidecars` / `src`
   - Default `--delete` preserves destination `.git`; pass `--delete-excluded` to also clean excluded junk
@@ -34,9 +34,9 @@ These scripts remain at `scripts/` root because they are primary entrypoints or 
 
 ## Public Release Flow
 
-Release CI lives only in the public repo (`.github/` is protected by `sync_public_repo.sh`).
+Release CI lives only in the public repo (`.github/` at `public/munk-ai/`, outside the sync target). The workflow runs with `working-directory: munk-test`.
 
-1. Sync private → public and push `main`:
+1. Sync private → `public/munk-ai/munk-test` and push `main` from the public git root:
    ```bash
    ./scripts/sync_public_repo.sh
    cd public/munk-ai

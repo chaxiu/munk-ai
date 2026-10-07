@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Sync the public open-source subset into public/munk-ai (or --target).
+# Sync the public open-source subset into public/munk-ai/munk-test (or --target).
+# The public git root stays outside this destination: .github/ and .git live in
+# public/munk-ai/, and rsync never sees them.
 #
 # Filter layers (rsync first-match wins):
 #   1) Protect filters  — destination-owned paths (e.g. public .github/)
@@ -16,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-DEFAULT_TARGET_ROOT="${SOURCE_ROOT}/public/munk-ai"
+DEFAULT_TARGET_ROOT="${SOURCE_ROOT}/public/munk-ai/munk-test"
 GITIGNORE_PATH="${SOURCE_ROOT}/.gitignore"
 
 TARGET_ROOT="${DEFAULT_TARGET_ROOT}"
@@ -52,8 +54,8 @@ OPTIONAL_DIRS=(
   "examples"
 )
 
-# Destination-owned paths that must survive sync (including --delete-excluded).
-# Release CI lives only on the public repo; private sync must never overwrite it.
+# Kept so a .github inside the subtree cannot be overwritten. The public repo's
+# real .github/ is the parent of this target and is outside rsync entirely.
 PUBLIC_OWNED_PROTECT=(
   "--filter=P /.github/"
   "--filter=P /.github/***"
@@ -95,8 +97,8 @@ Filter model:
   protect (.github/)  ->  policy denylist  ->  .gitignore  ->  public allowlist  ->  exclude *
 
 Note:
-  Destination .github/ is owned by the public repository (Release CI).
-  Sync never copies or deletes it.
+  The default target is the munk-test subtree, not the public git root.
+  public/munk-ai/.github/ and .git sit outside that directory and are not touched.
 EOF
 }
 
@@ -147,6 +149,12 @@ TARGET_ROOT="$(cd -- "$(dirname -- "${TARGET_ROOT}")" && pwd)/$(basename -- "${T
 
 if [[ "${TARGET_ROOT}" == "${SOURCE_ROOT}" ]]; then
   echo "Target path must not be the same as the source repository root" >&2
+  exit 1
+fi
+
+if [[ -e "${TARGET_ROOT}/.git" ]]; then
+  echo "Refusing to sync into a git repository root: ${TARGET_ROOT}" >&2
+  echo "Point --target at the munk-test subtree, for example public/munk-ai/munk-test." >&2
   exit 1
 fi
 
